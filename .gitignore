@@ -23,6 +23,12 @@ apps/desktop/src-tauri/gen/schemas/
 .DS_Store
 *.log
 
+# Windows packaging intermediates
+packaging/.venv/
+packaging/build/
+packaging/dist/
+
+
 # Heavy optional model weights (keep skill code)
 optional-skills/gongwen-rag-writing/models/bge-small-zh-v1.5/
 **/models/bge-small-zh-v1.5/

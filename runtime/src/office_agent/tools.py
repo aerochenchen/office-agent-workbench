@@ -164,8 +164,14 @@ class ToolExecutor:
         env = os.environ.copy()
         env.setdefault("HF_HUB_OFFLINE", "1")
         env.setdefault("TRANSFORMERS_OFFLINE", "1")
+        # PyInstaller sidecar: sys.executable is office-agent-runtime.exe.
+        # Re-enter via --run-script so scripts get a real interpreter context.
+        if getattr(sys, "frozen", False):
+            cmd = [self.python_bin, "--run-script", str(script), *argv]
+        else:
+            cmd = [self.python_bin, str(script), *argv]
         proc = subprocess.run(
-            [self.python_bin, str(script), *argv],
+            cmd,
             cwd=str(cwd),
             capture_output=True,
             text=True,

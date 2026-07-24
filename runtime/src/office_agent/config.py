@@ -10,4 +10,4 @@ class AppConfig:
     model: str
     allowed_hosts: list[str]
     permission_mode: str = "standard"
-    max_tool_steps: int = 20
+    max_tool_steps: int = 40

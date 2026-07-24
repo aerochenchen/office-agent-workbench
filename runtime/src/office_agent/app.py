@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import queue
 import threading
 from contextlib import asynccontextmanager
@@ -9,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -31,6 +32,9 @@ DEFAULT_CONFIG = AppConfig(
     allowed_hosts=["api.deepseek.com", "127.0.0.1", "localhost"],
 )
 
+# When False (tests), /shutdown returns ok but does not terminate the process.
+ALLOW_PROCESS_EXIT = True
+
 
 def _config_path() -> Path:
     return app_data_dir() / "config.json"
@@ -40,7 +44,8 @@ def load_config() -> AppConfig:
     path = _config_path()
     if not path.is_file():
         return DEFAULT_CONFIG
-    data = json.loads(path.read_text(encoding="utf-8"))
+    # PowerShell / Notepad may write UTF-8 BOM; utf-8-sig strips it.
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
     return AppConfig(
         api_base=str(data.get("api_base", DEFAULT_CONFIG.api_base)),
         api_key=str(data.get("api_key", DEFAULT_CONFIG.api_key)),
@@ -131,6 +136,21 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
     @app.get("/health")
     def health() -> dict[str, bool]:
+        return {"ok": True}
+
+    @app.post("/shutdown")
+    async def shutdown(request: Request) -> dict[str, bool]:
+        """Graceful stop for the packaged sidecar (localhost only)."""
+        client = request.client.host if request.client else ""
+        if client not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            raise HTTPException(status_code=403, detail="localhost only")
+
+        async def _exit_soon() -> None:
+            await asyncio.sleep(0.25)
+            if ALLOW_PROCESS_EXIT:
+                os._exit(0)
+
+        asyncio.create_task(_exit_soon())
         return {"ok": True}
 
     @app.get("/config")
@@ -264,6 +284,17 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         return {"ok": True}
 
     def _prepare_chat(body: ChatBody) -> tuple[str, Any, ToolExecutor, list[dict[str, Any]], list[str], int, list[dict[str, Any]]]:
+        # Sidecar restarts drop in-memory workspace; recover from session path.
+        if office.workspace is None and body.session_id:
+            meta = office.sessions.get_session(body.session_id)
+            wp = (meta or {}).get("workspace_path") or ""
+            if wp:
+                try:
+                    office.workspace = Workspace(Path(wp))
+                    office.workspace.ensure_layout()
+                except SandboxError as e:
+                    raise HTTPException(status_code=400, detail=str(e)) from e
+
         ws = office.require_workspace()
         session_id = body.session_id
         if session_id:

@@ -404,7 +404,10 @@ def run_agent(
             )
 
     if not final_text and tool_events:
-        final_text = "已达到最大工具步数限制，请根据已完成步骤继续或重新发起任务。"
+        final_text = (
+            "已达到最大工具步数限制，请根据已完成步骤继续或重新发起任务。"
+            "（复杂排版/PPT 建议开新对话并说明模板路径与产出文件名，减少无效重试。）"
+        )
     emit({"type": "status", "phase": "finishing"})
     return AgentResult(
         messages=messages[new_from:],

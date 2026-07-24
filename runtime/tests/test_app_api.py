@@ -68,6 +68,15 @@ def test_health(client: TestClient):
     assert r.json() == {"ok": True}
 
 
+def test_shutdown_localhost_ok(client: TestClient, monkeypatch):
+    import office_agent.app as app_mod
+
+    monkeypatch.setattr(app_mod, "ALLOW_PROCESS_EXIT", False)
+    r = client.post("/shutdown")
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+
+
 def test_open_workspace_and_tree(client: TestClient, tmp_path: Path):
     ws = tmp_path / "project"
     ws.mkdir()

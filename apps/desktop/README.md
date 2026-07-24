@@ -64,6 +64,17 @@ cd apps/desktop && npm run tauri -- dev
 npm run build   # tsc + vite build，产物在 dist/
 ```
 
+### Windows 安装包
+
+一键打出 NSIS `*-setup.exe`（含 Runtime sidecar）：
+
+```powershell
+# 仓库根目录
+.\scripts\build-windows.ps1
+```
+
+说明见 [`packaging/README-standard.md`](../../packaging/README-standard.md)。
+
 ## 已知限制
 
 - Skill 安装：桌面端点「选择安装包」→ 选文件夹或 zip/md；安装前预览名称/类型/权限。浏览器模式可用「高级：粘贴路径」。

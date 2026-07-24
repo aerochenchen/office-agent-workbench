@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from office_agent.paths import app_data_dir
@@ -11,6 +12,16 @@ def bundled_dir() -> Path:
     override = os.environ.get("OFFICE_AGENT_BUNDLED")
     if override:
         return Path(override)
+    # Packaged sidecar / frozen exe: look next to the binary (Tauri resources).
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        for candidate in (
+            exe_dir / "bundled",
+            exe_dir.parent / "bundled",
+            exe_dir.parent.parent / "bundled",
+        ):
+            if candidate.is_dir():
+                return candidate
     # .../runtime/src/office_agent/bundled_seed.py -> repo root
     return Path(__file__).resolve().parents[3] / "bundled"
 

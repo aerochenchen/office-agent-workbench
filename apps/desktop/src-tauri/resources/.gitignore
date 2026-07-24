@@ -1,0 +1,9 @@
+# Built binaries (runtime sidecar, bundled skills) are staged by build-windows.ps1.
+# Keep placeholders and this ignore file in git.
+*
+!.gitignore
+!README.md
+!runtime/
+!runtime/.keep
+!bundled/
+!bundled/.keep
