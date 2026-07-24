@@ -7,6 +7,115 @@
   color: var(--accent-teal);
 }
 
+.pending-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pending-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pending-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-teal);
+  flex: 0 0 auto;
+  animation: tool-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.pending-elapsed {
+  color: var(--ink-2);
+  font-size: var(--font-size-xs);
+}
+
+.pending-hint {
+  color: var(--ink-1);
+  font-size: var(--font-size-sm);
+}
+
+.pending-note {
+  color: var(--ink-2);
+  font-size: var(--font-size-xs);
+}
+
+.live-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-1);
+}
+
+.live-step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--ink-1);
+}
+
+.live-step-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--line-1);
+}
+
+.live-step--running .live-step-mark {
+  background: var(--accent-teal);
+  animation: tool-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.live-step--ok .live-step-mark {
+  background: var(--status-ok);
+}
+
+.live-step--fail .live-step-mark {
+  background: var(--status-error);
+}
+
+.live-step-label {
+  flex: 0 0 auto;
+  color: var(--ink-0);
+}
+
+.live-step-summary {
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 28em;
+}
+
+.steps-toggle {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  max-width: 72%;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.steps-toggle:hover {
+  color: var(--accent-teal);
+}
+
+.steps-toggle--inline {
+  margin-top: 0;
+  margin-bottom: var(--space-1);
+}
+
+
 .chat-scroll {
   padding: var(--space-4);
   display: flex;

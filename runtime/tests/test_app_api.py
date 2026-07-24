@@ -153,6 +153,29 @@ def test_chat_returns_reply_and_session(client: TestClient, tmp_path: Path, app_
     assert any(m.get("role") == "user" for m in msgs)
 
 
+def test_chat_stream_emits_started_and_final(client: TestClient, tmp_path: Path, app_state: ProcessState):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    with client.stream("POST", "/chat/stream", json={"message": "你好"}) as r:
+        assert r.status_code == 200
+        text = "".join(r.iter_text())
+    assert "event: started" in text
+    assert "event: final" in text
+    assert "你好，已就绪。" in text
+    sid = None
+    for block in text.split("\n\n"):
+        if "event: final" in block:
+            for line in block.splitlines():
+                if line.startswith("data:"):
+                    data = json.loads(line[5:].strip())
+                    sid = data.get("session_id")
+    assert sid
+    msgs = app_state.sessions.get_messages(sid)
+    assert any(m.get("role") == "user" for m in msgs)
+
+
 def test_chat_second_turn_includes_history(client: TestClient, tmp_path: Path, app_state: ProcessState):
     ws = tmp_path / "ws"
     ws.mkdir()

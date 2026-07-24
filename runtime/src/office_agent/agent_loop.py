@@ -1,10 +1,24 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from office_agent.tools import ToolExecutor
+
+EventCallback = Callable[[dict[str, Any]], None]
+
+TOOL_LABELS: dict[str, str] = {
+    "workspace_list": "查看工作区",
+    "workspace_read": "读取文件",
+    "workspace_write": "写入文件",
+    "run_workspace_script": "运行工作区脚本",
+    "run_skill_script": "运行 Skill 脚本",
+    "run_shared_script": "运行共享脚本",
+    "ask_user": "需要你确认",
+    "finish": "完成任务",
+}
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -217,6 +231,57 @@ def _assistant_message_from_response(message: Any) -> dict[str, Any]:
     return out
 
 
+def tool_label(name: str) -> str:
+    return TOOL_LABELS.get(name, name)
+
+
+def args_summary(name: str, args: dict[str, Any]) -> str:
+    if name == "workspace_list":
+        return str(args.get("path") or ".")
+    if name in {"workspace_read", "workspace_write", "run_workspace_script"}:
+        return str(args.get("path") or "")
+    if name == "run_skill_script":
+        return f"{args.get('skill_id', '')}/{args.get('script', '')}".strip("/")
+    if name == "run_shared_script":
+        script = str(args.get("name") or "")
+        extra = args.get("args") or []
+        if extra:
+            return f"{script} {' '.join(str(a) for a in extra[:2])}".strip()
+        return script
+    if name == "ask_user":
+        q = str(args.get("question") or args.get("prompt") or "")
+        return q[:80]
+    if name == "finish":
+        return str(args.get("summary") or "")[:80]
+    raw = json.dumps(args, ensure_ascii=False)
+    return raw if len(raw) <= 80 else raw[:77] + "…"
+
+
+def result_summary(name: str, result: dict[str, Any]) -> str:
+    if not isinstance(result, dict):
+        return str(result)[:120]
+    if result.get("ok") is False:
+        err = str(result.get("error") or result.get("stderr") or "失败")
+        return err[:120]
+    if name == "workspace_list":
+        entries = result.get("entries") or []
+        return f"{len(entries)} 项"
+    if name == "workspace_write":
+        return str(result.get("path") or "已写入")
+    if name in {"run_workspace_script", "run_skill_script", "run_shared_script"}:
+        code = result.get("returncode", result.get("exit_code"))
+        out = str(result.get("stdout") or "").strip().splitlines()
+        head = out[0][:80] if out else ""
+        if code is not None and head:
+            return f"退出码 {code} · {head}"
+        if code is not None:
+            return f"退出码 {code}"
+        return head or "已完成"
+    if name == "finish":
+        return str(result.get("summary") or "完成")[:80]
+    return "完成"
+
+
 def run_agent(
     user_message: str,
     attached_paths: list[str],
@@ -225,8 +290,14 @@ def run_agent(
     catalog: list[dict[str, Any]],
     max_steps: int,
     history: list[dict[str, Any]] | None = None,
+    on_event: EventCallback | None = None,
 ) -> AgentResult:
     """Run one user turn. ``history`` is prior session turns (no system message)."""
+
+    def emit(payload: dict[str, Any]) -> None:
+        if on_event is not None:
+            on_event(payload)
+
     prior = _history_without_system(history)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _build_system_prompt(catalog)},
@@ -239,16 +310,40 @@ def run_agent(
     final_text = ""
 
     for _ in range(max_steps):
+        emit({"type": "status", "phase": "planning"})
         response = gateway.chat(messages, tools=TOOL_SCHEMAS)
         message = response.choices[0].message
         messages.append(_assistant_message_from_response(message))
 
         if message.tool_calls:
+            emit({"type": "status", "phase": "tools"})
             stop_for_user = False
             for tc in message.tool_calls:
                 name = tc.function.name
                 args = _parse_tool_args(tc.function.arguments)
+                label = tool_label(name)
+                emit(
+                    {
+                        "type": "tool_start",
+                        "id": tc.id,
+                        "name": name,
+                        "label": label,
+                        "args_summary": args_summary(name, args),
+                    }
+                )
                 result = tools.execute(name, args)
+                ok = bool(result.get("ok", True)) if isinstance(result, dict) else True
+                summary = result_summary(name, result if isinstance(result, dict) else {"ok": False, "error": str(result)})
+                emit(
+                    {
+                        "type": "tool_done",
+                        "id": tc.id,
+                        "name": name,
+                        "label": label,
+                        "ok": ok,
+                        "summary": summary,
+                    }
+                )
                 tool_events.append({"name": name, "args": args, "result": result})
                 messages.append(
                     {
@@ -263,12 +358,14 @@ def run_agent(
                     break
                 if name == "finish" and result.get("ok"):
                     final_text = str(result.get("summary") or "")
+                    emit({"type": "status", "phase": "finishing"})
                     return AgentResult(
                         messages=messages[new_from:],
                         final_text=final_text,
                         tool_events=tool_events,
                     )
             if stop_for_user:
+                emit({"type": "status", "phase": "finishing"})
                 return AgentResult(
                     messages=messages[new_from:],
                     final_text=final_text,
@@ -278,6 +375,7 @@ def run_agent(
 
         if message.content:
             final_text = message.content.strip()
+            emit({"type": "status", "phase": "finishing"})
             return AgentResult(
                 messages=messages[new_from:],
                 final_text=final_text,
@@ -286,6 +384,7 @@ def run_agent(
 
     if not final_text and tool_events:
         final_text = "已达到最大工具步数限制，请根据已完成步骤继续或重新发起任务。"
+    emit({"type": "status", "phase": "finishing"})
     return AgentResult(
         messages=messages[new_from:],
         final_text=final_text,

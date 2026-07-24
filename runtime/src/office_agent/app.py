@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import queue
+import threading
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,11 +11,11 @@ from typing import Any, Callable
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
-from office_agent.bundled_seed import seed_bundled_assets
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from office_agent.agent_loop import run_agent
+from office_agent.bundled_seed import seed_bundled_assets
 from office_agent.config import AppConfig
 from office_agent.gateway import GatewayError, ModelGateway
 from office_agent.paths import app_data_dir
@@ -208,11 +211,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         save_config(office.config)
         return {"ok": True}
 
-    @app.post("/chat")
-    async def chat(body: ChatBody) -> dict[str, Any]:
-        """Run agent off the event loop so /health stays responsive during long chats."""
-        import asyncio
-
+    def _prepare_chat(body: ChatBody) -> tuple[str, Any, ToolExecutor, list[dict[str, Any]], list[str], int, list[dict[str, Any]]]:
         ws = office.require_workspace()
         session_id = body.session_id
         if session_id:
@@ -232,10 +231,25 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             permission_mode=office.config.permission_mode,
         )
         catalog = office.registry.enabled_catalog()
-        message = body.message
-        attached = list(body.attached_paths)
-        max_steps = office.config.max_tool_steps
         history = office.sessions.get_messages(session_id)
+        return (
+            session_id,
+            gateway,
+            tools,
+            catalog,
+            list(body.attached_paths),
+            office.config.max_tool_steps,
+            history,
+        )
+
+    def _sse(event: str, data: dict[str, Any]) -> str:
+        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    @app.post("/chat")
+    async def chat(body: ChatBody) -> dict[str, Any]:
+        """Run agent off the event loop so /health stays responsive during long chats."""
+        session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(body)
+        message = body.message
 
         def _run() -> Any:
             return run_agent(
@@ -253,13 +267,74 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"agent error: {e}") from e
 
-        # Persist only this turn's delta (no system; history already stored)
         office.sessions.append_messages(session_id, result.messages)
         return {
             "reply": result.final_text,
             "tool_events": result.tool_events,
             "session_id": session_id,
         }
+
+    @app.post("/chat/stream")
+    async def chat_stream(body: ChatBody) -> StreamingResponse:
+        """SSE progress for one chat turn: started/status/tool_*/final/error."""
+        session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(body)
+        message = body.message
+        event_q: queue.Queue[tuple[str, dict[str, Any]] | None] = queue.Queue()
+
+        def emit(event: str, data: dict[str, Any]) -> None:
+            event_q.put((event, data))
+
+        def on_event(payload: dict[str, Any]) -> None:
+            event_type = str(payload.get("type") or "status")
+            data = {k: v for k, v in payload.items() if k != "type"}
+            emit(event_type, data)
+
+        def worker() -> None:
+            try:
+                emit("started", {"session_id": session_id})
+                result = run_agent(
+                    message,
+                    attached,
+                    gateway,
+                    tools,
+                    catalog,
+                    max_steps,
+                    history=history,
+                    on_event=on_event,
+                )
+                office.sessions.append_messages(session_id, result.messages)
+                emit(
+                    "final",
+                    {
+                        "reply": result.final_text,
+                        "tool_events": result.tool_events,
+                        "session_id": session_id,
+                    },
+                )
+            except Exception as e:
+                emit("error", {"message": f"agent error: {e}"})
+            finally:
+                event_q.put(None)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+        async def event_gen():
+            while True:
+                item = await asyncio.to_thread(event_q.get)
+                if item is None:
+                    break
+                event, data = item
+                yield _sse(event, data)
+
+        return StreamingResponse(
+            event_gen(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     return app
 

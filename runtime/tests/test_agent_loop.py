@@ -199,3 +199,36 @@ def test_max_steps_stops_loop(tmp_path: Path, monkeypatch):
     )
     assert len(result.tool_events) == 1
     assert len(gateway.chat_calls) == 1
+
+
+def test_on_event_emits_tool_and_status(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "ws").mkdir()
+    executor = ToolExecutor(Workspace(tmp_path / "ws"), SkillRegistry(), permission_mode="trust")
+    gateway = FakeGateway(
+        responses=[
+            _completion(tool_calls=[_tool_call("c1", "workspace_list", {"path": "."})]),
+            _completion(content="好了"),
+        ]
+    )
+    events: list[dict[str, Any]] = []
+    result = run_agent(
+        user_message="列一下",
+        attached_paths=[],
+        gateway=gateway,
+        tools=executor,
+        catalog=[],
+        max_steps=5,
+        on_event=events.append,
+    )
+    assert result.final_text == "好了"
+    types = [e["type"] for e in events]
+    assert "status" in types
+    assert "tool_start" in types
+    assert "tool_done" in types
+    start = next(e for e in events if e["type"] == "tool_start")
+    assert start["label"] == "查看工作区"
+    assert start["id"] == "c1"
+    done = next(e for e in events if e["type"] == "tool_done")
+    assert done["ok"] is True

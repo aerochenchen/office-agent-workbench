@@ -3,7 +3,7 @@ import "./styles/theme.css";
 import "./App.css";
 import { runtimeClient, RuntimeClientError } from "./lib/runtimeClient";
 import { pickFolder } from "./lib/tauri";
-import type { ChatMessage, RuntimeConfig, SkillMeta, TreeEntry } from "./lib/types";
+import type { ChatMessage, LiveStep, RuntimeConfig, SkillMeta, TreeEntry } from "./lib/types";
 import WorkspaceTree from "./components/WorkspaceTree";
 import ChatPanel from "./components/ChatPanel";
 import SkillPanel from "./components/SkillPanel";
@@ -127,27 +127,108 @@ function App() {
   const handleSend = useCallback(
     async (text: string) => {
       const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
-      setMessages((prev) => [...prev, userMsg]);
+      const assistantId = nextId();
+      const pendingMsg: ChatMessage = {
+        id: assistantId,
+        role: "assistant",
+        content: "",
+        phase: "pending",
+        startedAt: Date.now(),
+        liveSteps: [],
+        stepsExpanded: false,
+      };
+      setMessages((prev) => [...prev, userMsg, pendingMsg]);
       setSending(true);
+
+      const patchAssistant = (updater: (m: ChatMessage) => ChatMessage) => {
+        setMessages((prev) => prev.map((m) => (m.id === assistantId ? updater(m) : m)));
+      };
+
       try {
-        const res = await runtimeClient.chat({
-          message: text,
-          session_id: sessionIdRef.current,
-        });
-        setSessionId(res.session_id);
-        setMessages((prev) => [
-          ...prev,
-          { id: nextId(), role: "assistant", content: res.reply, toolEvents: res.tool_events },
-        ]);
-      } catch (err) {
-        const detail = err instanceof RuntimeClientError ? err.message : "请求失败";
-        setMessages((prev) => [...prev, { id: nextId(), role: "error", content: detail }]);
+        await runtimeClient.chatStream(
+          {
+            message: text,
+            session_id: sessionIdRef.current,
+          },
+          {
+            onStarted: (sid) => {
+              if (sid) setSessionId(sid);
+            },
+            onStatus: (phase) => {
+              patchAssistant((m) => ({
+                ...m,
+                phase: m.phase === "pending" ? "live" : m.phase,
+                statusPhase:
+                  phase === "planning" || phase === "tools" || phase === "finishing"
+                    ? phase
+                    : m.statusPhase,
+              }));
+            },
+            onToolStart: (ev) => {
+              patchAssistant((m) => {
+                const steps = [...(m.liveSteps ?? [])];
+                const idx = steps.findIndex((s) => s.id === ev.id);
+                const next: LiveStep = {
+                  id: ev.id || `t${steps.length + 1}`,
+                  name: ev.name,
+                  label: ev.label || ev.name,
+                  status: "running",
+                  summary: ev.args_summary,
+                };
+                if (idx >= 0) steps[idx] = { ...steps[idx], ...next };
+                else steps.push(next);
+                return { ...m, phase: "live", statusPhase: "tools", liveSteps: steps };
+              });
+            },
+            onToolDone: (ev) => {
+              patchAssistant((m) => {
+                const steps = [...(m.liveSteps ?? [])];
+                const idx = steps.findIndex((s) => s.id === ev.id);
+                const done: LiveStep = {
+                  id: ev.id || `t${steps.length + 1}`,
+                  name: ev.name,
+                  label: ev.label || ev.name,
+                  status: ev.ok ? "ok" : "fail",
+                  summary: ev.summary,
+                };
+                if (idx >= 0) steps[idx] = { ...steps[idx], ...done };
+                else steps.push(done);
+                return { ...m, phase: "live", liveSteps: steps };
+              });
+            },
+            onFinal: (res) => {
+              if (res.session_id) setSessionId(res.session_id);
+              patchAssistant((m) => ({
+                ...m,
+                phase: "done",
+                content: res.reply,
+                toolEvents: res.tool_events,
+                stepsExpanded: false,
+                statusPhase: "finishing",
+              }));
+              void refreshTree();
+            },
+            onError: (message) => {
+              patchAssistant(() => ({
+                id: assistantId,
+                role: "error",
+                content: message,
+              }));
+            },
+          },
+        );
       } finally {
         setSending(false);
       }
     },
-    [],
+    [refreshTree],
   );
+
+  const handleToggleSteps = useCallback((messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, stepsExpanded: !m.stepsExpanded } : m)),
+    );
+  }, []);
 
   const handleToggleSkill = useCallback(async (id: string, enabled: boolean) => {
     try {
@@ -221,6 +302,7 @@ function App() {
           messages={messages}
           sending={sending}
           onSend={handleSend}
+          onToggleSteps={handleToggleSteps}
         />
 
         <SkillPanel
