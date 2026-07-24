@@ -21,6 +21,7 @@ from office_agent.config import AppConfig
 from office_agent.gateway import GatewayError, ModelGateway
 from office_agent.paths import app_data_dir
 from office_agent.session_store import SessionStore, history_to_ui_messages
+from office_agent.skill_localize import needs_zh_display, try_localize_installed_skill
 from office_agent.skills import SkillError, SkillRegistry
 from office_agent.tools import ToolExecutor
 from office_agent.workspace import SandboxError, Workspace
@@ -75,6 +76,8 @@ class ProcessState:
     sessions: SessionStore = field(default_factory=SessionStore)
     workspace: Workspace | None = None
     gateway_factory: Callable[[AppConfig], Any] = ModelGateway
+    # Soft-fail localize attempts this process (avoid re-calling LLM on every refresh)
+    zh_locale_tried: set[str] = field(default_factory=set)
 
     @classmethod
     def load(cls) -> ProcessState:
@@ -84,6 +87,15 @@ class ProcessState:
         if self.workspace is None:
             raise HTTPException(status_code=400, detail="workspace not open")
         return self.workspace
+
+    def maybe_localize_skill(self, meta: Any) -> Any:
+        """Translate UI fields into installed SKILL.md when needed; never raises."""
+        if not needs_zh_display(meta):
+            return meta
+        if meta.id in self.zh_locale_tried:
+            return meta
+        self.zh_locale_tried.add(meta.id)
+        return try_localize_installed_skill(meta, self.gateway_factory, self.config)
 
 
 class OpenWorkspaceBody(BaseModel):
@@ -229,19 +241,22 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
     @app.get("/skills")
     def list_skills() -> dict[str, Any]:
-        skills = [
-            {
-                "id": m.id,
-                "name": m.name,
-                "description": m.description,
-                "version": m.version,
-                "tier": m.tier,
-                "min_ram_gb": m.min_ram_gb,
-                "permissions": m.permissions,
-                "enabled": m.enabled,
-            }
-            for m in office.registry.scan()
-        ]
+        skills = []
+        for m in office.registry.scan():
+            m = office.maybe_localize_skill(m)
+            skills.append(
+                {
+                    "id": m.id,
+                    "name": m.ui_name,
+                    "display_name": m.display_name or m.ui_name,
+                    "description": m.description,
+                    "version": m.version,
+                    "tier": m.tier,
+                    "min_ram_gb": m.min_ram_gb,
+                    "permissions": m.permissions,
+                    "enabled": m.enabled,
+                }
+            )
         return {"skills": skills}
 
     @app.post("/skills/inspect")
@@ -260,6 +275,9 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             meta = office.registry.install_path(src, enabled=body.enabled)
         except SkillError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+        # Allow a fresh localize attempt after (re)install
+        office.zh_locale_tried.discard(meta.id)
+        meta = office.maybe_localize_skill(meta)
         return {"ok": True, "skill": office.registry.meta_payload(meta)}
 
     @app.post("/skills/{skill_id}/enabled")

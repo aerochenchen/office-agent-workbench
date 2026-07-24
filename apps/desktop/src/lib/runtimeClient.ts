@@ -71,6 +71,226 @@ async function request<T>(
   }
 }
 
+function mapNetworkError(err: unknown, timeoutLabel = "300s"): string {
+  if (err instanceof RuntimeClientError) return err.message;
+  const name = err instanceof Error ? err.name : "";
+  const msg = err instanceof Error ? err.message : String(err);
+  if (name === "AbortError" || msg.includes("aborted") || msg.includes("timeout")) {
+    return `请求超时（${timeoutLabel}）。若正在长对话/调工具，请稍候再试；勿反复刷新。`;
+  }
+  if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
+    return "无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 %TEMP%\\office-agent-desktop.log";
+  }
+  return msg || "对话请求失败";
+}
+
+type StreamOutcome = {
+  sawAny: boolean;
+  sawFinal: boolean;
+  sawError: boolean;
+};
+
+function createSseDispatcher(handlers: ChatStreamHandlers): {
+  dispatchBlock: (block: string) => void;
+  outcome: StreamOutcome;
+} {
+  const outcome: StreamOutcome = { sawAny: false, sawFinal: false, sawError: false };
+
+  const dispatchBlock = (block: string) => {
+    const lines = block.split(/\r?\n/);
+    let eventName = "message";
+    const dataLines: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("event:")) eventName = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+    }
+    if (dataLines.length === 0) return;
+    let data: Record<string, unknown> = {};
+    try {
+      data = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    outcome.sawAny = true;
+    switch (eventName) {
+      case "started":
+        if (typeof data.session_id === "string") handlers.onStarted?.(data.session_id);
+        break;
+      case "status":
+        if (typeof data.phase === "string") handlers.onStatus?.(data.phase);
+        break;
+      case "tool_start":
+        handlers.onToolStart?.({
+          id: String(data.id ?? ""),
+          name: String(data.name ?? ""),
+          label: String(data.label ?? data.name ?? ""),
+          args_summary: typeof data.args_summary === "string" ? data.args_summary : undefined,
+        });
+        break;
+      case "tool_done":
+        handlers.onToolDone?.({
+          id: String(data.id ?? ""),
+          name: String(data.name ?? ""),
+          label: String(data.label ?? data.name ?? ""),
+          ok: Boolean(data.ok),
+          summary: typeof data.summary === "string" ? data.summary : undefined,
+        });
+        break;
+      case "final":
+        outcome.sawFinal = true;
+        handlers.onFinal?.({
+          reply: String(data.reply ?? ""),
+          tool_events: Array.isArray(data.tool_events)
+            ? (data.tool_events as ChatReply["tool_events"])
+            : [],
+          session_id: String(data.session_id ?? ""),
+        });
+        break;
+      case "error":
+        outcome.sawError = true;
+        handlers.onError?.(String(data.message ?? "未知错误"));
+        break;
+      default:
+        break;
+    }
+  };
+
+  return { dispatchBlock, outcome };
+}
+
+/**
+ * Progressive XHR SSE reader — works in Tauri WebView2/WKWebView where
+ * `fetch().body.getReader()` is often unavailable or buffered until complete.
+ */
+function streamChatViaXhr(
+  input: { message: string; attached_paths?: string[]; session_id?: string },
+  handlers: ChatStreamHandlers,
+  timeoutMs = 600_000,
+): Promise<StreamOutcome> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const { dispatchBlock, outcome } = createSseDispatcher(handlers);
+    let buffer = "";
+    let seenChars = 0;
+
+    const pump = () => {
+      const text = xhr.responseText || "";
+      if (text.length <= seenChars) return;
+      buffer += text.slice(seenChars);
+      seenChars = text.length;
+      const parts = buffer.split(/\r?\n\r?\n/);
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        if (part.trim()) dispatchBlock(part);
+      }
+    };
+
+    xhr.open("POST", `${RUNTIME_BASE_URL}/chat/stream`);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.setRequestHeader("Accept", "text/event-stream");
+    xhr.timeout = timeoutMs;
+    xhr.responseType = "text";
+
+    xhr.onprogress = () => pump();
+    xhr.onreadystatechange = () => {
+      // readyState 3 (LOADING) also carries incremental body in some WebViews
+      if (xhr.readyState === XMLHttpRequest.LOADING || xhr.readyState === XMLHttpRequest.DONE) {
+        pump();
+      }
+    };
+
+    xhr.onload = () => {
+      pump();
+      if (buffer.trim()) dispatchBlock(buffer);
+      if (xhr.status === 404) {
+        reject(new RuntimeClientError("stream endpoint missing", 404));
+        return;
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        let detail = xhr.statusText || `HTTP ${xhr.status}`;
+        try {
+          const body = JSON.parse(xhr.responseText) as { detail?: string };
+          if (body?.detail) {
+            detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+          }
+        } catch {
+          // ignore
+        }
+        reject(new RuntimeClientError(detail, xhr.status));
+        return;
+      }
+      resolve(outcome);
+    };
+
+    xhr.onerror = () => reject(new Error("NetworkError"));
+    xhr.ontimeout = () => reject(new Error("timeout"));
+    xhr.onabort = () => reject(new Error("aborted"));
+
+    try {
+      xhr.send(JSON.stringify(input));
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  });
+}
+
+async function streamChatViaFetch(
+  input: { message: string; attached_paths?: string[]; session_id?: string },
+  handlers: ChatStreamHandlers,
+  timeoutMs = 600_000,
+): Promise<StreamOutcome> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${RUNTIME_BASE_URL}/chat/stream`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(input),
+    });
+    if (res.status === 404) {
+      throw new RuntimeClientError("stream endpoint missing", 404);
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const body = (await res.json()) as { detail?: string };
+        if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      } catch {
+        // ignore
+      }
+      throw new RuntimeClientError(detail, res.status);
+    }
+    if (!res.body) {
+      throw new RuntimeClientError("stream body unavailable", res.status);
+    }
+
+    const { dispatchBlock, outcome } = createSseDispatcher(handlers);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split(/\r?\n\r?\n/);
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        if (part.trim()) dispatchBlock(part);
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) dispatchBlock(buffer);
+    return outcome;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const runtimeClient = {
   health(): Promise<{ ok: boolean }> {
     return request("/health", { timeoutMs: 3_000 });
@@ -168,10 +388,10 @@ export const runtimeClient = {
   },
 
   /**
-   * One chat turn with progress callbacks.
-   * Packaged Tauri/WebView2 often cannot consume fetch SSE bodies, so the
-   * desktop shell uses sync `/chat` (still reports started/final to the UI).
-   * Browser/`vite` keeps SSE `/chat/stream` with a sync fallback.
+   * One chat turn with live progress callbacks.
+   * Desktop (Tauri): XHR progressive SSE — WebView often cannot stream fetch bodies.
+   * Browser: fetch ReadableStream SSE.
+   * Sync `/chat` only when the stream never delivered any event (no mid-flight double-run).
    */
   async chatStream(
     input: {
@@ -189,169 +409,56 @@ export const runtimeClient = {
       handlers.onFinal?.(reply);
     };
 
-    if (isTauriRuntime()) {
-      try {
-        await runSync();
-      } catch (err) {
-        if (err instanceof RuntimeClientError) {
-          handlers.onError?.(err.message);
-          return;
-        }
-        const name = err instanceof Error ? err.name : "";
-        const msg = err instanceof Error ? err.message : String(err);
-        if (name === "AbortError" || msg.includes("aborted")) {
-          handlers.onError?.(
-            "请求超时（300s）。若正在长对话/调工具，请稍候再试；勿反复刷新。",
-          );
-          return;
-        }
-        if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
-          handlers.onError?.(
-            "无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 %TEMP%\\office-agent-desktop.log",
-          );
-          return;
-        }
-        handlers.onError?.(msg || "对话请求失败");
-      }
-      return;
-    }
+    let delivered = false;
+    const tracking: ChatStreamHandlers = {
+      onStarted: (sessionId) => {
+        delivered = true;
+        handlers.onStarted?.(sessionId);
+      },
+      onStatus: (phase) => {
+        delivered = true;
+        handlers.onStatus?.(phase);
+      },
+      onToolStart: (ev) => {
+        delivered = true;
+        handlers.onToolStart?.(ev);
+      },
+      onToolDone: (ev) => {
+        delivered = true;
+        handlers.onToolDone?.(ev);
+      },
+      onFinal: (reply) => {
+        delivered = true;
+        handlers.onFinal?.(reply);
+      },
+      onError: (message) => {
+        delivered = true;
+        handlers.onError?.(message);
+      },
+    };
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 300_000);
     try {
-      const res = await fetch(`${RUNTIME_BASE_URL}/chat/stream`, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify(input),
-      });
-      if (res.status === 404) {
-        await runSync();
-        return;
-      }
-      if (!res.ok) {
-        let detail = res.statusText;
-        try {
-          const body = (await res.json()) as { detail?: string };
-          if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
-        } catch {
-          // ignore
-        }
-        throw new RuntimeClientError(detail, res.status);
-      }
-      if (!res.body) {
-        await runSync();
-        return;
-      }
+      const outcome = isTauriRuntime()
+        ? await streamChatViaXhr(input, tracking)
+        : await streamChatViaFetch(input, tracking);
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let sawFinal = false;
-      let sawError = false;
-      let sawAny = false;
-
-      const dispatchBlock = (block: string) => {
-        const lines = block.split(/\r?\n/);
-        let eventName = "message";
-        const dataLines: string[] = [];
-        for (const line of lines) {
-          if (line.startsWith("event:")) eventName = line.slice(6).trim();
-          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
-        }
-        if (dataLines.length === 0) return;
-        let data: Record<string, unknown> = {};
-        try {
-          data = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
-        } catch {
-          return;
-        }
-        sawAny = true;
-        switch (eventName) {
-          case "started":
-            if (typeof data.session_id === "string") handlers.onStarted?.(data.session_id);
-            break;
-          case "status":
-            if (typeof data.phase === "string") handlers.onStatus?.(data.phase);
-            break;
-          case "tool_start":
-            handlers.onToolStart?.({
-              id: String(data.id ?? ""),
-              name: String(data.name ?? ""),
-              label: String(data.label ?? data.name ?? ""),
-              args_summary: typeof data.args_summary === "string" ? data.args_summary : undefined,
-            });
-            break;
-          case "tool_done":
-            handlers.onToolDone?.({
-              id: String(data.id ?? ""),
-              name: String(data.name ?? ""),
-              label: String(data.label ?? data.name ?? ""),
-              ok: Boolean(data.ok),
-              summary: typeof data.summary === "string" ? data.summary : undefined,
-            });
-            break;
-          case "final":
-            sawFinal = true;
-            handlers.onFinal?.({
-              reply: String(data.reply ?? ""),
-              tool_events: Array.isArray(data.tool_events) ? (data.tool_events as ChatReply["tool_events"]) : [],
-              session_id: String(data.session_id ?? ""),
-            });
-            break;
-          case "error":
-            sawError = true;
-            handlers.onError?.(String(data.message ?? "未知错误"));
-            break;
-          default:
-            break;
-        }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split(/\r?\n\r?\n/);
-        buffer = parts.pop() ?? "";
-        for (const part of parts) {
-          if (part.trim()) dispatchBlock(part);
-        }
-      }
-      buffer += decoder.decode();
-      if (buffer.trim()) dispatchBlock(buffer);
-
-      if (sawFinal || sawError) return;
-      if (!sawAny) {
+      if (outcome.sawFinal || outcome.sawError) return;
+      if (!outcome.sawAny && !delivered) {
         await runSync();
         return;
       }
       handlers.onError?.("流式对话异常结束，未收到最终结果");
     } catch (err) {
-      if (err instanceof RuntimeClientError) {
-        handlers.onError?.(err.message);
-        return;
+      if (!delivered) {
+        try {
+          await runSync();
+          return;
+        } catch (syncErr) {
+          handlers.onError?.(mapNetworkError(syncErr, "600s"));
+          return;
+        }
       }
-      const name = err instanceof Error ? err.name : "";
-      const msg = err instanceof Error ? err.message : String(err);
-      if (name === "AbortError" || msg.includes("aborted")) {
-        handlers.onError?.(
-          "请求超时（300s）。若正在长对话/调工具，请稍候再试；勿反复刷新。",
-        );
-        return;
-      }
-      if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
-        handlers.onError?.(
-          "无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 %TEMP%\\office-agent-desktop.log",
-        );
-        return;
-      }
-      handlers.onError?.(msg || "流式请求失败");
-    } finally {
-      clearTimeout(timer);
+      handlers.onError?.(mapNetworkError(err, "600s"));
     }
   },
 };

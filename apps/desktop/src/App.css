@@ -19,21 +19,39 @@
 
 .topbar-brand {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.topbar-logo {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: block;
+  object-fit: contain;
+}
+
+.topbar-brand-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.15;
 }
 
 .topbar-title {
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--ink-0);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.04em;
 }
 
-.topbar-subtitle {
-  font-size: var(--font-size-xs);
+.topbar-tagline {
+  font-size: 11px;
   color: var(--ink-2);
-  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
 }
 
 .topbar-actions {
@@ -106,9 +124,12 @@
 }
 
 .btn--primary:disabled {
-  background: var(--line-0);
-  border-color: var(--line-0);
-  color: var(--ink-2);
+  /* Keep theme green as the next-step CTA even when temporarily unusable (e.g. empty draft). */
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+  color: var(--paper-2);
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* ---------- Three-pane workbench ---------- */

@@ -1,6 +1,7 @@
-# 办公智能体工作台（Office Agent Workbench）
+# 文书通
 
-Tauri 2 + React + TypeScript 桌面外壳，三栏工作台：文件树 | 对话 | Skill。
+Tauri 2 + React + TypeScript 桌面壳。定位：**政务文书 · 智能通办**。  
+三栏工作台：对话列表 | 对话 | Skill。  
 UI 通过 `src/lib/runtimeClient.ts` 与本地 Python Runtime（`http://127.0.0.1:8765`）通信；
 不直接联网、不直接读写文件系统——所有沙箱与工具调用都在 Runtime 侧完成。
 
@@ -37,7 +38,7 @@ src-tauri/
 
 日志在 `.dev/runtime.log`、`.dev/vite.log`。Runtime 开了 `--reload`，改 `runtime/src` 会自动重载。
 
-窗口标题：**办公智能体工作台 · Office Agent Workbench**。首次 Tauri 编译较慢，之后会快很多。
+窗口标题：**文书通**。首次 Tauri 编译较慢，之后会快很多。
 
 浏览器模式（`--web`）没有原生选文件夹对话框，左侧可粘贴工作区绝对路径。
 

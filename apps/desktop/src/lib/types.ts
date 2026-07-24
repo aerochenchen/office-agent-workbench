@@ -9,6 +9,7 @@ export type SkillTier = "light" | "heavy";
 export interface SkillMeta {
   id: string;
   name: string;
+  display_name?: string;
   description: string;
   version: string;
   tier: SkillTier;
@@ -20,6 +21,7 @@ export interface SkillMeta {
 export interface SkillInspect {
   id: string;
   name: string;
+  display_name?: string;
   description: string;
   version: string;
   tier: SkillTier;

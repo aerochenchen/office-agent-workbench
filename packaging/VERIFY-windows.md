@@ -12,7 +12,8 @@
 ## 干净机安装
 
 - [ ] 双击安装器完成安装（当前用户即可）
-- [ ] 开始菜单 / 桌面出现「办公智能体工作台」
+- [ ] 开始菜单 / 桌面出现「文书通」，快捷方式图标与 `apps/desktop/branding/app-icon.png` 一致
+- [ ] 安装目录中的 `文书通.exe` 显示同一套图标
 - [ ] 首次启动后 `http://127.0.0.1:8765/health` 返回 `{"ok":true}`（或 UI 显示 Runtime 在线）
 - [ ] 能打开工作区、发送一条对话（需已配置内网模型网关）
 - [ ] Skill 列表含 `government-document-format`（bundled seed）

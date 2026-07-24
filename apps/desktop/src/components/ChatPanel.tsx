@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChatMessage, LiveStep } from "../lib/types";
+import { APP_NAME, APP_TAGLINE } from "../lib/brand";
+import { GUIDE_HINTS, GUIDE_PILLARS, GUIDE_WELCOME_TITLE } from "../lib/guide";
 import "./ChatPanel.css";
 
 interface Props {
@@ -7,6 +9,7 @@ interface Props {
   messages: ChatMessage[];
   sending: boolean;
   onSend: (text: string) => void;
+  onOpenWorkspace?: () => void;
   onToggleSteps?: (messageId: string) => void;
 }
 
@@ -161,6 +164,7 @@ export default function ChatPanel({
   messages,
   sending,
   onSend,
+  onOpenWorkspace,
   onToggleSteps,
 }: Props) {
   const [draft, setDraft] = useState("");
@@ -198,11 +202,53 @@ export default function ChatPanel({
       </div>
 
       <div className="pane-body chat-scroll">
-        {messages.length === 0 && (
-          <div className="empty-hint">
-            {workspaceOpen
-              ? "向助手描述需要处理的公文任务，例如「整理本目录下的会议记要」。"
-              : "请先在左侧选择工作区文件夹，才能开始对话。"}
+        {messages.length === 0 && !workspaceOpen && (
+          <div className="guide-welcome">
+            <img
+              className="chat-empty-logo"
+              src="/logo-mark.png"
+              width={48}
+              height={48}
+              alt=""
+              aria-hidden="true"
+            />
+            <div className="chat-empty-brand">
+              <div className="chat-empty-name">{APP_NAME}</div>
+              <div className="chat-empty-tagline">{APP_TAGLINE}</div>
+            </div>
+            <h2 className="guide-welcome-title">{GUIDE_WELCOME_TITLE}</h2>
+            <ul className="guide-pillars">
+              {GUIDE_PILLARS.map((p) => (
+                <li key={p.id} className="guide-pillar">
+                  <div className="guide-pillar-title">{p.title}</div>
+                  <p className="guide-pillar-body">{p.summary}</p>
+                </li>
+              ))}
+            </ul>
+            {onOpenWorkspace ? (
+              <button type="button" className="btn btn--primary guide-welcome-cta" onClick={onOpenWorkspace}>
+                打开文件夹
+              </button>
+            ) : (
+              <p className="empty-hint chat-empty-hint">{GUIDE_HINTS.noWorkspace}</p>
+            )}
+          </div>
+        )}
+        {messages.length === 0 && workspaceOpen && (
+          <div className="chat-empty">
+            <img
+              className="chat-empty-logo"
+              src="/logo-mark.png"
+              width={48}
+              height={48}
+              alt=""
+              aria-hidden="true"
+            />
+            <div className="chat-empty-brand">
+              <div className="chat-empty-name">{APP_NAME}</div>
+              <div className="chat-empty-tagline">{APP_TAGLINE}</div>
+            </div>
+            <div className="empty-hint chat-empty-hint">{GUIDE_HINTS.workspaceReady}</div>
           </div>
         )}
         {messages.map((m) => (
@@ -237,7 +283,11 @@ export default function ChatPanel({
             }
           }}
         />
-        <button type="submit" className="btn btn--primary" disabled={disabled || !draft.trim()}>
+        <button
+          type="submit"
+          className={`btn${workspaceOpen ? " btn--primary" : " btn--ghost"}`}
+          disabled={disabled || !draft.trim()}
+        >
           发送
         </button>
       </form>

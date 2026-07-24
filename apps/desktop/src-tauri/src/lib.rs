@@ -1,4 +1,4 @@
-// 办公智能体工作台 (Office Agent Workbench) — Tauri shell.
+// 文书通 — Tauri 桌面壳（政务文书 · 智能通办）
 //
 // Responsibilities:
 // 1. Expose `pick_folder` / `pick_skill_file` for native dialogs.

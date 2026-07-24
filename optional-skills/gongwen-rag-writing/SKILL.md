@@ -1,5 +1,6 @@
 ---
 name: gongwen-rag-writing
+display_name: 公文写作助手
 description: "公文写作 RAG 流水线 v2.0：结构感知索引 → 深度模板分析 → 叙事规划 → 论证驱动检索合成 → 排版输出。基于 BGE-small-zh-v1.5 中文向量化。"
 version: 2.0.0
 tier: heavy

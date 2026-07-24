@@ -23,6 +23,10 @@ apps/desktop/src-tauri/gen/schemas/
 .DS_Store
 *.log
 
+# Mobile icon sets unused by desktop NSIS/mac builds
+apps/desktop/src-tauri/icons/ios/
+apps/desktop/src-tauri/icons/android/
+
 # Windows packaging intermediates
 packaging/.venv/
 packaging/build/

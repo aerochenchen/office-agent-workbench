@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
+import { APP_NAME, APP_TAGLINE } from "./lib/brand";
 import { runtimeClient, RuntimeClientError } from "./lib/runtimeClient";
 import { isTauriRuntime, pickFolder } from "./lib/tauri";
 import type {
@@ -349,20 +350,30 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-brand">
-          <span className="topbar-title">办公智能体工作台</span>
-          <span className="topbar-subtitle">Office Agent Workbench</span>
+          <img
+            className="topbar-logo"
+            src="/logo-mark.png"
+            width={28}
+            height={28}
+            alt=""
+            aria-hidden="true"
+          />
+          <div className="topbar-brand-text">
+            <span className="topbar-title">{APP_NAME}</span>
+            <span className="topbar-tagline">{APP_TAGLINE}</span>
+          </div>
         </div>
         <div className="topbar-actions">
           <span className={`health-dot health-dot--${health}`} aria-hidden="true" />
           <span className="health-label">
-            {health === "ok" ? "运行时已连接" : health === "down" ? "运行时未连接" : "检测中…"}
+            {health === "ok" ? "就绪" : health === "down" ? "未就绪" : "启动中…"}
           </span>
           <button
             type="button"
             className="btn btn--ghost"
             onClick={() => setSkillsCollapsed((v) => !v)}
           >
-            {skillsCollapsed ? "展开 Skill" : "收起 Skill"}
+            {skillsCollapsed ? "展开技能" : "收起技能"}
           </button>
           <button type="button" className="btn btn--ghost" onClick={() => setSettingsOpen(true)}>
             设置
@@ -390,6 +401,7 @@ function App() {
           messages={messages}
           sending={sending}
           onSend={handleSend}
+          onOpenWorkspace={handlePickFolder}
           onToggleSteps={handleToggleSteps}
         />
 

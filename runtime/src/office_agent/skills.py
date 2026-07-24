@@ -34,12 +34,12 @@ class SkillMeta:
     path: Path | None = None
     enabled: bool = True
     body: str = ""
+    display_name: str = ""
 
-
-def _slug_id(raw: str, fallback: str = "skill") -> str:
-    text = (raw or "").strip() or fallback
-    slug = SAFE_ID_RE.sub("-", text).strip("-_.")
-    return slug or fallback
+    @property
+    def ui_name(self) -> str:
+        """Name shown in UI; prefers display_name when set."""
+        return (self.display_name or self.name or self.id).strip() or self.id
 
 
 def parse_skill_md(text: str, skill_dir: Path) -> SkillMeta:
@@ -47,9 +47,11 @@ def parse_skill_md(text: str, skill_dir: Path) -> SkillMeta:
     if not m:
         raise SkillError("SKILL.md missing YAML frontmatter")
     data = yaml.safe_load(m.group(1)) or {}
+    name = str(data.get("name") or skill_dir.name)
+    display_name = str(data.get("display_name") or data.get("title") or "").strip()
     return SkillMeta(
         id=skill_dir.name,
-        name=str(data.get("name") or skill_dir.name),
+        name=name,
         description=str(data.get("description") or ""),
         version=str(data.get("version") or "0.0.0"),
         tier=str(data.get("tier") or "light"),
@@ -58,7 +60,14 @@ def parse_skill_md(text: str, skill_dir: Path) -> SkillMeta:
         shared_scripts=list(data.get("shared_scripts") or []),
         path=skill_dir,
         body=m.group(2),
+        display_name=display_name,
     )
+
+
+def _slug_id(raw: str, fallback: str = "skill") -> str:
+    text = (raw or "").strip() or fallback
+    slug = SAFE_ID_RE.sub("-", text).strip("-_.")
+    return slug or fallback
 
 
 def _skill_id_from_text(text: str, fallback: str) -> str:
@@ -117,7 +126,12 @@ class SkillRegistry:
 
     def enabled_catalog(self) -> list[dict]:
         return [
-            {"id": m.id, "name": m.name, "description": m.description, "tier": m.tier}
+            {
+                "id": m.id,
+                "name": m.ui_name,
+                "description": m.description,
+                "tier": m.tier,
+            }
             for m in self.scan()
             if m.enabled
         ]
@@ -125,7 +139,8 @@ class SkillRegistry:
     def meta_payload(self, meta: SkillMeta) -> dict:
         return {
             "id": meta.id,
-            "name": meta.name,
+            "name": meta.ui_name,
+            "display_name": meta.display_name or meta.ui_name,
             "description": meta.description,
             "version": meta.version,
             "tier": meta.tier,

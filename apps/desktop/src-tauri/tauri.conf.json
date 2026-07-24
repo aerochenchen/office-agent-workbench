@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "办公智能体工作台",
+  "productName": "文书通",
   "version": "0.1.0",
   "identifier": "com.chenzai.office-agent-desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "办公智能体工作台 · Office Agent Workbench",
+        "title": "文书通",
         "width": 1280,
         "height": 820,
         "minWidth": 960,
@@ -44,7 +44,9 @@
       "nsis": {
         "installMode": "currentUser",
         "languages": ["SimpChinese", "English"],
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
       }
     }
   }

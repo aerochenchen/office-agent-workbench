@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { SessionMeta } from "../lib/types";
+import { GUIDE_HINTS } from "../lib/guide";
 import "./SessionList.css";
 
 interface Props {
@@ -57,7 +58,7 @@ export default function SessionList({
       <div className="session-toolbar">
         <button
           type="button"
-          className="btn btn--primary btn--full"
+          className="btn btn--ghost btn--full"
           disabled={!workspacePath || sending}
           onClick={onNewSession}
           title={!workspacePath ? "请先打开工作区" : sending ? "请等待当前回复结束" : undefined}
@@ -68,10 +69,10 @@ export default function SessionList({
 
       <div className="pane-body session-list-body">
         {!workspacePath && (
-          <div className="empty-hint">打开工作区后，可在此管理多个任务对话。</div>
+          <div className="empty-hint">{GUIDE_HINTS.noWorkspace}</div>
         )}
         {workspacePath && sessions.length === 0 && (
-          <div className="empty-hint">暂无对话。点击上方「新建对话」开始。</div>
+          <div className="empty-hint">{GUIDE_HINTS.noSessions}</div>
         )}
         <ul className="session-list">
           {sessions.map((s) => {
@@ -124,7 +125,7 @@ export default function SessionList({
       </div>
 
       <div className="session-workspace-bar">
-        <div className="session-workspace-label">工作区</div>
+        <div className="session-workspace-label">项目文件夹</div>
         {workspacePath ? (
           <div className="session-workspace-path" title={workspacePath}>
             {basename(workspacePath)}
@@ -133,7 +134,11 @@ export default function SessionList({
           <div className="session-workspace-path session-workspace-path--empty">未打开</div>
         )}
         {workspaceError && <div className="session-workspace-error">{workspaceError}</div>}
-        <button type="button" className="btn btn--ghost btn--full" onClick={onPickWorkspace}>
+        <button
+          type="button"
+          className={`btn btn--full${workspacePath ? " btn--ghost" : " btn--primary"}`}
+          onClick={onPickWorkspace}
+        >
           {workspacePath ? "更换文件夹" : "打开文件夹"}
         </button>
         {showManualPath && (

@@ -29,11 +29,41 @@
   color: var(--ink-0);
 }
 
+.modal-header-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.modal-logo {
+  width: 20px;
+  height: 20px;
+  display: block;
+  object-fit: contain;
+}
+
 .modal-body {
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
+}
+
+.settings-section-title {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-1);
+  text-transform: uppercase;
 }
 
 .field {
@@ -62,13 +92,119 @@
   font-size: var(--font-size-xs);
 }
 
-.settings-notice {
-  margin: var(--space-2) 0 0;
+.settings-about {
   padding-top: var(--space-3);
   border-top: 1px solid var(--line-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-guide {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-guide-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-guide-item {
+  padding: var(--space-2) 0;
+}
+
+.settings-guide-item + .settings-guide-item {
+  border-top: 1px solid var(--line-1);
+}
+
+.settings-guide-item-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--ink-0);
+  margin-bottom: 4px;
+}
+
+.settings-guide-item-body {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--ink-1);
+  line-height: 1.55;
+}
+
+.settings-about-product {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-about-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--ink-0);
+  letter-spacing: 0.04em;
+}
+
+.settings-about-tagline {
   font-size: var(--font-size-xs);
   color: var(--ink-2);
-  line-height: 1.45;
+  letter-spacing: 0.04em;
+}
+
+.settings-about-version {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-about-oss-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--ink-1);
+  margin-bottom: var(--space-1);
+}
+
+.settings-about-oss-lead,
+.settings-about-oss-note {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.settings-about-oss-list {
+  list-style: none;
+  margin: var(--space-2) 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-about-oss-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.settings-about-oss-name {
+  color: var(--ink-1);
+}
+
+.settings-about-oss-license {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .modal-footer {

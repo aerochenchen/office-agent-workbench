@@ -1,6 +1,8 @@
 <#
 .SYNOPSIS
-  Build the Windows NSIS installer (办公智能体工作台-setup.exe).
+  Build the Windows NSIS installer (文书通-setup.exe).
+  App / installer / desktop shortcut icons come from apps/desktop/src-tauri/icons
+  (generated from apps/desktop/branding/app-icon.png via scripts/generate-app-icons.sh).
 
 .DESCRIPTION
   1. Create/reuse a packaging venv under packaging/.venv

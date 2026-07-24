@@ -14,5 +14,8 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
         skills = client.get("/skills").json()["skills"]
     ids = {s["id"] for s in skills}
     assert "government-document-format" in ids
+    gongwen = next(s for s in skills if s["id"] == "government-document-format")
+    assert gongwen["name"] == "公文格式排版"
+    assert gongwen.get("display_name") == "公文格式排版"
     assert (tmp_path / "shared-scripts" / "format_gongwen.py").is_file()
     assert (tmp_path / "skills" / "government-document-format" / "SKILL.md").is_file()
