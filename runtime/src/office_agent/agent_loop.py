@@ -57,11 +57,19 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "workspace_write",
-            "description": "在工作区内写入或覆盖文本文件",
+            "description": (
+                "在工作区内写入或覆盖文本文件。"
+                "脚本与中间产物 → .office-agent/work/；"
+                "最终交付（docx/pdf 等）→ output/；"
+                "不要往工作区根目录堆 Agent 产出（根目录留给用户源材料）。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "相对文件路径"},
+                    "path": {
+                        "type": "string",
+                        "description": "相对路径，如 .office-agent/work/merge_docs.py 或 output/AI.docx",
+                    },
                     "content": {"type": "string", "description": "文件内容"},
                 },
                 "required": ["path", "content"],
@@ -74,12 +82,16 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "run_workspace_script",
             "description": (
                 "在工作区沙箱内直接运行已有的 .py 脚本（cwd=工作区根目录）。"
-                "写完 merge_docs.py 等脚本后必须用本工具执行，禁止让用户去终端手动 python。"
+                "脚本应位于 .office-agent/work/；脚本内最终产出请写到 output/（如 output/AI.docx）。"
+                "写完后必须用本工具执行，禁止让用户去终端手动 python。"
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "工作区内相对路径，如 merge_docs.py"},
+                    "path": {
+                        "type": "string",
+                        "description": "工作区内相对路径，如 .office-agent/work/merge_docs.py",
+                    },
                     "args": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["path"],
@@ -110,7 +122,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "run_shared_script",
-            "description": "运行共享脚本。公文排版优先：name=format_gongwen，args=[工作区内docx路径]",
+            "description": (
+                "运行共享脚本。公文排版优先：name=format_gongwen，args=[工作区内docx路径]。"
+                "排版结果若为新文件，应落到 output/。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -143,7 +158,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "finish",
-            "description": "结束当前任务并给出面向用户的总结",
+            "description": "结束当前任务并给出面向用户的总结（提及成果在 output/ 下的路径）",
             "parameters": {
                 "type": "object",
                 "properties": {"summary": {"type": "string"}},
@@ -166,6 +181,12 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
     return (
         "你是内网办公智能助手，帮助用户在当前工作区内处理文书与文件任务。"
         "请优先使用已启用的 Skill 与内置工具；不得尝试访问工作区外路径或执行 shell。\n"
+        "目录约定（必须遵守）：\n"
+        "- 工作区根目录：只保留用户自己的源材料（纪要、模板、附件等），不要往根目录堆 Agent 产出；\n"
+        "- `output/`：最终交付成果（如 `output/AI.docx`、排版后的公文）；\n"
+        "- `.office-agent/work/`：过程文件（自写 .py、草稿、临时 json/中间文件）；\n"
+        "- 运行脚本时 cwd 已是工作区根，脚本内请用 `output/文件名` 写出最终成果，"
+        "脚本自身放在 `.office-agent/work/xxx.py`。\n"
         "重要区分：\n"
         "- workspace_* 只能访问用户打开的工作区文件夹；\n"
         "- 工作区内的 .py 用 run_workspace_script 执行（写完脚本后立刻执行）；\n"
@@ -383,7 +404,10 @@ def run_agent(
             )
 
     if not final_text and tool_events:
-        final_text = "已达到最大工具步数限制，请根据已完成步骤继续或重新发起任务。"
+        final_text = (
+            "已达到最大工具步数限制，请根据已完成步骤继续或重新发起任务。"
+            "（复杂排版/PPT 建议开新对话并说明模板路径与产出文件名，减少无效重试。）"
+        )
     emit({"type": "status", "phase": "finishing"})
     return AgentResult(
         messages=messages[new_from:],

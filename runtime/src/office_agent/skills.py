@@ -1,11 +1,15 @@
 from __future__ import annotations
+
 import json
 import re
 import shutil
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+
 import yaml
+
 from office_agent.paths import app_data_dir
 
 
@@ -14,6 +18,7 @@ class SkillError(ValueError):
 
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
+SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 
 
 @dataclass
@@ -29,6 +34,12 @@ class SkillMeta:
     path: Path | None = None
     enabled: bool = True
     body: str = ""
+
+
+def _slug_id(raw: str, fallback: str = "skill") -> str:
+    text = (raw or "").strip() or fallback
+    slug = SAFE_ID_RE.sub("-", text).strip("-_.")
+    return slug or fallback
 
 
 def parse_skill_md(text: str, skill_dir: Path) -> SkillMeta:
@@ -48,6 +59,27 @@ def parse_skill_md(text: str, skill_dir: Path) -> SkillMeta:
         path=skill_dir,
         body=m.group(2),
     )
+
+
+def _skill_id_from_text(text: str, fallback: str) -> str:
+    m = FRONTMATTER_RE.match(text)
+    if not m:
+        raise SkillError("SKILL.md missing YAML frontmatter")
+    data = yaml.safe_load(m.group(1)) or {}
+    return _slug_id(str(data.get("name") or fallback), fallback=_slug_id(fallback))
+
+
+def _resolve_skill_root(src: Path) -> Path:
+    """Return the directory that directly contains SKILL.md."""
+    src = src.resolve()
+    if (src / "SKILL.md").is_file():
+        return src
+    if not src.is_dir():
+        raise SkillError("SKILL.md not found")
+    children = [p for p in src.iterdir() if p.is_dir() and (p / "SKILL.md").is_file()]
+    if len(children) != 1:
+        raise SkillError("SKILL.md not found")
+    return children[0]
 
 
 class SkillRegistry:
@@ -90,15 +122,66 @@ class SkillRegistry:
             if m.enabled
         ]
 
+    def meta_payload(self, meta: SkillMeta) -> dict:
+        return {
+            "id": meta.id,
+            "name": meta.name,
+            "description": meta.description,
+            "version": meta.version,
+            "tier": meta.tier,
+            "min_ram_gb": meta.min_ram_gb,
+            "permissions": list(meta.permissions),
+            "shared_scripts": list(meta.shared_scripts),
+            "enabled": meta.enabled,
+        }
+
+    def inspect_path(self, path: Path) -> SkillMeta:
+        """Parse Skill metadata from dir / zip / md without installing."""
+        path = path.expanduser().resolve()
+        if not path.exists():
+            raise SkillError(f"path not found: {path}")
+        if path.is_dir():
+            root = _resolve_skill_root(path)
+            return parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
+        if path.is_file() and path.suffix.lower() == ".zip":
+            return self._inspect_zip(path)
+        if path.is_file() and (path.suffix.lower() == ".md" or path.name == "SKILL.md"):
+            text = path.read_text(encoding="utf-8")
+            fallback = path.stem if path.name.lower() != "skill.md" else path.parent.name
+            skill_id = _skill_id_from_text(text, fallback)
+            return parse_skill_md(text, Path(skill_id))
+        raise SkillError("unsupported package: use a Skill folder, .zip, or .md / SKILL.md")
+
+    def _inspect_zip(self, zip_path: Path) -> SkillMeta:
+        with tempfile.TemporaryDirectory(prefix="oa-skill-inspect-") as tmp:
+            extract = Path(tmp)
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(extract)
+            root = _resolve_skill_root(extract)
+            return parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
+
+    def install_path(self, path: Path, *, enabled: bool = True) -> SkillMeta:
+        """Install from folder, zip, or single markdown file."""
+        path = path.expanduser().resolve()
+        if not path.exists():
+            raise SkillError(f"path not found: {path}")
+        if path.is_dir():
+            meta = self.install_dir(path)
+        elif path.is_file() and path.suffix.lower() == ".zip":
+            meta = self.install_zip(path)
+        elif path.is_file() and (path.suffix.lower() == ".md" or path.name == "SKILL.md"):
+            meta = self.install_md(path)
+        else:
+            raise SkillError("unsupported package: use a Skill folder, .zip, or .md / SKILL.md")
+        self.set_enabled(meta.id, enabled)
+        meta.enabled = enabled
+        return meta
+
     def install_dir(self, src: Path) -> SkillMeta:
-        src = src.resolve()
-        if not (src / "SKILL.md").is_file():
-            children = [p for p in src.iterdir() if p.is_dir() and (p / "SKILL.md").is_file()]
-            if len(children) != 1:
-                raise SkillError("SKILL.md not found")
-            src = children[0]
+        src = _resolve_skill_root(src)
         meta = parse_skill_md((src / "SKILL.md").read_text(encoding="utf-8"), src)
         dest = self.skills_dir / meta.id
+        self.skills_dir.mkdir(parents=True, exist_ok=True)
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(src, dest)
@@ -108,10 +191,26 @@ class SkillRegistry:
         extract = self.root / "_tmp_extract"
         if extract.exists():
             shutil.rmtree(extract)
-        extract.mkdir()
+        extract.mkdir(parents=True)
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(extract)
         try:
             return self.install_dir(extract)
         finally:
             shutil.rmtree(extract, ignore_errors=True)
+
+    def install_md(self, md_path: Path) -> SkillMeta:
+        """Install a lightweight prompt-only Skill from a single markdown file."""
+        md_path = md_path.resolve()
+        text = md_path.read_text(encoding="utf-8")
+        fallback = md_path.stem if md_path.name.lower() != "skill.md" else md_path.parent.name
+        skill_id = _skill_id_from_text(text, fallback)
+        # Validate frontmatter before writing
+        parse_skill_md(text, Path(skill_id))
+        dest = self.skills_dir / skill_id
+        self.skills_dir.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            shutil.rmtree(dest)
+        dest.mkdir(parents=True)
+        (dest / "SKILL.md").write_text(text, encoding="utf-8")
+        return parse_skill_md((dest / "SKILL.md").read_text(encoding="utf-8"), dest)

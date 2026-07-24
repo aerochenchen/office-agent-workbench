@@ -10,16 +10,66 @@ def test_run_workspace_script(tmp_path: Path, monkeypatch):
     (tmp_path / "skills").mkdir()
     ws = tmp_path / "ws"
     ws.mkdir()
-    (ws / "hello.py").write_text("print('from-workspace')\n", encoding="utf-8")
+    work = ws / ".office-agent" / "work"
+    work.mkdir(parents=True)
+    (work / "hello.py").write_text("print('from-workspace')\n", encoding="utf-8")
     ex = ToolExecutor(
         Workspace(ws),
         SkillRegistry(),
         permission_mode="trust",
         audit=AuditLog(tmp_path / "db" / "a.sqlite"),
     )
+    # Bare name at root is relocated to .office-agent/work/
     result = ex.execute("run_workspace_script", {"path": "hello.py", "args": []})
     assert result["ok"] is True
     assert "from-workspace" in result["stdout"]
+
+
+def test_workspace_write_relocates_root_py(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "workspace_write",
+        {"path": "merge_docs.py", "content": "print(1)\n"},
+    )
+    assert result["ok"] is True
+    assert result["path"] == ".office-agent/work/merge_docs.py"
+    assert (ws / ".office-agent" / "work" / "merge_docs.py").is_file()
+    assert not (ws / "merge_docs.py").exists()
+
+
+def test_workspace_write_relocates_root_docx_to_output(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "workspace_write",
+        {"path": "AI.docx", "content": "final\n"},
+    )
+    assert result["ok"] is True
+    assert result["path"] == "output/AI.docx"
+    assert (ws / "output" / "AI.docx").is_file()
+    assert not (ws / "AI.docx").exists()
+
+
+def test_workspace_write_keeps_non_deliverable_at_root(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "workspace_write",
+        {"path": "notes.txt", "content": "memo\n"},
+    )
+    assert result["ok"] is True
+    assert result["path"] == "notes.txt"
+    assert (ws / "notes.txt").is_file()
 
 
 def test_run_skill_script_captures_stdout(tmp_path: Path, monkeypatch):

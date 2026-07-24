@@ -13,3 +13,11 @@ export async function pickFolder(): Promise<string | null> {
   const result = await invoke<string | null>("pick_folder");
   return result ?? null;
 }
+
+/** Pick a Skill zip or markdown file. Browser mode returns null. */
+export async function pickSkillFile(): Promise<string | null> {
+  if (!isTauriRuntime()) return null;
+  const { invoke } = await import("@tauri-apps/api/core");
+  const result = await invoke<string | null>("pick_skill_file");
+  return result ?? null;
+}

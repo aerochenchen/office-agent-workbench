@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from openai import OpenAI
+from httpx import Timeout
 
 from office_agent.config import AppConfig
 
@@ -16,7 +17,12 @@ class ModelGateway:
     def __init__(self, cfg: AppConfig) -> None:
         self._cfg = cfg
         self.assert_allowed()
-        self._client = OpenAI(base_url=cfg.api_base, api_key=cfg.api_key)
+        # Long tool-heavy turns (PPT/docx scripting) need more than the SDK default.
+        self._client = OpenAI(
+            base_url=cfg.api_base,
+            api_key=cfg.api_key,
+            timeout=Timeout(600.0, connect=30.0),
+        )
 
     def assert_allowed(self) -> None:
         host = urlparse(self._cfg.api_base).hostname

@@ -2,9 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { runtimeClient, RuntimeClientError } from "./lib/runtimeClient";
-import { pickFolder } from "./lib/tauri";
-import type { ChatMessage, LiveStep, RuntimeConfig, SkillMeta, TreeEntry } from "./lib/types";
-import WorkspaceTree from "./components/WorkspaceTree";
+import { isTauriRuntime, pickFolder } from "./lib/tauri";
+import type {
+  ChatMessage,
+  LiveStep,
+  RuntimeConfig,
+  SessionMeta,
+  SkillInspect,
+  SkillMeta,
+} from "./lib/types";
+import SessionList from "./components/SessionList";
 import ChatPanel from "./components/ChatPanel";
 import SkillPanel from "./components/SkillPanel";
 import SettingsModal from "./components/SettingsModal";
@@ -27,8 +34,8 @@ function nextId(): string {
 function App() {
   const [health, setHealth] = useState<HealthState>("checking");
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
-  const [treeEntries, setTreeEntries] = useState<TreeEntry[]>([]);
-  const [treeError, setTreeError] = useState<string | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [skills, setSkills] = useState<SkillMeta[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -43,7 +50,6 @@ function App() {
   sendingRef.current = sending;
 
   const checkHealth = useCallback(async () => {
-    // Avoid false "runtime down" while a long chat occupies the UI; still probe lightly.
     if (sendingRef.current) return;
     try {
       await runtimeClient.health();
@@ -51,7 +57,6 @@ function App() {
       setHealth("ok");
     } catch {
       healthFailCount.current += 1;
-      // Require two consecutive failures (~16s) before flipping to down
       if (healthFailCount.current >= 2) setHealth("down");
     }
   }, []);
@@ -84,8 +89,7 @@ function App() {
       const { skills: list } = await runtimeClient.listSkills();
       setSkills(list);
     } catch {
-      // Skills panel shows its own empty state; runtime status dot already
-      // signals connectivity issues, no need to duplicate the error here.
+      // ignore
     }
   }, []);
 
@@ -93,30 +97,55 @@ function App() {
     void refreshSkills();
   }, [refreshSkills]);
 
-  const refreshTree = useCallback(async () => {
-    try {
-      const { entries } = await runtimeClient.getTree();
-      setTreeEntries(entries);
-      setTreeError(null);
-    } catch (err) {
-      setTreeError(err instanceof RuntimeClientError ? err.message : "读取目录失败");
+  const refreshSessions = useCallback(async (wsPath?: string | null) => {
+    const path = wsPath ?? workspacePath;
+    if (!path) {
+      setSessions([]);
+      return [];
     }
+    try {
+      const { sessions: list } = await runtimeClient.listSessions(path);
+      setSessions(list);
+      return list;
+    } catch {
+      setSessions([]);
+      return [];
+    }
+  }, [workspacePath]);
+
+  const loadSessionMessages = useCallback(async (id: string) => {
+    const res = await runtimeClient.getSessionMessages(id);
+    setMessages(
+      res.messages.map((m) => ({
+        id: nextId(),
+        role: m.role,
+        content: m.content,
+        phase: "done" as const,
+      })),
+    );
   }, []);
 
   const handleOpenPath = useCallback(
     async (path: string) => {
-      setTreeError(null);
+      setWorkspaceError(null);
       try {
         const res = await runtimeClient.openWorkspace(path);
         setWorkspacePath(res.path);
-        setSessionId(undefined);
-        setMessages([]);
-        await refreshTree();
+        const list = await refreshSessions(res.path);
+        if (list.length > 0) {
+          setSessionId(list[0].id);
+          await loadSessionMessages(list[0].id);
+        } else {
+          const created = await runtimeClient.createSession(res.path);
+          setSessionId(created.session.id);
+          setMessages([]);
+          await refreshSessions(res.path);
+        }
       } catch (err) {
-        setTreeError(err instanceof RuntimeClientError ? err.message : "打开工作区失败");
+        setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开工作区失败");
       }
     },
-    [refreshTree],
+    [loadSessionMessages, refreshSessions],
   );
 
   const handlePickFolder = useCallback(async () => {
@@ -124,8 +153,67 @@ function App() {
     if (path) await handleOpenPath(path);
   }, [handleOpenPath]);
 
+  const handleNewSession = useCallback(async () => {
+    if (!workspacePath || sending) return;
+    const created = await runtimeClient.createSession(workspacePath);
+    setSessionId(created.session.id);
+    setMessages([]);
+    await refreshSessions(workspacePath);
+  }, [workspacePath, sending, refreshSessions]);
+
+  const handleSelectSession = useCallback(
+    async (id: string) => {
+      if (sending && id !== sessionIdRef.current) return;
+      if (id === sessionIdRef.current) return;
+      setSessionId(id);
+      try {
+        await loadSessionMessages(id);
+      } catch (err) {
+        setMessages([
+          {
+            id: nextId(),
+            role: "error",
+            content: err instanceof RuntimeClientError ? err.message : "加载对话失败",
+          },
+        ]);
+      }
+    },
+    [sending, loadSessionMessages],
+  );
+
+  const handleDeleteSession = useCallback(
+    async (id: string) => {
+      if (sending) return;
+      await runtimeClient.deleteSession(id);
+      const list = await refreshSessions(workspacePath);
+      if (id === sessionIdRef.current) {
+        if (list.length > 0) {
+          setSessionId(list[0].id);
+          await loadSessionMessages(list[0].id);
+        } else if (workspacePath) {
+          const created = await runtimeClient.createSession(workspacePath);
+          setSessionId(created.session.id);
+          setMessages([]);
+          await refreshSessions(workspacePath);
+        } else {
+          setSessionId(undefined);
+          setMessages([]);
+        }
+      }
+    },
+    [sending, workspacePath, refreshSessions, loadSessionMessages],
+  );
+
   const handleSend = useCallback(
     async (text: string) => {
+      if (!workspacePath) return;
+      let activeId = sessionIdRef.current;
+      if (!activeId) {
+        const created = await runtimeClient.createSession(workspacePath);
+        activeId = created.session.id;
+        setSessionId(activeId);
+      }
+
       const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
       const assistantId = nextId();
       const pendingMsg: ChatMessage = {
@@ -148,7 +236,7 @@ function App() {
         await runtimeClient.chatStream(
           {
             message: text,
-            session_id: sessionIdRef.current,
+            session_id: activeId,
           },
           {
             onStarted: (sid) => {
@@ -206,7 +294,7 @@ function App() {
                 stepsExpanded: false,
                 statusPhase: "finishing",
               }));
-              void refreshTree();
+              void refreshSessions(workspacePath);
             },
             onError: (message) => {
               patchAssistant(() => ({
@@ -221,7 +309,7 @@ function App() {
         setSending(false);
       }
     },
-    [refreshTree],
+    [workspacePath, refreshSessions],
   );
 
   const handleToggleSteps = useCallback((messageId: string) => {
@@ -238,23 +326,18 @@ function App() {
     }
   }, [refreshSkills]);
 
-  const handleInstallSkill = useCallback(async (path: string) => {
-    const res = await runtimeClient.installSkill(path);
-    await refreshSkills();
-    const tier = res.skill?.tier;
-    const minRam = res.skill?.min_ram_gb;
-    if (tier === "heavy") {
-      const ok = window.confirm(
-        `「${res.skill?.name ?? res.skill?.id}」为重量级 Skill${
-          minRam ? `，建议至少 ${minRam}GB 内存` : ""
-        }。是否保持启用？`,
-      );
-      if (!ok && res.skill?.id) {
-        await runtimeClient.setEnabled(res.skill.id, false);
-        await refreshSkills();
-      }
-    }
-  }, [refreshSkills]);
+  const handleInspectSkill = useCallback(async (path: string): Promise<SkillInspect> => {
+    const res = await runtimeClient.inspectSkill(path);
+    return res.skill;
+  }, []);
+
+  const handleConfirmInstallSkill = useCallback(
+    async (path: string, enabled: boolean) => {
+      await runtimeClient.installSkillWithOptions(path, enabled);
+      await refreshSkills();
+    },
+    [refreshSkills],
+  );
 
   const handleSaveConfig = useCallback(async (partial: Partial<RuntimeConfig>) => {
     await runtimeClient.saveConfig(partial);
@@ -288,13 +371,18 @@ function App() {
       </header>
 
       <div className={`workbench${skillsCollapsed ? " skills-collapsed" : ""}`}>
-        <WorkspaceTree
+        <SessionList
           workspacePath={workspacePath}
-          entries={treeEntries}
-          error={treeError}
-          onPickFolder={handlePickFolder}
-          onOpenPath={handleOpenPath}
-          onRefresh={refreshTree}
+          workspaceError={workspaceError}
+          sessions={sessions}
+          activeSessionId={sessionId}
+          sending={sending}
+          onPickWorkspace={handlePickFolder}
+          onOpenWorkspacePath={handleOpenPath}
+          onNewSession={() => void handleNewSession()}
+          onSelectSession={(id) => void handleSelectSession(id)}
+          onDeleteSession={(id) => void handleDeleteSession(id)}
+          showManualPath={!isTauriRuntime()}
         />
 
         <ChatPanel
@@ -309,7 +397,8 @@ function App() {
           skills={skills}
           collapsed={skillsCollapsed}
           onToggle={handleToggleSkill}
-          onInstall={handleInstallSkill}
+          onInspect={handleInspectSkill}
+          onConfirmInstall={handleConfirmInstallSkill}
           onRefresh={refreshSkills}
         />
       </div>

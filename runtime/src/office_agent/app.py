@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import queue
 import threading
 from contextlib import asynccontextmanager
@@ -9,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -19,7 +20,7 @@ from office_agent.bundled_seed import seed_bundled_assets
 from office_agent.config import AppConfig
 from office_agent.gateway import GatewayError, ModelGateway
 from office_agent.paths import app_data_dir
-from office_agent.session_store import SessionStore
+from office_agent.session_store import SessionStore, history_to_ui_messages
 from office_agent.skills import SkillError, SkillRegistry
 from office_agent.tools import ToolExecutor
 from office_agent.workspace import SandboxError, Workspace
@@ -31,6 +32,9 @@ DEFAULT_CONFIG = AppConfig(
     allowed_hosts=["api.deepseek.com", "127.0.0.1", "localhost"],
 )
 
+# When False (tests), /shutdown returns ok but does not terminate the process.
+ALLOW_PROCESS_EXIT = True
+
 
 def _config_path() -> Path:
     return app_data_dir() / "config.json"
@@ -40,7 +44,8 @@ def load_config() -> AppConfig:
     path = _config_path()
     if not path.is_file():
         return DEFAULT_CONFIG
-    data = json.loads(path.read_text(encoding="utf-8"))
+    # PowerShell / Notepad may write UTF-8 BOM; utf-8-sig strips it.
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
     return AppConfig(
         api_base=str(data.get("api_base", DEFAULT_CONFIG.api_base)),
         api_key=str(data.get("api_key", DEFAULT_CONFIG.api_key)),
@@ -87,6 +92,7 @@ class OpenWorkspaceBody(BaseModel):
 
 class InstallSkillBody(BaseModel):
     path: str
+    enabled: bool = True
 
 
 class SetEnabledBody(BaseModel):
@@ -104,6 +110,10 @@ class ChatBody(BaseModel):
     message: str
     attached_paths: list[str] = Field(default_factory=list)
     session_id: str | None = None
+
+
+class CreateSessionBody(BaseModel):
+    workspace_path: str | None = None
 
 
 @asynccontextmanager
@@ -128,6 +138,21 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     def health() -> dict[str, bool]:
         return {"ok": True}
 
+    @app.post("/shutdown")
+    async def shutdown(request: Request) -> dict[str, bool]:
+        """Graceful stop for the packaged sidecar (localhost only)."""
+        client = request.client.host if request.client else ""
+        if client not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            raise HTTPException(status_code=403, detail="localhost only")
+
+        async def _exit_soon() -> None:
+            await asyncio.sleep(0.25)
+            if ALLOW_PROCESS_EXIT:
+                os._exit(0)
+
+        asyncio.create_task(_exit_soon())
+        return {"ok": True}
+
     @app.get("/config")
     def get_config() -> dict[str, Any]:
         cfg = office.config
@@ -148,6 +173,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         root = Path(body.path).expanduser()
         try:
             office.workspace = Workspace(root)
+            office.workspace.ensure_layout()
         except SandboxError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         return {"ok": True, "path": str(office.workspace.root)}
@@ -156,6 +182,50 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     def workspace_tree() -> dict[str, Any]:
         ws = office.require_workspace()
         return {"entries": ws.list_dir(".")}
+
+    @app.get("/sessions")
+    def list_sessions(workspace_path: str | None = None) -> dict[str, Any]:
+        if workspace_path:
+            path = str(Path(workspace_path).expanduser().resolve())
+        else:
+            ws = office.require_workspace()
+            path = str(ws.root)
+        return {"sessions": office.sessions.list_sessions(path)}
+
+    @app.post("/sessions")
+    def create_session(body: CreateSessionBody | None = None) -> dict[str, Any]:
+        body = body or CreateSessionBody()
+        if body.workspace_path:
+            path = str(Path(body.workspace_path).expanduser().resolve())
+        else:
+            ws = office.require_workspace()
+            path = str(ws.root)
+        sid = office.sessions.create_session(path)
+        meta = office.sessions.get_session(sid)
+        return {"ok": True, "session": meta}
+
+    @app.get("/sessions/{session_id}")
+    def get_session(session_id: str) -> dict[str, Any]:
+        meta = office.sessions.get_session(session_id)
+        if not meta:
+            raise HTTPException(status_code=404, detail="session not found")
+        return {"session": meta}
+
+    @app.get("/sessions/{session_id}/messages")
+    def get_session_messages(session_id: str) -> dict[str, Any]:
+        if not office.sessions.session_exists(session_id):
+            raise HTTPException(status_code=404, detail="session not found")
+        raw = office.sessions.get_messages(session_id)
+        return {
+            "messages": history_to_ui_messages(raw),
+            "raw_count": len(raw),
+        }
+
+    @app.delete("/sessions/{session_id}")
+    def delete_session(session_id: str) -> dict[str, Any]:
+        if not office.sessions.delete_session(session_id):
+            raise HTTPException(status_code=404, detail="session not found")
+        return {"ok": True, "id": session_id}
 
     @app.get("/skills")
     def list_skills() -> dict[str, Any]:
@@ -167,28 +237,30 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 "version": m.version,
                 "tier": m.tier,
                 "min_ram_gb": m.min_ram_gb,
+                "permissions": m.permissions,
                 "enabled": m.enabled,
             }
             for m in office.registry.scan()
         ]
         return {"skills": skills}
 
+    @app.post("/skills/inspect")
+    def inspect_skill(body: InstallSkillBody) -> dict[str, Any]:
+        src = Path(body.path).expanduser()
+        try:
+            meta = office.registry.inspect_path(src)
+        except SkillError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        return {"skill": office.registry.meta_payload(meta)}
+
     @app.post("/skills/install")
     def install_skill(body: InstallSkillBody) -> dict[str, Any]:
         src = Path(body.path).expanduser()
         try:
-            meta = office.registry.install_dir(src)
+            meta = office.registry.install_path(src, enabled=body.enabled)
         except SkillError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        return {
-            "ok": True,
-            "skill": {
-                "id": meta.id,
-                "name": meta.name,
-                "tier": meta.tier,
-                "min_ram_gb": meta.min_ram_gb,
-            },
-        }
+        return {"ok": True, "skill": office.registry.meta_payload(meta)}
 
     @app.post("/skills/{skill_id}/enabled")
     def set_skill_enabled(skill_id: str, body: SetEnabledBody) -> dict[str, Any]:
@@ -212,6 +284,17 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         return {"ok": True}
 
     def _prepare_chat(body: ChatBody) -> tuple[str, Any, ToolExecutor, list[dict[str, Any]], list[str], int, list[dict[str, Any]]]:
+        # Sidecar restarts drop in-memory workspace; recover from session path.
+        if office.workspace is None and body.session_id:
+            meta = office.sessions.get_session(body.session_id)
+            wp = (meta or {}).get("workspace_path") or ""
+            if wp:
+                try:
+                    office.workspace = Workspace(Path(wp))
+                    office.workspace.ensure_layout()
+                except SandboxError as e:
+                    raise HTTPException(status_code=400, detail=str(e)) from e
+
         ws = office.require_workspace()
         session_id = body.session_id
         if session_id:

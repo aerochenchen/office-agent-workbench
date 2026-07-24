@@ -1,4 +1,14 @@
-import type { ChatReply, ChatStreamHandlers, RuntimeConfig, SkillMeta, TreeEntry } from "./types";
+import type {
+  ChatReply,
+  ChatStreamHandlers,
+  RuntimeConfig,
+  SessionMeta,
+  SessionUiMessage,
+  SkillInspect,
+  SkillMeta,
+  TreeEntry,
+} from "./types";
+import { isTauriRuntime } from "./tauri";
 
 /** Local Python runtime is always loopback-only; not user configurable. */
 export const RUNTIME_BASE_URL = "http://127.0.0.1:8765";
@@ -52,7 +62,7 @@ async function request<T>(
     }
     if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
       throw new RuntimeClientError(
-        "无法连接本地运行时（127.0.0.1:8765）。请确认终端里 uvicorn 仍在运行，或重新启动：uvicorn office_agent.app:app --app-dir src --host 127.0.0.1 --port 8765",
+        "无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 %TEMP%\\office-agent-desktop.log",
       );
     }
     throw new RuntimeClientError(`运行时请求失败：${msg || name || "未知错误"}`);
@@ -77,6 +87,28 @@ export const runtimeClient = {
     return request("/workspace/tree");
   },
 
+  listSessions(workspacePath?: string): Promise<{ sessions: SessionMeta[] }> {
+    const q = workspacePath ? `?workspace_path=${encodeURIComponent(workspacePath)}` : "";
+    return request(`/sessions${q}`);
+  },
+
+  createSession(workspacePath?: string): Promise<{ ok: boolean; session: SessionMeta }> {
+    return request("/sessions", {
+      method: "POST",
+      body: JSON.stringify(workspacePath ? { workspace_path: workspacePath } : {}),
+    });
+  },
+
+  getSessionMessages(sessionId: string): Promise<{ messages: SessionUiMessage[]; raw_count: number }> {
+    return request(`/sessions/${encodeURIComponent(sessionId)}/messages`);
+  },
+
+  deleteSession(sessionId: string): Promise<{ ok: boolean; id: string }> {
+    return request(`/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+    });
+  },
+
   listSkills(): Promise<{ skills: SkillMeta[] }> {
     return request("/skills");
   },
@@ -85,6 +117,23 @@ export const runtimeClient = {
     return request("/skills/install", {
       method: "POST",
       body: JSON.stringify({ path }),
+    });
+  },
+
+  inspectSkill(path: string): Promise<{ skill: SkillInspect }> {
+    return request("/skills/inspect", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    });
+  },
+
+  installSkillWithOptions(
+    path: string,
+    enabled: boolean,
+  ): Promise<{ ok: boolean; skill: SkillInspect }> {
+    return request("/skills/install", {
+      method: "POST",
+      body: JSON.stringify({ path, enabled }),
     });
   },
 
@@ -114,13 +163,15 @@ export const runtimeClient = {
     return request("/chat", {
       method: "POST",
       body: JSON.stringify(input),
-      timeoutMs: 300_000,
+      timeoutMs: 600_000,
     });
   },
 
   /**
-   * Stream one chat turn as SSE. Falls back to sync `/chat` if stream endpoint
-   * is unavailable (404) so older runtimes still work with A0 placeholder UI.
+   * One chat turn with progress callbacks.
+   * Packaged Tauri/WebView2 often cannot consume fetch SSE bodies, so the
+   * desktop shell uses sync `/chat` (still reports started/final to the UI).
+   * Browser/`vite` keeps SSE `/chat/stream` with a sync fallback.
    */
   async chatStream(
     input: {
@@ -130,19 +181,55 @@ export const runtimeClient = {
     },
     handlers: ChatStreamHandlers,
   ): Promise<void> {
+    const runSync = async () => {
+      handlers.onStatus?.("planning");
+      const reply = await this.chat(input);
+      handlers.onStarted?.(reply.session_id);
+      handlers.onStatus?.("finishing");
+      handlers.onFinal?.(reply);
+    };
+
+    if (isTauriRuntime()) {
+      try {
+        await runSync();
+      } catch (err) {
+        if (err instanceof RuntimeClientError) {
+          handlers.onError?.(err.message);
+          return;
+        }
+        const name = err instanceof Error ? err.name : "";
+        const msg = err instanceof Error ? err.message : String(err);
+        if (name === "AbortError" || msg.includes("aborted")) {
+          handlers.onError?.(
+            "请求超时（300s）。若正在长对话/调工具，请稍候再试；勿反复刷新。",
+          );
+          return;
+        }
+        if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
+          handlers.onError?.(
+            "无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 %TEMP%\\office-agent-desktop.log",
+          );
+          return;
+        }
+        handlers.onError?.(msg || "对话请求失败");
+      }
+      return;
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 300_000);
     try {
       const res = await fetch(`${RUNTIME_BASE_URL}/chat/stream`, {
         method: "POST",
         signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
         body: JSON.stringify(input),
       });
       if (res.status === 404) {
-        const reply = await this.chat(input);
-        handlers.onStarted?.(reply.session_id);
-        handlers.onFinal?.(reply);
+        await runSync();
         return;
       }
       if (!res.ok) {
@@ -156,16 +243,19 @@ export const runtimeClient = {
         throw new RuntimeClientError(detail, res.status);
       }
       if (!res.body) {
-        throw new RuntimeClientError("流式响应为空");
+        await runSync();
+        return;
       }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
       let sawFinal = false;
+      let sawError = false;
+      let sawAny = false;
 
       const dispatchBlock = (block: string) => {
-        const lines = block.split("\n");
+        const lines = block.split(/\r?\n/);
         let eventName = "message";
         const dataLines: string[] = [];
         for (const line of lines) {
@@ -179,6 +269,7 @@ export const runtimeClient = {
         } catch {
           return;
         }
+        sawAny = true;
         switch (eventName) {
           case "started":
             if (typeof data.session_id === "string") handlers.onStarted?.(data.session_id);
@@ -212,6 +303,7 @@ export const runtimeClient = {
             });
             break;
           case "error":
+            sawError = true;
             handlers.onError?.(String(data.message ?? "未知错误"));
             break;
           default:
@@ -223,16 +315,21 @@ export const runtimeClient = {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
+        const parts = buffer.split(/\r?\n\r?\n/);
         buffer = parts.pop() ?? "";
         for (const part of parts) {
           if (part.trim()) dispatchBlock(part);
         }
       }
+      buffer += decoder.decode();
       if (buffer.trim()) dispatchBlock(buffer);
-      if (!sawFinal) {
-        handlers.onError?.("流式对话异常结束，未收到最终结果");
+
+      if (sawFinal || sawError) return;
+      if (!sawAny) {
+        await runSync();
+        return;
       }
+      handlers.onError?.("流式对话异常结束，未收到最终结果");
     } catch (err) {
       if (err instanceof RuntimeClientError) {
         handlers.onError?.(err.message);
@@ -248,7 +345,7 @@ export const runtimeClient = {
       }
       if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
         handlers.onError?.(
-          "无法连接本地运行时（127.0.0.1:8765）。请确认 Runtime 仍在运行。",
+          "无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 %TEMP%\\office-agent-desktop.log",
         );
         return;
       }

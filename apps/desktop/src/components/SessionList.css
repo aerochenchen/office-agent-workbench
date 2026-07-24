@@ -1,0 +1,141 @@
+.session-pane {
+  background: var(--paper-1);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.session-toolbar {
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.session-list-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-2) 0;
+}
+
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--ink-0);
+}
+
+.session-row:hover {
+  background: var(--paper-2);
+}
+
+.session-row--active {
+  background: var(--accent-teal-soft);
+}
+
+.session-row--blocked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.session-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-title {
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-time {
+  font-size: var(--font-size-xs);
+  color: var(--ink-2);
+}
+
+.session-delete {
+  flex: 0 0 auto;
+  opacity: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.session-row:hover .session-delete,
+.session-row:focus-within .session-delete {
+  opacity: 1;
+}
+
+.session-delete:hover:not(:disabled) {
+  color: var(--status-error);
+}
+
+.session-delete:disabled {
+  cursor: not-allowed;
+}
+
+.session-workspace-bar {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line-0);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--paper-1);
+}
+
+.session-workspace-label {
+  font-size: var(--font-size-xs);
+  color: var(--ink-2);
+}
+
+.session-workspace-path {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-workspace-path--empty {
+  color: var(--ink-2);
+}
+
+.session-workspace-error {
+  font-size: var(--font-size-xs);
+  color: var(--status-error);
+}
+
+.session-manual-path {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.session-manual-input {
+  border: 1px solid var(--line-0);
+  border-radius: var(--radius-sm);
+  padding: 3px var(--space-2);
+  font-size: var(--font-size-xs);
+  background: var(--paper-2);
+  color: var(--ink-0);
+}
