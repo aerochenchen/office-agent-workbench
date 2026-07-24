@@ -8,11 +8,48 @@ from pathlib import Path
 from office_agent.audit import AuditLog
 from office_agent.paths import app_data_dir
 from office_agent.skills import SkillRegistry
-from office_agent.workspace import SandboxError, Workspace
+from office_agent.workspace import (
+    AGENT_OUTPUT_REL,
+    AGENT_WORK_REL,
+    DELIVERABLE_SUFFIXES,
+    SandboxError,
+    Workspace,
+)
 
 
 class ToolError(ValueError):
     pass
+
+
+def _normalize_rel(rel: str) -> str:
+    normalized = rel.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
+
+
+def relocate_write_path(rel: str) -> str:
+    """Route agent writes: root .py → work/; root deliverables → output/."""
+    normalized = _normalize_rel(rel)
+    if normalized.startswith(f"{AGENT_WORK_REL}/") or normalized == AGENT_WORK_REL:
+        return normalized
+    if normalized.startswith(f"{AGENT_OUTPUT_REL}/") or normalized == AGENT_OUTPUT_REL:
+        return normalized
+    path = Path(normalized)
+    if ".." in path.parts:
+        return normalized
+    if len(path.parts) != 1:
+        return normalized
+    suffix = path.suffix.lower()
+    if suffix == ".py":
+        return f"{AGENT_WORK_REL}/{path.name}"
+    if suffix in DELIVERABLE_SUFFIXES:
+        return f"{AGENT_OUTPUT_REL}/{path.name}"
+    return normalized
+
+
+# Back-compat alias used by older tests/imports
+_relocate_process_path = relocate_write_path
 
 
 class ToolExecutor:
@@ -77,12 +114,15 @@ class ToolExecutor:
         return {"ok": True, "content": content}
 
     def _workspace_write(self, args: dict) -> dict:
-        written = self.workspace.write_text(str(args["path"]), str(args["content"]))
+        rel = relocate_write_path(str(args["path"]))
+        if rel.startswith(f"{AGENT_WORK_REL}/") or rel.startswith(f"{AGENT_OUTPUT_REL}/"):
+            self.workspace.ensure_layout()
+        written = self.workspace.write_text(rel, str(args["content"]))
         return {"ok": True, "path": str(written.relative_to(self.workspace.root))}
 
     def _run_workspace_script(self, args: dict) -> dict:
         """Run a .py file that lives inside the workspace sandbox."""
-        rel = str(args["path"])
+        rel = relocate_write_path(str(args["path"]))
         argv = [str(a) for a in args.get("args", [])]
         script_path = self.workspace.resolve(rel)
         if not script_path.is_file():

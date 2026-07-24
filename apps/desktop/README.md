@@ -66,9 +66,7 @@ npm run build   # tsc + vite build，产物在 dist/
 
 ## 已知限制
 
+- Skill 安装：桌面端点「选择安装包」→ 选文件夹或 zip/md；安装前预览名称/类型/权限。浏览器模式可用「高级：粘贴路径」。
 - `/workspace/tree` 当前只返回工作区根目录的一层内容（无递归/展开），文件树暂不支持展开子目录；
   待 Runtime 增加带路径参数的接口后再补齐。
-- 无 `GET /config` 接口，设置弹窗无法读取 Runtime 当前已保存的配置，仅能覆盖式保存。
-- Skill 安装通过本机路径（`SKILL.md` 所在目录），未接入 zip 上传 UI。
-- 本机没有 Rust/Cargo，`tauri dev`/`tauri build` 未能在当前开发环境中实测，仅完成源码与配置；
-  已用浏览器 + vite dev 方式验证前端逻辑与 Runtime API 对接。
+- 无流式配置回读以外，设置弹窗以覆盖式保存为主。

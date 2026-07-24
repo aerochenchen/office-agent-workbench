@@ -25,6 +25,16 @@ async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
     Ok(folder.map(|f| f.to_string()))
 }
 
+#[tauri::command]
+async fn pick_skill_file(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let file = app
+        .dialog()
+        .file()
+        .add_filter("Skill 包", &["zip", "md"])
+        .blocking_pick_file();
+    Ok(file.map(|f| f.to_string()))
+}
+
 /// Locates `runtime/` relative to the dev working directory
 /// (`apps/desktop/src-tauri` during `tauri dev`). Returns `None` if it
 /// cannot be found; the caller should fall back to manual startup.
@@ -113,7 +123,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![pick_folder])
+        .invoke_handler(tauri::generate_handler![pick_folder, pick_skill_file])
         .setup(|app| {
             let child = try_spawn_runtime();
             app.manage(RuntimeProcess(Mutex::new(child)));

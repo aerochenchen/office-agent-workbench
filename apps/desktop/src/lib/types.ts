@@ -13,7 +13,20 @@ export interface SkillMeta {
   version: string;
   tier: SkillTier;
   min_ram_gb: number | null;
+  permissions?: string[];
   enabled: boolean;
+}
+
+export interface SkillInspect {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  tier: SkillTier;
+  min_ram_gb: number | null;
+  permissions: string[];
+  shared_scripts?: string[];
+  enabled?: boolean;
 }
 
 export interface ToolEvent {
@@ -53,6 +66,19 @@ export interface ChatMessage {
   startedAt?: number;
   statusPhase?: "planning" | "tools" | "finishing";
   stepsExpanded?: boolean;
+}
+
+export interface SessionMeta {
+  id: string;
+  workspace_path: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface SessionUiMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export interface RuntimeConfig {

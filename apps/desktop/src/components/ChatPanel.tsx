@@ -193,7 +193,7 @@ export default function ChatPanel({
   return (
     <section className="pane chat-pane">
       <div className="pane-header">
-        <span className="pane-title">对话</span>
+        <span className="pane-title">当前对话</span>
         {sending && <span className="chat-status">运行中…</span>}
       </div>
 

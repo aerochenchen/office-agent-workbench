@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -75,11 +76,15 @@ def test_open_workspace_and_tree(client: TestClient, tmp_path: Path):
     r = client.post("/workspace/open", json={"path": str(ws)})
     assert r.status_code == 200
     assert r.json()["ok"] is True
+    assert (ws / ".office-agent" / "work").is_dir()
+    assert (ws / "output").is_dir()
 
     tree = client.get("/workspace/tree")
     assert tree.status_code == 200
     names = {e["name"] for e in tree.json()["entries"]}
     assert "doc.txt" in names
+    assert ".office-agent" in names
+    assert "output" in names
 
 
 def test_workspace_tree_requires_open(client: TestClient):
@@ -108,17 +113,38 @@ def test_install_skill_and_set_enabled(client: TestClient, tmp_path: Path):
     src = tmp_path / "pkg" / "my-skill"
     src.mkdir(parents=True)
     (src / "SKILL.md").write_text(
-        "---\nname: my-skill\ndescription: install test\ntier: light\n---\n\n# y\n",
+        "---\nname: my-skill\ndescription: install test\ntier: light\n"
+        "permissions:\n  - run_python\n---\n\n# y\n",
         encoding="utf-8",
     )
-    r = client.post("/skills/install", json={"path": str(src)})
+    preview = client.post("/skills/inspect", json={"path": str(src)})
+    assert preview.status_code == 200
+    assert preview.json()["skill"]["permissions"] == ["run_python"]
+
+    r = client.post("/skills/install", json={"path": str(src), "enabled": True})
     assert r.status_code == 200
     assert r.json()["skill"]["id"] == "my-skill"
+    assert r.json()["skill"]["permissions"] == ["run_python"]
 
     off = client.post("/skills/my-skill/enabled", json={"enabled": False})
     assert off.status_code == 200
     listed = client.get("/skills").json()["skills"]
     assert listed[0]["enabled"] is False
+
+
+def test_install_zip_via_api(client: TestClient, tmp_path: Path):
+    src = tmp_path / "pkg" / "zip-skill"
+    src.mkdir(parents=True)
+    (src / "SKILL.md").write_text(
+        "---\nname: zip-skill\ndescription: from zip\ntier: light\n---\n\n# z\n",
+        encoding="utf-8",
+    )
+    z = tmp_path / "s.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.write(src / "SKILL.md", arcname="zip-skill/SKILL.md")
+    r = client.post("/skills/install", json={"path": str(z)})
+    assert r.status_code == 200
+    assert r.json()["skill"]["id"] == "zip-skill"
 
 
 def test_post_config_updates_state(client: TestClient, app_state: ProcessState):
@@ -200,3 +226,35 @@ def test_session_store_persists_in_db(tmp_path: Path, monkeypatch):
     store.append_messages(sid, [{"role": "user", "content": "hi"}])
     assert (tmp_path / "db" / "sessions.sqlite").is_file()
     assert store.get_messages(sid)[0]["content"] == "hi"
+    meta = store.get_session(sid)
+    assert meta is not None
+    assert meta["title"] == "hi"
+
+
+def test_sessions_api_list_create_delete(client: TestClient, tmp_path: Path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    created = client.post("/sessions", json={})
+    assert created.status_code == 200
+    sid = created.json()["session"]["id"]
+    assert created.json()["session"]["title"] == "新对话"
+
+    listed = client.get("/sessions")
+    assert listed.status_code == 200
+    ids = {s["id"] for s in listed.json()["sessions"]}
+    assert sid in ids
+
+    client.post("/chat", json={"message": "整理会议纪要", "session_id": sid})
+    msgs = client.get(f"/sessions/{sid}/messages")
+    assert msgs.status_code == 200
+    roles = [m["role"] for m in msgs.json()["messages"]]
+    assert "user" in roles
+
+    meta = client.get(f"/sessions/{sid}").json()["session"]
+    assert meta["title"] == "整理会议纪要"
+
+    deleted = client.delete(f"/sessions/{sid}")
+    assert deleted.status_code == 200
+    assert client.get(f"/sessions/{sid}").status_code == 404

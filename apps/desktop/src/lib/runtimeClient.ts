@@ -1,4 +1,13 @@
-import type { ChatReply, ChatStreamHandlers, RuntimeConfig, SkillMeta, TreeEntry } from "./types";
+import type {
+  ChatReply,
+  ChatStreamHandlers,
+  RuntimeConfig,
+  SessionMeta,
+  SessionUiMessage,
+  SkillInspect,
+  SkillMeta,
+  TreeEntry,
+} from "./types";
 
 /** Local Python runtime is always loopback-only; not user configurable. */
 export const RUNTIME_BASE_URL = "http://127.0.0.1:8765";
@@ -77,6 +86,28 @@ export const runtimeClient = {
     return request("/workspace/tree");
   },
 
+  listSessions(workspacePath?: string): Promise<{ sessions: SessionMeta[] }> {
+    const q = workspacePath ? `?workspace_path=${encodeURIComponent(workspacePath)}` : "";
+    return request(`/sessions${q}`);
+  },
+
+  createSession(workspacePath?: string): Promise<{ ok: boolean; session: SessionMeta }> {
+    return request("/sessions", {
+      method: "POST",
+      body: JSON.stringify(workspacePath ? { workspace_path: workspacePath } : {}),
+    });
+  },
+
+  getSessionMessages(sessionId: string): Promise<{ messages: SessionUiMessage[]; raw_count: number }> {
+    return request(`/sessions/${encodeURIComponent(sessionId)}/messages`);
+  },
+
+  deleteSession(sessionId: string): Promise<{ ok: boolean; id: string }> {
+    return request(`/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+    });
+  },
+
   listSkills(): Promise<{ skills: SkillMeta[] }> {
     return request("/skills");
   },
@@ -85,6 +116,23 @@ export const runtimeClient = {
     return request("/skills/install", {
       method: "POST",
       body: JSON.stringify({ path }),
+    });
+  },
+
+  inspectSkill(path: string): Promise<{ skill: SkillInspect }> {
+    return request("/skills/inspect", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    });
+  },
+
+  installSkillWithOptions(
+    path: string,
+    enabled: boolean,
+  ): Promise<{ ok: boolean; skill: SkillInspect }> {
+    return request("/skills/install", {
+      method: "POST",
+      body: JSON.stringify({ path, enabled }),
     });
   },
 

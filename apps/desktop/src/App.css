@@ -90,6 +90,11 @@
   background: transparent;
 }
 
+.btn--full {
+  width: 100%;
+  justify-content: center;
+}
+
 .btn--primary {
   background: var(--accent-teal);
   border-color: var(--accent-teal);
