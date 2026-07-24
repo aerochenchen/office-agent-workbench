@@ -1,0 +1,33 @@
+# Python
+runtime/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+apps/desktop/node_modules/
+apps/desktop/dist/
+npm-debug.log*
+
+# Tauri / Rust
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/schemas/
+
+# Local / generated
+.dev/
+.tmp-skills-inspect/
+.tmp-ws-demo/
+.DS_Store
+*.log
+
+# Heavy optional model weights (keep skill code)
+optional-skills/gongwen-rag-writing/models/bge-small-zh-v1.5/
+**/models/bge-small-zh-v1.5/
+
+# Secrets (never commit)
+.env
+.env.*
+!.env.example

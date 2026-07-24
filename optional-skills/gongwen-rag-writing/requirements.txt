@@ -1,0 +1,7 @@
+# Optional writing skill Python deps (NOT for standard runtime package)
+# Install only on machines that enable gongwen-rag-writing (recommend ≥8GB RAM).
+sentence-transformers>=3.0.0
+torch>=2.0.0
+numpy>=1.26.0
+tqdm>=4.66.0
+python-docx>=1.1.0

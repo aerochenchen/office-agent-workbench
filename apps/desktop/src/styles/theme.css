@@ -1,0 +1,102 @@
+/*
+ * 设计基调：机关文书工作台。冷灰纸感背景 + 深墨字，点缀色为 muted 青绿。
+ * 所有颜色/字号/间距集中在此，组件样式只引用变量，禁止散落硬编码色值。
+ */
+:root {
+  /* -- 色板：纸感背景 / 墨色文字 -- */
+  --paper-0: #f3f4f1; /* 应用底色 */
+  --paper-1: #fafaf8; /* 面板/输入底色，略高对比 */
+  --paper-2: #ffffff; /* 最高层（弹层） */
+  --ink-0: #1e2321; /* 主文字 */
+  --ink-1: #4c554f; /* 次要文字 */
+  --ink-2: #7b837c; /* 弱化文字/占位符 */
+  --line-0: #d7dad3; /* 主分隔线 */
+  --line-1: #e5e7e1; /* 弱分隔线 */
+
+  /* -- 点缀色：muted 青绿为主，靛蓝为辅 -- */
+  --accent-teal: #3c6e64;
+  --accent-teal-soft: #e4ede9;
+  --accent-indigo: #445a8c;
+  --accent-indigo-soft: #e6e9f1;
+
+  /* -- 状态色（克制，不用霓虹） -- */
+  --status-ok: #3c6e64;
+  --status-warn: #9a6a2c;
+  --status-error: #a1433a;
+
+  /* -- 字体 -- */
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB",
+    system-ui, -apple-system, sans-serif;
+  --font-mono: "SF Mono", "Menlo", "Consolas", "Cascadia Code", ui-monospace, monospace;
+
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 19px;
+
+  /* -- 间距/圆角：克制，不做大圆角胶囊 -- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+
+  /* -- 布局尺寸 -- */
+  --topbar-height: 48px;
+  --tree-width: 240px;
+  --skills-width: 300px;
+
+  /* -- 动效：唯一统一时长 -- */
+  --motion-fast: 120ms ease-out;
+  --motion-base: 180ms ease-out;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--paper-0);
+  color: var(--ink-0);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-md);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--font-mono);
+}
+
+::selection {
+  background: var(--accent-teal-soft);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--accent-teal);
+  outline-offset: 1px;
+}
