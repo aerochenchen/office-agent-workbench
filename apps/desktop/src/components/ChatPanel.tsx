@@ -10,6 +10,7 @@ interface Props {
   sending: boolean;
   runtimeReady: boolean;
   onSend: (text: string) => void;
+  onStop?: () => void;
   onOpenWorkspace?: () => void;
   onToggleSteps?: (messageId: string) => void;
 }
@@ -166,6 +167,7 @@ export default function ChatPanel({
   sending,
   runtimeReady,
   onSend,
+  onStop,
   onOpenWorkspace,
   onToggleSteps,
 }: Props) {
@@ -293,13 +295,19 @@ export default function ChatPanel({
             }
           }}
         />
-        <button
-          type="submit"
-          className={`btn${workspaceOpen && runtimeReady ? " btn--primary" : " btn--ghost"}`}
-          disabled={disabled || !draft.trim()}
-        >
-          发送
-        </button>
+        {sending ? (
+          <button type="button" className="btn btn--ghost" onClick={() => onStop?.()}>
+            停止
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className={`btn${workspaceOpen && runtimeReady ? " btn--primary" : " btn--ghost"}`}
+            disabled={disabled || !draft.trim()}
+          >
+            发送
+          </button>
+        )}
       </form>
     </section>
   );

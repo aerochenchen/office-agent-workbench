@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from office_agent.agent_loop import run_agent
 from office_agent.audit import AuditLog
 from office_agent.bundled_seed import seed_bundled_assets
+from office_agent.cancel import CancelToken
 from office_agent.config import AppConfig
 from office_agent.gateway import GatewayError, ModelGateway
 from office_agent.paths import app_data_dir
@@ -87,6 +88,8 @@ class ProcessState:
     zh_locale_tried: set[str] = field(default_factory=set)
     # request_id → interactive PermissionGate awaiting resolve
     gates: dict[str, PermissionGate] = field(default_factory=dict)
+    # session_id → CancelToken for the in-flight agent turn
+    active_cancel: dict[str, CancelToken] = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> ProcessState:
@@ -136,6 +139,10 @@ class ChatBody(BaseModel):
 
 class PermissionBody(BaseModel):
     allow: bool
+
+
+class CancelChatBody(BaseModel):
+    session_id: str
 
 
 class CreateSessionBody(BaseModel):
@@ -335,6 +342,14 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         office.gates.pop(request_id, None)
         return {"ok": True}
 
+    @app.post("/chat/cancel")
+    def cancel_chat(body: CancelChatBody) -> dict[str, Any]:
+        token = office.active_cancel.get(body.session_id)
+        if token is None:
+            raise HTTPException(status_code=404, detail="no active chat for session")
+        token.cancel()
+        return {"ok": True}
+
     def _prepare_chat(
         body: ChatBody,
         *,
@@ -451,6 +466,9 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         gate.on_request = on_permission_request
         gate.on_timeout = lambda request_id: office.gates.pop(request_id, None)
 
+        cancel_token = CancelToken()
+        office.active_cancel[session_id] = cancel_token
+
         def worker() -> None:
             try:
                 emit("started", {"session_id": session_id})
@@ -463,8 +481,13 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     max_steps,
                     history=history,
                     on_event=on_event,
+                    cancel=cancel_token,
                 )
-                office.sessions.append_messages(session_id, result.messages)
+                # Best-effort: persist whatever the turn produced (incl. cancel truncation).
+                try:
+                    office.sessions.append_messages(session_id, result.messages)
+                except Exception:
+                    pass
                 emit(
                     "final",
                     {
@@ -476,6 +499,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             except Exception as e:
                 emit("error", {"message": f"agent error: {e}"})
             finally:
+                office.active_cancel.pop(session_id, None)
                 event_q.put(None)
 
         threading.Thread(target=worker, daemon=True).start()

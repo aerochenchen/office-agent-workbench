@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
-import { runtimeClient, RuntimeClientError } from "./lib/runtimeClient";
+import { runtimeClient, RuntimeClientError, type ChatStreamHandle } from "./lib/runtimeClient";
 import { isTauriRuntime, pickFolder } from "./lib/tauri";
 import type {
   ChatMessage,
@@ -52,6 +52,7 @@ function App() {
   const sessionIdRef = useRef<string | undefined>(undefined);
   const healthFailCount = useRef(0);
   const sendingRef = useRef(false);
+  const streamHandleRef = useRef<ChatStreamHandle | null>(null);
   sessionIdRef.current = sessionId;
   sendingRef.current = sending;
 
@@ -270,7 +271,7 @@ function App() {
       };
 
       try {
-        await runtimeClient.chatStream(
+        const stream = runtimeClient.chatStream(
           {
             message: text,
             session_id: activeId,
@@ -347,12 +348,26 @@ function App() {
             },
           },
         );
+        streamHandleRef.current = stream;
+        await stream.done;
       } finally {
+        streamHandleRef.current = null;
         setSending(false);
       }
     },
     [workspacePath, runtimeReady, refreshSessions],
   );
+
+  const handleStop = useCallback(async () => {
+    const sid = sessionIdRef.current;
+    streamHandleRef.current?.abort();
+    if (!sid) return;
+    try {
+      await runtimeClient.cancelChat(sid);
+    } catch {
+      // Stream abort already stops the UI; ignore 404 when turn already ended.
+    }
+  }, []);
 
   const handleToggleSteps = useCallback((messageId: string) => {
     setMessages((prev) =>
@@ -479,6 +494,7 @@ function App() {
           sending={sending}
           runtimeReady={runtimeReady}
           onSend={handleSend}
+          onStop={() => void handleStop()}
           onOpenWorkspace={handlePickFolder}
           onToggleSteps={handleToggleSteps}
         />

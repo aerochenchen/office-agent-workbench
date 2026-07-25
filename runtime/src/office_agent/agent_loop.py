@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from office_agent.cancel import CancelToken, CancelledError
 from office_agent.tools import ToolExecutor
 
 EventCallback = Callable[[dict[str, Any]], None]
@@ -312,6 +313,7 @@ def run_agent(
     max_steps: int,
     history: list[dict[str, Any]] | None = None,
     on_event: EventCallback | None = None,
+    cancel: CancelToken | None = None,
 ) -> AgentResult:
     """Run one user turn. ``history`` is prior session turns (no system message)."""
 
@@ -330,78 +332,94 @@ def run_agent(
     tool_events: list[dict[str, Any]] = []
     final_text = ""
 
-    for _ in range(max_steps):
-        emit({"type": "status", "phase": "planning"})
-        response = gateway.chat(messages, tools=TOOL_SCHEMAS)
-        message = response.choices[0].message
-        messages.append(_assistant_message_from_response(message))
+    try:
+        for _ in range(max_steps):
+            if cancel is not None:
+                cancel.check()
+            emit({"type": "status", "phase": "planning"})
+            response = gateway.chat(messages, tools=TOOL_SCHEMAS)
+            message = response.choices[0].message
+            messages.append(_assistant_message_from_response(message))
 
-        if message.tool_calls:
-            emit({"type": "status", "phase": "tools"})
-            stop_for_user = False
-            for tc in message.tool_calls:
-                name = tc.function.name
-                args = _parse_tool_args(tc.function.arguments)
-                label = tool_label(name)
-                emit(
-                    {
-                        "type": "tool_start",
-                        "id": tc.id,
-                        "name": name,
-                        "label": label,
-                        "args_summary": args_summary(name, args),
-                    }
-                )
-                result = tools.execute(name, args)
-                ok = bool(result.get("ok", True)) if isinstance(result, dict) else True
-                summary = result_summary(name, result if isinstance(result, dict) else {"ok": False, "error": str(result)})
-                emit(
-                    {
-                        "type": "tool_done",
-                        "id": tc.id,
-                        "name": name,
-                        "label": label,
-                        "ok": ok,
-                        "summary": summary,
-                    }
-                )
-                tool_events.append({"name": name, "args": args, "result": result})
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": json.dumps(result, ensure_ascii=False),
-                    }
-                )
-                if name == "ask_user":
-                    final_text = _ask_user_text(args, result)
-                    stop_for_user = True
-                    break
-                if name == "finish" and result.get("ok"):
-                    final_text = str(result.get("summary") or "")
+            if message.tool_calls:
+                emit({"type": "status", "phase": "tools"})
+                stop_for_user = False
+                for tc in message.tool_calls:
+                    if cancel is not None:
+                        cancel.check()
+                    name = tc.function.name
+                    args = _parse_tool_args(tc.function.arguments)
+                    label = tool_label(name)
+                    emit(
+                        {
+                            "type": "tool_start",
+                            "id": tc.id,
+                            "name": name,
+                            "label": label,
+                            "args_summary": args_summary(name, args),
+                        }
+                    )
+                    result = tools.execute(name, args)
+                    ok = bool(result.get("ok", True)) if isinstance(result, dict) else True
+                    summary = result_summary(
+                        name, result if isinstance(result, dict) else {"ok": False, "error": str(result)}
+                    )
+                    emit(
+                        {
+                            "type": "tool_done",
+                            "id": tc.id,
+                            "name": name,
+                            "label": label,
+                            "ok": ok,
+                            "summary": summary,
+                        }
+                    )
+                    tool_events.append({"name": name, "args": args, "result": result})
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(result, ensure_ascii=False),
+                        }
+                    )
+                    if name == "ask_user":
+                        final_text = _ask_user_text(args, result)
+                        stop_for_user = True
+                        break
+                    if name == "finish" and result.get("ok"):
+                        final_text = str(result.get("summary") or "")
+                        emit({"type": "status", "phase": "finishing"})
+                        return AgentResult(
+                            messages=messages[new_from:],
+                            final_text=final_text,
+                            tool_events=tool_events,
+                        )
+                if stop_for_user:
                     emit({"type": "status", "phase": "finishing"})
                     return AgentResult(
                         messages=messages[new_from:],
                         final_text=final_text,
                         tool_events=tool_events,
                     )
-            if stop_for_user:
+                continue
+
+            if message.content:
+                final_text = message.content.strip()
                 emit({"type": "status", "phase": "finishing"})
                 return AgentResult(
                     messages=messages[new_from:],
                     final_text=final_text,
                     tool_events=tool_events,
                 )
-            continue
-
-        if message.content:
-            final_text = message.content.strip()
-            emit({"type": "status", "phase": "finishing"})
-            return AgentResult(
-                messages=messages[new_from:],
-                final_text=final_text,
-                tool_events=tool_events,
-            )
+    except CancelledError:
+        if not final_text:
+            final_text = "已取消生成。"
+        emit({"type": "status", "phase": "finishing"})
+        return AgentResult(
+            messages=messages[new_from:],
+            final_text=final_text,
+            tool_events=tool_events,
+        )
 
     if not final_text and tool_events:
         final_text = (

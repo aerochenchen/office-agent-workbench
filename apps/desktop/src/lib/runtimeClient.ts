@@ -177,6 +177,11 @@ function createSseDispatcher(handlers: ChatStreamHandlers): {
   return { dispatchBlock, outcome };
 }
 
+/** External abort handle for an in-flight chat stream (XHR or fetch). */
+export type ChatStreamHandle = {
+  abort: () => void;
+};
+
 /**
  * Progressive XHR SSE reader — works in Tauri WebView2/WKWebView where
  * `fetch().body.getReader()` is often unavailable or buffered until complete.
@@ -185,12 +190,21 @@ function streamChatViaXhr(
   input: { message: string; attached_paths?: string[]; session_id?: string },
   handlers: ChatStreamHandlers,
   timeoutMs = 600_000,
+  onHandle?: (handle: ChatStreamHandle) => void,
 ): Promise<StreamOutcome> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const { dispatchBlock, outcome } = createSseDispatcher(handlers);
     let buffer = "";
     let seenChars = 0;
+    let userAborted = false;
+
+    onHandle?.({
+      abort: () => {
+        userAborted = true;
+        xhr.abort();
+      },
+    });
 
     const pump = () => {
       const text = xhr.responseText || "";
@@ -243,7 +257,20 @@ function streamChatViaXhr(
 
     xhr.onerror = () => reject(new Error("NetworkError"));
     xhr.ontimeout = () => reject(new Error("timeout"));
-    xhr.onabort = () => reject(new Error("aborted"));
+    xhr.onabort = () => {
+      if (userAborted) {
+        // Treat user stop as a soft end if SSE already delivered final/error.
+        if (outcome.sawFinal || outcome.sawError) {
+          resolve(outcome);
+          return;
+        }
+        handlers.onError?.("已取消生成");
+        outcome.sawError = true;
+        resolve(outcome);
+        return;
+      }
+      reject(new Error("aborted"));
+    };
 
     try {
       xhr.send(JSON.stringify(input));
@@ -257,8 +284,16 @@ async function streamChatViaFetch(
   input: { message: string; attached_paths?: string[]; session_id?: string },
   handlers: ChatStreamHandlers,
   timeoutMs = 600_000,
+  onHandle?: (handle: ChatStreamHandle) => void,
 ): Promise<StreamOutcome> {
   const controller = new AbortController();
+  let userAborted = false;
+  onHandle?.({
+    abort: () => {
+      userAborted = true;
+      controller.abort();
+    },
+  });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${RUNTIME_BASE_URL}/chat/stream`, {
@@ -305,6 +340,13 @@ async function streamChatViaFetch(
     buffer += decoder.decode();
     if (buffer.trim()) dispatchBlock(buffer);
     return outcome;
+  } catch (err) {
+    if (userAborted) {
+      const outcome: StreamOutcome = { sawAny: true, sawFinal: false, sawError: true };
+      handlers.onError?.("已取消生成");
+      return outcome;
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }
@@ -402,6 +444,14 @@ export const runtimeClient = {
     });
   },
 
+  cancelChat(sessionId: string): Promise<{ ok: boolean }> {
+    return request("/chat/cancel", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId }),
+      timeoutMs: 10_000,
+    });
+  },
+
   chat(input: {
     message: string;
     attached_paths?: string[];
@@ -419,77 +469,93 @@ export const runtimeClient = {
    * Desktop (Tauri): XHR progressive SSE — WebView often cannot stream fetch bodies.
    * Browser: fetch ReadableStream SSE.
    * Sync `/chat` only when the stream never delivered any event (no mid-flight double-run).
+   * Returns an abort handle so the UI can stop the in-flight XHR/fetch.
    */
-  async chatStream(
+  chatStream(
     input: {
       message: string;
       attached_paths?: string[];
       session_id?: string;
     },
     handlers: ChatStreamHandlers,
-  ): Promise<void> {
-    const runSync = async () => {
-      handlers.onStatus?.("planning");
-      const reply = await this.chat(input);
-      handlers.onStarted?.(reply.session_id);
-      handlers.onStatus?.("finishing");
-      handlers.onFinal?.(reply);
+  ): { abort: () => void; done: Promise<void> } {
+    let streamAbort: (() => void) | null = null;
+    const handle: ChatStreamHandle = {
+      abort: () => {
+        streamAbort?.();
+      },
     };
 
-    let delivered = false;
-    const tracking: ChatStreamHandlers = {
-      onStarted: (sessionId) => {
-        delivered = true;
-        handlers.onStarted?.(sessionId);
-      },
-      onStatus: (phase) => {
-        delivered = true;
-        handlers.onStatus?.(phase);
-      },
-      onToolStart: (ev) => {
-        delivered = true;
-        handlers.onToolStart?.(ev);
-      },
-      onToolDone: (ev) => {
-        delivered = true;
-        handlers.onToolDone?.(ev);
-      },
-      onPermissionRequest: (ev) => {
-        delivered = true;
-        handlers.onPermissionRequest?.(ev);
-      },
-      onFinal: (reply) => {
-        delivered = true;
+    const done = (async () => {
+      const runSync = async () => {
+        handlers.onStatus?.("planning");
+        const reply = await this.chat(input);
+        handlers.onStarted?.(reply.session_id);
+        handlers.onStatus?.("finishing");
         handlers.onFinal?.(reply);
-      },
-      onError: (message) => {
-        delivered = true;
-        handlers.onError?.(message);
-      },
-    };
+      };
 
-    try {
-      const outcome = isTauriRuntime()
-        ? await streamChatViaXhr(input, tracking)
-        : await streamChatViaFetch(input, tracking);
+      let delivered = false;
+      const tracking: ChatStreamHandlers = {
+        onStarted: (sessionId) => {
+          delivered = true;
+          handlers.onStarted?.(sessionId);
+        },
+        onStatus: (phase) => {
+          delivered = true;
+          handlers.onStatus?.(phase);
+        },
+        onToolStart: (ev) => {
+          delivered = true;
+          handlers.onToolStart?.(ev);
+        },
+        onToolDone: (ev) => {
+          delivered = true;
+          handlers.onToolDone?.(ev);
+        },
+        onPermissionRequest: (ev) => {
+          delivered = true;
+          handlers.onPermissionRequest?.(ev);
+        },
+        onFinal: (reply) => {
+          delivered = true;
+          handlers.onFinal?.(reply);
+        },
+        onError: (message) => {
+          delivered = true;
+          handlers.onError?.(message);
+        },
+      };
 
-      if (outcome.sawFinal || outcome.sawError) return;
-      if (!outcome.sawAny && !delivered) {
-        await runSync();
-        return;
-      }
-      handlers.onError?.("流式对话异常结束，未收到最终结果");
-    } catch (err) {
-      if (!delivered) {
-        try {
+      const bindHandle = (h: ChatStreamHandle) => {
+        streamAbort = h.abort;
+      };
+
+      try {
+        const outcome = isTauriRuntime()
+          ? await streamChatViaXhr(input, tracking, 600_000, bindHandle)
+          : await streamChatViaFetch(input, tracking, 600_000, bindHandle);
+
+        if (outcome.sawFinal || outcome.sawError) return;
+        if (!outcome.sawAny && !delivered) {
           await runSync();
           return;
-        } catch (syncErr) {
-          handlers.onError?.(mapNetworkError(syncErr, "600s"));
-          return;
         }
+        handlers.onError?.("流式对话异常结束，未收到最终结果");
+      } catch (err) {
+        if (!delivered) {
+          try {
+            await runSync();
+            return;
+          } catch (syncErr) {
+            handlers.onError?.(mapNetworkError(syncErr, "600s"));
+            return;
+          }
+        }
+        handlers.onError?.(mapNetworkError(err, "600s"));
       }
-      handlers.onError?.(mapNetworkError(err, "600s"));
-    }
+    })();
+
+    return { abort: () => handle.abort(), done };
   },
 };
