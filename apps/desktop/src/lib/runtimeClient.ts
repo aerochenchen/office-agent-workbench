@@ -1,6 +1,7 @@
 import type {
   ChatReply,
   ChatStreamHandlers,
+  PermissionRequestEvent,
   RuntimeConfig,
   SessionMeta,
   SessionUiMessage,
@@ -145,6 +146,14 @@ function createSseDispatcher(handlers: ChatStreamHandlers): {
           ok: Boolean(data.ok),
           summary: typeof data.summary === "string" ? data.summary : undefined,
         });
+        break;
+      case "permission_request":
+        handlers.onPermissionRequest?.({
+          id: String(data.id ?? ""),
+          tool: String(data.tool ?? ""),
+          summary: String(data.summary ?? ""),
+          session_id: String(data.session_id ?? ""),
+        } satisfies PermissionRequestEvent);
         break;
       case "final":
         outcome.sawFinal = true;
@@ -385,6 +394,14 @@ export const runtimeClient = {
     });
   },
 
+  resolvePermission(requestId: string, allow: boolean): Promise<{ ok: boolean }> {
+    return request(`/chat/permissions/${encodeURIComponent(requestId)}`, {
+      method: "POST",
+      body: JSON.stringify({ allow }),
+      timeoutMs: 30_000,
+    });
+  },
+
   chat(input: {
     message: string;
     attached_paths?: string[];
@@ -436,6 +453,10 @@ export const runtimeClient = {
       onToolDone: (ev) => {
         delivered = true;
         handlers.onToolDone?.(ev);
+      },
+      onPermissionRequest: (ev) => {
+        delivered = true;
+        handlers.onPermissionRequest?.(ev);
       },
       onFinal: (reply) => {
         delivered = true;

@@ -21,6 +21,7 @@ from office_agent.bundled_seed import seed_bundled_assets
 from office_agent.config import AppConfig
 from office_agent.gateway import GatewayError, ModelGateway
 from office_agent.paths import app_data_dir
+from office_agent.permissions import PermissionGate, PermissionRequest
 from office_agent.session_store import SessionStore, history_to_ui_messages
 from office_agent.skill_localize import needs_zh_display, try_localize_installed_skill
 from office_agent.skills import SkillError, SkillRegistry
@@ -84,6 +85,8 @@ class ProcessState:
     gateway_factory: Callable[[AppConfig], Any] = ModelGateway
     # Soft-fail localize attempts this process (avoid re-calling LLM on every refresh)
     zh_locale_tried: set[str] = field(default_factory=set)
+    # request_id → interactive PermissionGate awaiting resolve
+    gates: dict[str, PermissionGate] = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> ProcessState:
@@ -122,12 +125,17 @@ class ConfigBody(BaseModel):
     allowed_hosts: list[str] | None = None
     api_key: str | None = None
     model: str | None = None
+    permission_mode: str | None = None
 
 
 class ChatBody(BaseModel):
     message: str
     attached_paths: list[str] = Field(default_factory=list)
     session_id: str | None = None
+
+
+class PermissionBody(BaseModel):
+    allow: bool
 
 
 class CreateSessionBody(BaseModel):
@@ -304,7 +312,27 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             office.config.api_key = body.api_key
         if body.model is not None:
             office.config.model = body.model
+        if body.permission_mode is not None:
+            mode = body.permission_mode.strip()
+            if mode not in ("cautious", "standard", "trust_workspace"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="permission_mode must be cautious|standard|trust_workspace",
+                )
+            office.config.permission_mode = mode
         save_config(office.config)
+        return {"ok": True}
+
+    @app.post("/chat/permissions/{request_id}")
+    def resolve_permission(request_id: str, body: PermissionBody) -> dict[str, Any]:
+        gate = office.gates.get(request_id)
+        if gate is None:
+            raise HTTPException(status_code=404, detail="unknown permission request")
+        try:
+            gate.resolve(request_id, body.allow)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        office.gates.pop(request_id, None)
         return {"ok": True}
 
     def _prepare_chat(body: ChatBody) -> tuple[str, Any, ToolExecutor, list[dict[str, Any]], list[str], int, list[dict[str, Any]]]:
@@ -332,11 +360,14 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         except GatewayError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
+        gate = PermissionGate(office.config.permission_mode)
+        gate.set_auto(None)
         tools = ToolExecutor(
             ws,
             office.registry,
             permission_mode=office.config.permission_mode,
             audit=office.audit,
+            gate=gate,
         )
         catalog = office.registry.enabled_catalog()
         history = office.sessions.get_messages(session_id)
@@ -384,7 +415,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
     @app.post("/chat/stream")
     async def chat_stream(body: ChatBody) -> StreamingResponse:
-        """SSE progress for one chat turn: started/status/tool_*/final/error."""
+        """SSE progress for one chat turn: started/status/tool_*/permission_request/final/error."""
         session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(body)
         message = body.message
         event_q: queue.Queue[tuple[str, dict[str, Any]] | None] = queue.Queue()
@@ -396,6 +427,22 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             event_type = str(payload.get("type") or "status")
             data = {k: v for k, v in payload.items() if k != "type"}
             emit(event_type, data)
+
+        gate = tools.gate
+
+        def on_permission_request(req: PermissionRequest) -> None:
+            office.gates[req.id] = gate
+            emit(
+                "permission_request",
+                {
+                    "id": req.id,
+                    "tool": req.tool,
+                    "summary": req.summary,
+                    "session_id": session_id,
+                },
+            )
+
+        gate.on_request = on_permission_request
 
         def worker() -> None:
             try:

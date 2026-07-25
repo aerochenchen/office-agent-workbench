@@ -7,6 +7,7 @@ import { isTauriRuntime, pickFolder } from "./lib/tauri";
 import type {
   ChatMessage,
   LiveStep,
+  PermissionRequestEvent,
   RuntimeConfig,
   SessionMeta,
   SkillInspect,
@@ -16,6 +17,7 @@ import SessionList from "./components/SessionList";
 import ChatPanel from "./components/ChatPanel";
 import SkillPanel from "./components/SkillPanel";
 import SettingsModal from "./components/SettingsModal";
+import PermissionModal from "./components/PermissionModal";
 
 type HealthState = "checking" | "ok" | "down";
 
@@ -24,6 +26,7 @@ const DEFAULT_CONFIG: RuntimeConfig = {
   api_key: "",
   model: "deepseek-v4-flash",
   allowed_hosts: ["api.deepseek.com", "127.0.0.1", "localhost"],
+  permission_mode: "standard",
 };
 
 let messageSeq = 0;
@@ -44,6 +47,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [skillsCollapsed, setSkillsCollapsed] = useState(false);
   const [config, setConfig] = useState<RuntimeConfig>(DEFAULT_CONFIG);
+  const [permissionRequest, setPermissionRequest] = useState<PermissionRequestEvent | null>(null);
+  const [permissionBusy, setPermissionBusy] = useState(false);
   const sessionIdRef = useRef<string | undefined>(undefined);
   const healthFailCount = useRef(0);
   const sendingRef = useRef(false);
@@ -80,6 +85,7 @@ function App() {
           api_key_set: cfg.api_key_set,
           model: cfg.model,
           allowed_hosts: cfg.allowed_hosts,
+          permission_mode: cfg.permission_mode ?? "standard",
         });
       } catch {
         // keep defaults
@@ -315,7 +321,11 @@ function App() {
                 return { ...m, phase: "live", liveSteps: steps };
               });
             },
+            onPermissionRequest: (ev) => {
+              setPermissionRequest(ev);
+            },
             onFinal: (res) => {
+              setPermissionRequest(null);
               if (res.session_id) setSessionId(res.session_id);
               patchAssistant((m) => ({
                 ...m,
@@ -328,6 +338,7 @@ function App() {
               void refreshSessions(workspacePath);
             },
             onError: (message) => {
+              setPermissionRequest(null);
               patchAssistant(() => ({
                 id: assistantId,
                 role: "error",
@@ -393,6 +404,23 @@ function App() {
     });
     setSettingsOpen(false);
   }, []);
+
+  const handlePermissionResolve = useCallback(async (allow: boolean) => {
+    if (!permissionRequest) return;
+    setPermissionBusy(true);
+    try {
+      await runtimeClient.resolvePermission(permissionRequest.id, allow);
+      setPermissionRequest(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "权限确认失败";
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId(), role: "error", content: message },
+      ]);
+    } finally {
+      setPermissionBusy(false);
+    }
+  }, [permissionRequest]);
 
   return (
     <div className="app-shell">
@@ -470,6 +498,13 @@ function App() {
         initial={config}
         onClose={() => setSettingsOpen(false)}
         onSave={handleSaveConfig}
+      />
+
+      <PermissionModal
+        request={permissionRequest}
+        busy={permissionBusy}
+        onAllow={() => void handlePermissionResolve(true)}
+        onDeny={() => void handlePermissionResolve(false)}
       />
     </div>
   );

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +22,13 @@ from office_agent.skills import SkillRegistry
 def _completion(*, content: str | None = None, tool_calls: list[Any] | None = None):
     message = SimpleNamespace(content=content, tool_calls=tool_calls)
     return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
+def _tool_call(call_id: str, name: str, arguments: dict[str, Any]):
+    return SimpleNamespace(
+        id=call_id,
+        function=SimpleNamespace(name=name, arguments=json.dumps(arguments, ensure_ascii=False)),
+    )
 
 
 @dataclass
@@ -327,3 +336,73 @@ def test_chat_uses_state_audit(client: TestClient, tmp_path: Path, app_state: Pr
     r = client.post("/chat", json={"message": "hi"})
     assert r.status_code == 200
     assert seen.get("audit") is app_state.audit
+
+
+def test_post_config_permission_mode(client: TestClient, app_state: ProcessState):
+    r = client.post("/config", json={"permission_mode": "cautious"})
+    assert r.status_code == 200
+    assert app_state.config.permission_mode == "cautious"
+    got = client.get("/config")
+    assert got.json()["permission_mode"] == "cautious"
+
+
+def test_chat_stream_permission_request_then_allow(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    """SSE emits permission_request; POST allow unblocks workspace_write; final succeeds."""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    app_state.config.permission_mode = "cautious"
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[
+                    _tool_call(
+                        "c1",
+                        "workspace_write",
+                        {"path": "notes.txt", "content": "hello\n"},
+                    )
+                ]
+            ),
+            _completion(content="已写入 notes.txt"),
+        ]
+    )
+
+    resolved = threading.Event()
+    errors: list[BaseException] = []
+
+    def resolve_when_ready() -> None:
+        try:
+            deadline = time.time() + 5.0
+            while time.time() < deadline:
+                if app_state.gates:
+                    request_id = next(iter(app_state.gates))
+                    r = client.post(
+                        f"/chat/permissions/{request_id}",
+                        json={"allow": True},
+                    )
+                    assert r.status_code == 200, r.text
+                    assert r.json()["ok"] is True
+                    resolved.set()
+                    return
+                time.sleep(0.02)
+            raise AssertionError("permission gate was never registered")
+        except BaseException as e:
+            errors.append(e)
+
+    t = threading.Thread(target=resolve_when_ready, daemon=True)
+    t.start()
+
+    with client.stream("POST", "/chat/stream", json={"message": "写个文件"}) as r:
+        assert r.status_code == 200
+        text = "".join(r.iter_text())
+
+    t.join(timeout=5)
+    assert not errors, errors
+    assert resolved.is_set()
+    assert "event: permission_request" in text
+    assert "event: final" in text
+    assert "已写入 notes.txt" in text
+    assert (ws / "notes.txt").read_text(encoding="utf-8") == "hello\n"

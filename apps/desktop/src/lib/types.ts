@@ -83,6 +83,8 @@ export interface SessionUiMessage {
   content: string;
 }
 
+export type PermissionMode = "cautious" | "standard" | "trust_workspace";
+
 export interface RuntimeConfig {
   api_base: string;
   /** Local form draft only; empty after GET /config. */
@@ -91,6 +93,14 @@ export interface RuntimeConfig {
   api_key_set?: boolean;
   model: string;
   allowed_hosts: string[];
+  permission_mode: PermissionMode;
+}
+
+export interface PermissionRequestEvent {
+  id: string;
+  tool: string;
+  summary: string;
+  session_id: string;
 }
 
 export interface ChatStreamHandlers {
@@ -109,6 +119,7 @@ export interface ChatStreamHandlers {
     ok: boolean;
     summary?: string;
   }) => void;
+  onPermissionRequest?: (ev: PermissionRequestEvent) => void;
   onFinal?: (reply: ChatReply) => void;
   onError?: (message: string) => void;
 }

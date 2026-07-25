@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { APP_NAME, APP_TAGLINE, APP_VERSION, OSS_CREDITS } from "../lib/brand";
 import { GUIDE_PILLARS } from "../lib/guide";
-import type { RuntimeConfig } from "../lib/types";
+import type { PermissionMode, RuntimeConfig } from "../lib/types";
 import "./SettingsModal.css";
 
 interface Props {
@@ -11,11 +11,20 @@ interface Props {
   onSave: (partial: Partial<RuntimeConfig>) => Promise<void>;
 }
 
+const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; hint: string }[] = [
+  { value: "cautious", label: "谨慎", hint: "每次写入/跑脚本都需确认" },
+  { value: "standard", label: "标准（默认）", hint: "首次确认后，同会话同操作可记住" },
+  { value: "trust_workspace", label: "信任工作区", hint: "本会话内自动允许写入与跑脚本" },
+];
+
 export default function SettingsModal({ open, initial, onClose, onSave }: Props) {
   const [apiBase, setApiBase] = useState(initial.api_base);
   const [apiKey, setApiKey] = useState(initial.api_key);
   const [model, setModel] = useState(initial.model);
   const [allowedHosts, setAllowedHosts] = useState(initial.allowed_hosts.join(", "));
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>(
+    initial.permission_mode ?? "standard",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +34,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setApiKey(initial.api_key);
       setModel(initial.model);
       setAllowedHosts(initial.allowed_hosts.join(", "));
+      setPermissionMode(initial.permission_mode ?? "standard");
       setError(null);
     }
   }, [open, initial]);
@@ -42,6 +52,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
           .split(",")
           .map((h) => h.trim())
           .filter(Boolean),
+        permission_mode: permissionMode,
       };
       const trimmedKey = apiKey.trim();
       if (trimmedKey) {
@@ -129,6 +140,29 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
             </label>
 
             {error && <p className="field-error">{error}</p>}
+          </section>
+
+          <section className="settings-section" aria-labelledby="settings-permission-title">
+            <h3 id="settings-permission-title" className="settings-section-title">
+              权限模式
+            </h3>
+            <label className="field">
+              <span className="field-label">工具确认策略</span>
+              <select
+                className="field-input"
+                value={permissionMode}
+                onChange={(e) => setPermissionMode(e.currentTarget.value as PermissionMode)}
+              >
+                {PERMISSION_MODE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="settings-permission-hint">
+              {PERMISSION_MODE_OPTIONS.find((o) => o.value === permissionMode)?.hint}
+            </p>
           </section>
 
           <section className="settings-guide" aria-labelledby="settings-guide-title">
