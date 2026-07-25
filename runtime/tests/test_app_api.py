@@ -173,6 +173,25 @@ def test_post_config_updates_state(client: TestClient, app_state: ProcessState):
     assert app_state.config.model == "other-model"
 
 
+def test_get_config_does_not_return_plaintext_key(client: TestClient, app_state: ProcessState):
+    app_state.config.api_key = "sk-secret-value-123456"
+    r = client.get("/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert "sk-secret-value-123456" not in json.dumps(body)
+    assert body.get("api_key") in (None, "")  # 推荐实现为字段不存在或空
+    assert body["api_key_set"] is True
+    assert body["api_key_masked"]
+    assert "sk-secret" not in body["api_key_masked"] or "…" in body["api_key_masked"]
+
+
+def test_post_config_omitted_key_keeps_previous(client: TestClient, app_state: ProcessState):
+    app_state.config.api_key = "keep-me"
+    r = client.post("/config", json={"model": "m2"})
+    assert r.status_code == 200
+    assert app_state.config.api_key == "keep-me"
+
+
 def test_chat_returns_reply_and_session(client: TestClient, tmp_path: Path, app_state: ProcessState):
     ws = tmp_path / "ws"
     ws.mkdir()

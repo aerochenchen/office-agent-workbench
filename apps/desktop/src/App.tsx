@@ -75,7 +75,9 @@ function App() {
         const cfg = await runtimeClient.getConfig();
         setConfig({
           api_base: cfg.api_base,
-          api_key: cfg.api_key,
+          api_key: "",
+          api_key_masked: cfg.api_key_masked,
+          api_key_set: cfg.api_key_set,
           model: cfg.model,
           allowed_hosts: cfg.allowed_hosts,
         });
@@ -341,8 +343,26 @@ function App() {
   );
 
   const handleSaveConfig = useCallback(async (partial: Partial<RuntimeConfig>) => {
+    // Omit undefined fields; do not send api_key: null (JSON.stringify drops undefined).
     await runtimeClient.saveConfig(partial);
-    setConfig((prev) => ({ ...prev, ...partial }));
+    setConfig((prev) => {
+      const next: RuntimeConfig = {
+        ...prev,
+        ...partial,
+        api_key: "",
+      };
+      if (partial.api_key !== undefined) {
+        next.api_key_set = Boolean(partial.api_key);
+        if (partial.api_key) {
+          const key = partial.api_key;
+          next.api_key_masked =
+            key.length > 12 ? `${key.slice(0, 6)}…${key.slice(-4)}` : "***";
+        } else {
+          next.api_key_masked = "";
+        }
+      }
+      return next;
+    });
     setSettingsOpen(false);
   }, []);
 

@@ -85,7 +85,10 @@ export interface SessionUiMessage {
 
 export interface RuntimeConfig {
   api_base: string;
+  /** Local form draft only; empty after GET /config. */
   api_key: string;
+  api_key_masked?: string;
+  api_key_set?: boolean;
   model: string;
   allowed_hosts: string[];
 }

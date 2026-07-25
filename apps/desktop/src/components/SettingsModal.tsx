@@ -35,15 +35,22 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
     setSaving(true);
     setError(null);
     try {
-      await onSave({
+      const partial: Partial<RuntimeConfig> = {
         api_base: apiBase.trim(),
-        api_key: apiKey,
         model: model.trim(),
         allowed_hosts: allowedHosts
           .split(",")
           .map((h) => h.trim())
           .filter(Boolean),
-      });
+      };
+      const trimmedKey = apiKey.trim();
+      if (trimmedKey) {
+        partial.api_key = trimmedKey;
+      } else if (!initial.api_key_set) {
+        partial.api_key = "";
+      }
+      // api_key_set && 空输入 → 不传 api_key，保留服务端原值
+      await onSave(partial);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
     } finally {
@@ -94,6 +101,11 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.currentTarget.value)}
+                placeholder={
+                  initial.api_key_set
+                    ? `已保存 ${initial.api_key_masked || "***"}；留空不修改`
+                    : "粘贴 API Key"
+                }
               />
             </label>
 

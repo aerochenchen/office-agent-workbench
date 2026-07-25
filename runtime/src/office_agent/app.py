@@ -178,8 +178,8 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         masked = (key[:6] + "…" + key[-4:]) if len(key) > 12 else ("***" if key else "")
         return {
             "api_base": cfg.api_base,
-            "api_key": key,
             "api_key_masked": masked,
+            "api_key_set": bool(key),
             "model": cfg.model,
             "allowed_hosts": cfg.allowed_hosts,
             "permission_mode": cfg.permission_mode,
