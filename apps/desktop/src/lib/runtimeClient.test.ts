@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  authHeadersForPath,
   createSseDispatcher,
   formatSkillErrorDetail,
+  getRuntimeApiToken,
   runtimeLogHint,
+  setRuntimeApiToken,
 } from "./runtimeClient";
 
 describe("runtimeLogHint", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    setRuntimeApiToken(null);
   });
 
   it("returns Windows temp log path on Windows UA", () => {
@@ -18,6 +22,35 @@ describe("runtimeLogHint", () => {
   it("returns generic temp hint on non-Windows", () => {
     vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Macintosh)" });
     expect(runtimeLogHint()).toContain("office-agent-desktop.log");
+  });
+});
+
+describe("authHeadersForPath", () => {
+  afterEach(() => {
+    setRuntimeApiToken(null);
+  });
+
+  it("returns empty headers when token unset", () => {
+    setRuntimeApiToken(null);
+    expect(authHeadersForPath("/config")).toEqual({});
+  });
+
+  it("adds Bearer for non-health paths", () => {
+    setRuntimeApiToken("abc-123");
+    expect(authHeadersForPath("/config")).toEqual({ Authorization: "Bearer abc-123" });
+    expect(authHeadersForPath("/chat/stream")).toEqual({ Authorization: "Bearer abc-123" });
+  });
+
+  it("skips Bearer for /health", () => {
+    setRuntimeApiToken("abc-123");
+    expect(authHeadersForPath("/health")).toEqual({});
+  });
+
+  it("setRuntimeApiToken trims and stores token", () => {
+    setRuntimeApiToken("  tok  ");
+    expect(getRuntimeApiToken()).toBe("tok");
+    setRuntimeApiToken("");
+    expect(getRuntimeApiToken()).toBeNull();
   });
 });
 

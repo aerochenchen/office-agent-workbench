@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
-import { runtimeClient, RuntimeClientError, type ChatStreamHandle } from "./lib/runtimeClient";
-import { isTauriRuntime, pickFolder } from "./lib/tauri";
+import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
+import { getRuntimeToken, isTauriRuntime, pickFolder } from "./lib/tauri";
 import type {
   ChatMessage,
   LiveStep,
@@ -69,7 +69,17 @@ function App() {
   }, []);
 
   useEffect(() => {
-    void checkHealth();
+    void (async () => {
+      if (isTauriRuntime()) {
+        try {
+          const token = await getRuntimeToken();
+          if (token) setRuntimeApiToken(token);
+        } catch {
+          // keep unset — dev runtime may run without token
+        }
+      }
+      await checkHealth();
+    })();
     const timer = window.setInterval(() => void checkHealth(), 8_000);
     return () => window.clearInterval(timer);
   }, [checkHealth]);

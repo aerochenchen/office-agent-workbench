@@ -16,6 +16,38 @@ import { isTauriRuntime } from "./tauri";
 /** Local Python runtime is always loopback-only; not user configurable. */
 export const RUNTIME_BASE_URL = "http://127.0.0.1:8765";
 
+let runtimeApiToken: string | null = null;
+
+/** Set Bearer token for non-health runtime requests (from Tauri invoke at startup). */
+export function setRuntimeApiToken(token: string | null | undefined): void {
+  const trimmed = token?.trim();
+  runtimeApiToken = trimmed ? trimmed : null;
+}
+
+export function getRuntimeApiToken(): string | null {
+  return runtimeApiToken;
+}
+
+/** @internal Exported for Vitest auth header smoke tests. */
+export function authHeadersForPath(path: string): Record<string, string> {
+  if (!runtimeApiToken) return {};
+  const bare = path.split("?")[0] ?? path;
+  if (bare === "/health") return {};
+  return { Authorization: `Bearer ${runtimeApiToken}` };
+}
+
+function mergeAuthHeaders(path: string, headers?: HeadersInit): Record<string, string> {
+  const auth = authHeadersForPath(path);
+  if (!headers) return auth;
+  if (headers instanceof Headers) {
+    return { ...Object.fromEntries(headers.entries()), ...auth };
+  }
+  if (Array.isArray(headers)) {
+    return { ...Object.fromEntries(headers), ...auth };
+  }
+  return { ...headers, ...auth };
+}
+
 export class RuntimeClientError extends Error {
   status?: number;
   skillDetail?: SkillErrorDetail;
@@ -80,7 +112,7 @@ async function request<T>(
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        ...(rest.headers ?? {}),
+        ...mergeAuthHeaders(path, rest.headers),
       },
     });
     if (!res.ok) {
@@ -243,6 +275,7 @@ function streamChatViaXhr(
     let buffer = "";
     let seenChars = 0;
     let userAborted = false;
+    const streamAuth = authHeadersForPath("/chat/stream");
 
     onHandle?.({
       abort: () => {
@@ -266,6 +299,9 @@ function streamChatViaXhr(
     xhr.open("POST", `${RUNTIME_BASE_URL}/chat/stream`);
     xhr.setRequestHeader("Content-Type", "application/json");
     xhr.setRequestHeader("Accept", "text/event-stream");
+    if (streamAuth.Authorization) {
+      xhr.setRequestHeader("Authorization", streamAuth.Authorization);
+    }
     xhr.timeout = timeoutMs;
     xhr.responseType = "text";
 
@@ -347,6 +383,7 @@ async function streamChatViaFetch(
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...authHeadersForPath("/chat/stream"),
       },
       body: JSON.stringify(input),
     });

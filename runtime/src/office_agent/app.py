@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from office_agent.agent_loop import run_agent
+from office_agent.auth import install_api_token_middleware
 from office_agent.audit import AuditLog
 from office_agent.bundled_seed import seed_bundled_assets
 from office_agent.cancel import CancelToken
@@ -190,6 +191,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    install_api_token_middleware(app)
     app.state.office = office
 
     @app.get("/health")

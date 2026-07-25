@@ -16,6 +16,7 @@ use std::time::Duration;
 use tauri::path::BaseDirectory;
 use tauri::{Manager, RunEvent};
 use tauri_plugin_dialog::DialogExt;
+use uuid::Uuid;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -26,6 +27,22 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Holds the handle to the auto-spawned runtime process (if any) so it can
 /// be terminated when the app exits.
 struct RuntimeProcess(Mutex<Option<Child>>);
+
+/// Per-launch API token shared with the spawned runtime and the webview.
+struct RuntimeAuthToken(Mutex<String>);
+
+fn generate_runtime_token() -> String {
+    Uuid::new_v4().to_string()
+}
+
+#[tauri::command]
+fn get_runtime_token(state: tauri::State<'_, RuntimeAuthToken>) -> Result<String, String> {
+    state
+        .0
+        .lock()
+        .map_err(|e| e.to_string())
+        .map(|guard| guard.clone())
+}
 
 #[tauri::command]
 async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
@@ -195,7 +212,7 @@ fn find_bundled_dir(app: &tauri::AppHandle, sidecar: &Path) -> Option<PathBuf> {
 }
 
 /// Production path: onedir sidecar staged under Tauri resources.
-fn try_spawn_sidecar(app: &tauri::AppHandle) -> Option<Child> {
+fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
     let sidecar = find_sidecar_exe(app)?;
     let bundled = find_bundled_dir(app, &sidecar);
 
@@ -208,6 +225,7 @@ fn try_spawn_sidecar(app: &tauri::AppHandle) -> Option<Child> {
         cmd.env("OFFICE_AGENT_BUNDLED", b);
         log_line(&format!("[office-agent] OFFICE_AGENT_BUNDLED={b:?}"));
     }
+    cmd.env("OFFICE_AGENT_API_TOKEN", api_token);
 
     // Keep logs for packaged installs (stderr was previously discarded).
     let log_path = std::env::temp_dir().join("office-agent-runtime.err.log");
@@ -247,7 +265,7 @@ fn try_spawn_sidecar(app: &tauri::AppHandle) -> Option<Child> {
 }
 
 /// Dev path: `python -m office_agent` via local `.venv`.
-fn try_spawn_venv() -> Option<Child> {
+fn try_spawn_venv(api_token: &str) -> Option<Child> {
     let runtime_dir = find_runtime_dir()?;
     let python = venv_python(&runtime_dir)?;
     let bundled = runtime_dir
@@ -271,6 +289,7 @@ fn try_spawn_venv() -> Option<Child> {
     if let Some(b) = bundled {
         cmd.env("OFFICE_AGENT_BUNDLED", b);
     }
+    cmd.env("OFFICE_AGENT_API_TOKEN", api_token);
 
     #[cfg(windows)]
     {
@@ -296,7 +315,7 @@ fn try_spawn_venv() -> Option<Child> {
 /// Best-effort spawn of the local runtime. Never panics: any failure is
 /// logged and the UI will simply show "runtime offline" until the
 /// user starts it manually (see README).
-fn try_spawn_runtime(app: &tauri::AppHandle) -> Option<Child> {
+fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
     if runtime_already_up() {
         log_line("[office-agent] runtime already listening on 127.0.0.1:8765 — skip auto-start");
         return None;
@@ -304,13 +323,13 @@ fn try_spawn_runtime(app: &tauri::AppHandle) -> Option<Child> {
 
     // Release builds prefer the packaged sidecar; debug keeps the fast venv loop.
     if !cfg!(debug_assertions) {
-        if let Some(child) = try_spawn_sidecar(app) {
+        if let Some(child) = try_spawn_sidecar(app, api_token) {
             return Some(child);
         }
         log_line("[office-agent] sidecar unavailable — trying local .venv fallback");
     }
 
-    try_spawn_venv()
+    try_spawn_venv(api_token)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -318,9 +337,15 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![pick_folder, pick_skill_file])
+        .invoke_handler(tauri::generate_handler![
+            pick_folder,
+            pick_skill_file,
+            get_runtime_token,
+        ])
         .setup(|app| {
-            let child = try_spawn_runtime(app.handle());
+            let api_token = generate_runtime_token();
+            app.manage(RuntimeAuthToken(Mutex::new(api_token.clone())));
+            let child = try_spawn_runtime(app.handle(), &api_token);
             app.manage(RuntimeProcess(Mutex::new(child)));
             Ok(())
         });
