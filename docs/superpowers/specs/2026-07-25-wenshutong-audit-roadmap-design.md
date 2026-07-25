@@ -194,6 +194,19 @@
 
 **实施计划：** `docs/superpowers/plans/2026-07-25-wenshutong-q1-product-loop.md`（Tasks 1–7；范围 A+B+D）。
 
+### Q+1 完成记录
+
+| 项 | 状态 |
+|----|------|
+| A 附件 / `attached_paths` UI | 已完成 2026-07-25 |
+| B Markdown 气泡 | 已完成 2026-07-25 |
+| B 产物「系统默认程序打开」 | 已完成 2026-07-25 |
+| C 写作 RAG 端到端 / 无向量降级 Skill | **跳过 / 本轮不做** |
+| D 安装前 `skill_validate` 结构校验 | 已完成 2026-07-25 |
+
+**验收：** 2026-07-25 · 分支 `q1-product-loop` · Runtime pytest **126 passed** · desktop `npm run build` 通过。  
+**提交摘要：** `9c377b1` plan → `b9802e6`/`e320c76` A 附件 → `6e625ef`/`e65bc7d` B Markdown/打开产物 → `9ff8765`/`71ba311` D 安装校验。
+
 ### 5.4 Q+2 · 交付与生态（Windows 为主）
 
 - 许可证扫描流水线 + NOTICE  

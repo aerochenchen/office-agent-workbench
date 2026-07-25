@@ -158,9 +158,9 @@ cd apps/desktop && npm install react-markdown remark-gfm
 
 ### Task 7: 回归与规格回写
 
-- [ ] Full `pytest` + `npm run build`
-- [ ] 更新审计规格 §5.3：标注 A/B/D 完成，**C 明确跳过**
-- [ ] Commit `docs: record Q+1 A/B/D completion`
+- [x] Full `pytest` + `npm run build`
+- [x] 更新审计规格 §5.3：标注 A/B/D 完成，**C 明确跳过**
+- [x] Commit `docs: record Q+1 A/B/D completion`
 
 ---
 
