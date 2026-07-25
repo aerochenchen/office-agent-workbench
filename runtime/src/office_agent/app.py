@@ -335,7 +335,11 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         office.gates.pop(request_id, None)
         return {"ok": True}
 
-    def _prepare_chat(body: ChatBody) -> tuple[str, Any, ToolExecutor, list[dict[str, Any]], list[str], int, list[dict[str, Any]]]:
+    def _prepare_chat(
+        body: ChatBody,
+        *,
+        interactive: bool = False,
+    ) -> tuple[str, Any, ToolExecutor, list[dict[str, Any]], list[str], int, list[dict[str, Any]]]:
         # Sidecar restarts drop in-memory workspace; recover from session path.
         if office.workspace is None and body.session_id:
             meta = office.sessions.get_session(body.session_id)
@@ -361,7 +365,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
         gate = PermissionGate(office.config.permission_mode)
-        gate.set_auto(None)
+        gate.set_auto(None if interactive else True)
         tools = ToolExecutor(
             ws,
             office.registry,
@@ -416,7 +420,9 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     @app.post("/chat/stream")
     async def chat_stream(body: ChatBody) -> StreamingResponse:
         """SSE progress for one chat turn: started/status/tool_*/permission_request/final/error."""
-        session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(body)
+        session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(
+            body, interactive=True
+        )
         message = body.message
         event_q: queue.Queue[tuple[str, dict[str, Any]] | None] = queue.Queue()
 
@@ -443,6 +449,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             )
 
         gate.on_request = on_permission_request
+        gate.on_timeout = lambda request_id: office.gates.pop(request_id, None)
 
         def worker() -> None:
             try:

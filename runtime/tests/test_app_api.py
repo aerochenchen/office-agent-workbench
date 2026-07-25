@@ -346,6 +346,40 @@ def test_post_config_permission_mode(client: TestClient, app_state: ProcessState
     assert got.json()["permission_mode"] == "cautious"
 
 
+def test_sync_chat_cautious_auto_allows_risky_tool(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    """Sync /chat uses non-interactive gate; cautious + workspace_write completes without hanging."""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    app_state.config.permission_mode = "cautious"
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[
+                    _tool_call(
+                        "c1",
+                        "workspace_write",
+                        {"path": "notes.txt", "content": "hello\n"},
+                    )
+                ]
+            ),
+            _completion(content="已写入 notes.txt"),
+        ]
+    )
+
+    start = time.time()
+    r = client.post("/chat", json={"message": "写个文件"})
+    elapsed = time.time() - start
+
+    assert r.status_code == 200
+    assert elapsed < 5.0
+    assert r.json()["reply"] == "已写入 notes.txt"
+    assert (ws / "notes.txt").read_text(encoding="utf-8") == "hello\n"
+
+
 def test_chat_stream_permission_request_then_allow(
     client: TestClient, tmp_path: Path, app_state: ProcessState
 ):

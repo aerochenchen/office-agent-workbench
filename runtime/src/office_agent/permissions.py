@@ -71,6 +71,7 @@ class PermissionGate:
         self._decisions: dict[str, bool] = {}
         self._requests: dict[str, PermissionRequest] = {}
         self.on_request: Callable[[PermissionRequest], None] | None = None
+        self.on_timeout: Callable[[str], None] | None = None
         self.wait_timeout: float = 300.0
 
     def set_auto(self, allow: bool | None) -> None:
@@ -120,6 +121,9 @@ class PermissionGate:
             with self._lock:
                 self._pending.pop(request.id, None)
                 self._requests.pop(request.id, None)
+            timeout_cb = self.on_timeout
+            if timeout_cb is not None:
+                timeout_cb(request.id)
             raise PermissionDenied(f"permission request timed out: {tool}")
 
         with self._lock:
