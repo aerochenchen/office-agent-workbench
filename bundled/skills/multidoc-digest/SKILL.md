@@ -124,13 +124,7 @@ run_skill_script
 
 ### Step 6 — 可选排版
 
-若用户要 docx：将 Markdown 转为 docx（可用工作区脚本）后：
-
-```
-run_shared_script
-  name: format_gongwen
-  args: [<docx路径>]
-```
+若用户要 docx：将 Markdown 转为 docx 后，按 `government-document-format` **四步**执行（先 `dump` 标注角色，再 `apply`），禁止对未标注文档直接调用 `format_gongwen`。
 
 ---
 

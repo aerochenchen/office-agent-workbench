@@ -181,8 +181,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "run_shared_script",
             "description": (
-                "运行共享脚本。公文排版优先：name=format_gongwen，args=[工作区内docx路径]。"
-                "排版结果若为新文件，应落到 output/。"
+                "运行共享脚本。公文排版 format_gongwen："
+                "先 args=[dump, docx]，Agent 写 roles.json 后 "
+                "args=[apply, docx, roles.json]；结果宜落到 output/。"
             ),
             "parameters": {
                 "type": "object",
@@ -249,7 +250,8 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "- workspace_* 只能访问用户打开的工作区文件夹；\n"
         "- 工作区内的 .py 用 run_workspace_script 执行（写完脚本后立刻执行）；\n"
         "- Skill 的 scripts/ 不在工作区内，必须用 run_skill_script 或 run_shared_script；\n"
-        "- 公文排版优先 run_shared_script(name=format_gongwen, args=[docx路径])；\n"
+        "- 公文排版须先 read_skill(government-document-format)，再 "
+        "format_gongwen dump → 标注 roles → apply（禁止跳过结构标注）；\n"
         "- 读取 .docx/.doc/.xlsx/.xls 请用 workspace_extract（.doc/.xls 会先转为 docx/xlsx）；"
         "纯文本才用 workspace_read；\n"
         "- 不要对「scripts」调用 workspace_list，除非工作区里真有该目录。\n"

@@ -255,9 +255,7 @@ run_skill_script → gongwen-rag-writing / scripts/search_argument.py \
 
 ## 第六步：排版输出
 
-```bash
-run_shared_script → format_gongwen <输出文件.docx>
-```
+按 `government-document-format` 四步：`dump` → Agent 写 `_roles.json` → `apply` → 复核。禁止跳过结构标注直接 `format_gongwen`。
 
 ---
 
@@ -276,7 +274,7 @@ Agent 执行:
             b. Agent 阅读检索结果 + 叙事计划 → 按论证角色组织写作
             c. write_file 追加到草稿
   Step 5: Agent 自审 → 修订
-  Step 6: run_shared_script(format_gongwen, [<输出.docx>])
+  Step 6: government-document-format：dump → 标注 roles → apply
           交付: <原文件名>_formatted.docx
 ```
 

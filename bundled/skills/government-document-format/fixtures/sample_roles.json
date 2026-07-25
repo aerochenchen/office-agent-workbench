@@ -1,0 +1,67 @@
+{
+  "source": "sample.docx",
+  "red_line_after": 1,
+  "notes": [
+    "印章需人工复核"
+  ],
+  "paragraphs": [
+    {
+      "index": 0,
+      "role": "masthead"
+    },
+    {
+      "index": 1,
+      "role": "doc_number"
+    },
+    {
+      "index": 2,
+      "role": "title"
+    },
+    {
+      "index": 3,
+      "role": "main_recipient"
+    },
+    {
+      "index": 4,
+      "role": "body"
+    },
+    {
+      "index": 5,
+      "role": "h1"
+    },
+    {
+      "index": 6,
+      "role": "body"
+    },
+    {
+      "index": 7,
+      "role": "h2",
+      "text": "（一）贯通业务流程"
+    },
+    {
+      "index": 8,
+      "role": "body"
+    },
+    {
+      "index": 9,
+      "role": "h2",
+      "text": "（二）引入智能能力"
+    },
+    {
+      "index": 10,
+      "role": "h3"
+    },
+    {
+      "index": 11,
+      "role": "h4"
+    },
+    {
+      "index": 12,
+      "role": "signature"
+    },
+    {
+      "index": 13,
+      "role": "date"
+    }
+  ]
+}
