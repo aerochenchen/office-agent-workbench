@@ -210,9 +210,13 @@
 ### 5.4 Q+2 · 交付与生态（Windows 为主）
 
 - 许可证扫描流水线 + NOTICE  
-- 前端冒烟测试；request id / 工具日志  
-- 可选：同机 API token、Skill 授权校验  
+- 前端冒烟测试；turn_id / 工具与审计贯通  
+- 同机 API token（Skill 本地许可证 / 机器码：**本轮跳过**）  
+- **本轮范围锁定：A+B+C(token only)**（2026-07-25；Task 5 不做）  
+- **本轮不做：** 写作 RAG / 无向量降级 Skill；完整脚本 jail；Skill 授权文件  
 - **明确排除：** macOS 公证  
+
+**实施计划：** `docs/superpowers/plans/2026-07-25-wenshutong-q2-delivery.md`（Tasks 1–4 + 6；Task 5 跳过）。
 
 ### 5.5 规格落盘后的建议下一动作
 
