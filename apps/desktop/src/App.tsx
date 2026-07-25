@@ -170,7 +170,8 @@ function App() {
       setMessages([]);
       await refreshSessions(workspacePath);
     } catch (err) {
-      setMessages([
+      setMessages((prev) => [
+        ...prev,
         {
           id: nextId(),
           role: "error",
@@ -221,7 +222,8 @@ function App() {
           }
         }
       } catch (err) {
-        setMessages([
+        setMessages((prev) => [
+          ...prev,
           {
             id: nextId(),
             role: "error",
