@@ -104,6 +104,8 @@ start_tauri() {
     echo "未找到 cargo。可改用：./scripts/dev.sh --web" >&2
     exit 1
   fi
+  # tauri.conf.json bundles resources/NOTICE; stage from repo root before cargo.
+  bash "${ROOT}/scripts/stage_notice.sh"
   log "启动 Tauri 桌面壳（首次编译较慢）…"
   log "日志：Runtime → ${STATE_DIR}/runtime.log | Vite → ${STATE_DIR}/vite.log"
   log "停止：./scripts/dev-stop.sh"
