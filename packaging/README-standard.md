@@ -8,14 +8,14 @@
 |------|------|
 | `apps/desktop/` | Tauri 2 + React 工作台（工作区、对话、Skill 面板） |
 | `runtime/` | 本地 Python Runtime（FastAPI，127.0.0.1），轻量 `requirements.txt` |
-| `bundled/skills/` | 预置轻量 Skill（如 `government-document-format`，`tier: light`） |
+| `bundled/skills/` | 预置轻量 Skill（`tier: light`）：`government-document-format` 公文排版、`multidoc-digest` 批量文档整理、`skill-builder` 创建技能 |
 | `bundled/shared-scripts/` | 与轻量 Skill 配套的共享脚本（如排版占位/实现） |
 
 标准包**不包含** `optional-skills/gongwen-rag-writing/`、离线 embedding 模型或 Torch 运行时。
 
 ## Windows 安装包（推荐交付物）
 
-交付文件为 **NSIS 安装器**：`办公智能体工作台_0.1.0_x64-setup.exe`（版本号随 `tauri.conf.json` 变化）。
+交付文件为 **NSIS 安装器**：`文书通_0.1.0_x64-setup.exe`（版本号随 `tauri.conf.json` 变化；旧版曾用「办公智能体工作台」命名）。
 
 ### 架构
 
@@ -59,6 +59,24 @@ apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
 
 验收步骤见 [VERIFY-windows.md](./VERIFY-windows.md)。
 
+## macOS 内测 DMG
+
+**内测用，不做 Apple 公证。** 在 **Apple Silicon / Intel Mac** 上可打出未签名/未公证的盘镜像（含 Runtime sidecar），供笔记本或另一台 Mac 验收。
+
+```bash
+./scripts/build-macos.sh
+# 可选：--clean / --skip-sidecar / --skip-tauri
+```
+
+产物：
+
+```
+apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+packaging/dist/mac/*.dmg          # 脚本额外拷贝的便捷路径
+```
+
+说明：本路径仅面向内测，**不做公证**；测试机首次打开请在 Finder 中右键「打开」。正式对外分发需另行 Developer ID 签名与 notarize。
+
 中间产物（不进 git）：
 
 - `packaging/dist/office-agent-runtime/` — PyInstaller onedir  
@@ -69,9 +87,9 @@ apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
 
 1. 双击 `*-setup.exe`（默认当前用户安装）。  
 2. 若本机无 WebView2，安装器会走 **嵌入式 bootstrapper**（不依赖安装时访问公网下载页；仍建议机关镜像预装 WebView2）。  
-3. 启动「办公智能体工作台」：壳自动拉起 sidecar（`127.0.0.1:8765`）。  
+3. 启动「文书通」：壳自动拉起 sidecar（`127.0.0.1:8765`）。  
 4. 用户数据与会话在 `%USERPROFILE%\.office-agent\`；**卸载安装包不会删除**该目录。  
-5. 额外 Skill 通过 UI「导入 zip」安装，不影响标准包体积。
+5. 额外 Skill 通过 Tauri 桌面端 UI「导入技能」（文件夹 / zip / md）安装，不影响标准包体积。
 
 ### 体积与基线
 
