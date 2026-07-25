@@ -107,3 +107,23 @@ def test_reject_without_skill_md(tmp_path: Path, monkeypatch):
     (bad / "readme.txt").write_text("x", encoding="utf-8")
     with pytest.raises(SkillError):
         SkillRegistry().install_dir(bad)
+
+
+def test_install_zip_rejects_path_escape(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    z = tmp_path / "evil.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("../escape/SKILL.md", "---\nname: evil\ndescription: x\ntier: light\n---\n\n#\n")
+        zf.writestr("evil/SKILL.md", "---\nname: evil\ndescription: x\ntier: light\n---\n\n#\n")
+    with pytest.raises(SkillError, match="unsafe zip"):
+        SkillRegistry().install_zip(z)
+    assert not (tmp_path / "escape").exists()
+
+
+def test_inspect_zip_rejects_path_escape(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    z = tmp_path / "evil2.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("/tmp/evil-skill/SKILL.md", "---\nname: evil\ndescription: x\ntier: light\n---\n\n#\n")
+    with pytest.raises(SkillError, match="unsafe zip"):
+        SkillRegistry().inspect_path(z)

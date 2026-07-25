@@ -91,6 +91,31 @@ def _resolve_skill_root(src: Path) -> Path:
     return children[0]
 
 
+def _safe_extractall(zf: zipfile.ZipFile, dest: Path) -> None:
+    dest = dest.resolve()
+    dest.mkdir(parents=True, exist_ok=True)
+    for info in zf.infolist():
+        name = info.filename
+        if not name or name.endswith("/"):
+            target_check = name.rstrip("/")
+        else:
+            target_check = name
+        parts = Path(target_check).parts
+        if Path(target_check).is_absolute() or any(p == ".." for p in parts):
+            raise SkillError(f"unsafe zip entry: {name}")
+        raw = name.replace("\\", "/")
+        if raw.startswith("/") or raw.startswith("../") or "/../" in f"/{raw}/" or (
+            len(raw) > 1 and raw[1] == ":"
+        ):
+            raise SkillError(f"unsafe zip entry: {name}")
+        target = (dest / name).resolve()
+        try:
+            target.relative_to(dest)
+        except ValueError as e:
+            raise SkillError(f"unsafe zip entry: {name}") from e
+    zf.extractall(dest)
+
+
 class SkillRegistry:
     def __init__(self) -> None:
         self.root = app_data_dir()
@@ -171,7 +196,7 @@ class SkillRegistry:
         with tempfile.TemporaryDirectory(prefix="oa-skill-inspect-") as tmp:
             extract = Path(tmp)
             with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall(extract)
+                _safe_extractall(zf, extract)
             root = _resolve_skill_root(extract)
             return parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
 
@@ -208,7 +233,7 @@ class SkillRegistry:
             shutil.rmtree(extract)
         extract.mkdir(parents=True)
         with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(extract)
+            _safe_extractall(zf, extract)
         try:
             return self.install_dir(extract)
         finally:
