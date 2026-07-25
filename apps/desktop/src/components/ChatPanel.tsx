@@ -8,6 +8,7 @@ import {
   parsePastedPaths,
   pickFiles,
 } from "../lib/tauri";
+import MarkdownMessage from "./MarkdownMessage";
 import "./ChatPanel.css";
 
 interface Props {
@@ -128,7 +129,13 @@ function Bubble({
   return (
     <div className={`message-row message-row--${message.role}`}>
       <div className={`bubble ${roleClass}`}>
-        {inFlight ? <PendingBody message={message} now={now} /> : message.content}
+        {inFlight ? (
+          <PendingBody message={message} now={now} />
+        ) : message.role === "assistant" && message.phase === "done" ? (
+          <MarkdownMessage content={message.content} />
+        ) : (
+          message.content
+        )}
       </div>
 
       {showCollapsed && (
