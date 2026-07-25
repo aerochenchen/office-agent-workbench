@@ -111,7 +111,10 @@ cd runtime
 ## 依赖原则
 
 - `runtime/requirements.txt` 仅声明 FastAPI、uvicorn、openai、pydantic、PyYAML、httpx 等轻依赖。  
-- 发版前在 `runtime/.venv` 或 `packaging/.venv` 执行仓库根目录 `scripts/check_licenses.sh`，禁止 GPL/AGPL 污染。  
+- 发版前**必须**在仓库根目录依次执行：
+  1. `./scripts/check_licenses.sh` — 扫描 `runtime/.venv`（Python）与 `apps/desktop`（npm），GPL/AGPL 失败退出；LGPL 允许。
+  2. `./scripts/generate_notice.sh` — 生成/更新仓库根 `NOTICE`（人类可读的 Python + npm 摘要），并由打包脚本随标准包分发。
+- `packaging/.venv` 用于 PyInstaller sidecar；若与 runtime 依赖不一致，可在该 venv 上单独跑 `pip-licenses` 复核。  
 - 运行时仅允许白名单内网 API Host；Skill/模型禁止运行时从公网下载。
 
 ## 手动 / 解压式安装（运维备选）

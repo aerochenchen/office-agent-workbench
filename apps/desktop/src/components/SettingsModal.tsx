@@ -203,7 +203,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 ))}
               </ul>
               <p className="settings-about-oss-note">
-                完整第三方清单与许可文本见发版包中的 NOTICE 文件。
+                完整第三方清单与许可文本见发版包根目录的 NOTICE 文件（由 scripts/generate_notice.sh 生成）。
               </p>
             </div>
           </section>

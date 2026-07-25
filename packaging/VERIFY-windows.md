@@ -5,9 +5,11 @@
 ## 构建机
 
 - [ ] 已安装 Python 3.11+、Node.js/npm、Rust MSVC toolchain
+- [ ] 发版门禁：`bash scripts/check_licenses.sh` 通过（Python + npm，无 GPL/AGPL）
+- [ ] 发版门禁：`bash scripts/generate_notice.sh` 已生成仓库根 `NOTICE`
 - [ ] 仓库根目录执行：`.\scripts\build-windows.ps1`
 - [ ] 产物存在：`apps\desktop\src-tauri\target\release\bundle\nsis\*-setup.exe`
-- [ ] （可选）`scripts\check_licenses.sh` 对 packaging/.venv 无 GPL/AGPL
+- [ ] 安装包内含 `NOTICE`（或与仓库根生成物一致）
 
 ## 干净机安装
 

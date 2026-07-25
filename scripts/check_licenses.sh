@@ -24,6 +24,8 @@ echo "---"
 if pip-licenses --help 2>&1 | grep -q -- '--fail-on'; then
   pip-licenses --fail-on "GNU General Public License;GNU General Public License v2 (GPLv2);GNU General Public License v3 (GPLv3);GNU Affero General Public License;GNU Affero General Public License v3"
   echo "OK: no GPL/AGPL (pip-licenses --fail-on)."
+  echo ""
+  "${ROOT}/scripts/check_licenses_npm.sh"
   exit 0
 fi
 
@@ -49,4 +51,7 @@ if [[ -n "${bad}" ]]; then
 fi
 
 echo "OK: no GPL/AGPL packages reported."
+
+echo ""
+"${ROOT}/scripts/check_licenses_npm.sh"
 exit 0
