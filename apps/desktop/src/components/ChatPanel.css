@@ -374,6 +374,39 @@
   color: var(--ink-1);
 }
 
+.markdown-path {
+  display: inline;
+}
+
+.markdown-path-btn {
+  display: inline;
+  margin: 0;
+  padding: 0.05em 0.2em;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent-teal) 12%, transparent);
+  color: var(--accent-teal);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  word-break: break-all;
+}
+
+.markdown-path-btn:hover {
+  color: var(--accent-indigo);
+  background: color-mix(in srgb, var(--accent-indigo) 12%, transparent);
+}
+
+.markdown-path-status {
+  display: inline-block;
+  margin-left: 0.35em;
+  font-size: var(--font-size-xs);
+  color: var(--ink-1);
+}
+
 .tool-events {
   margin-top: var(--space-1);
   max-width: 72%;

@@ -23,6 +23,11 @@
       "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8765 http://localhost:8765 ws://127.0.0.1:1420 ws://localhost:1420 ws://127.0.0.1:1421 ws://localhost:1421 ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline'"
     }
   },
+  "plugins": {
+    "opener": {
+      "requireLiteralLeadingDot": false
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],

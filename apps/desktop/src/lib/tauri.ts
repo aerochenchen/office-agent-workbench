@@ -79,3 +79,51 @@ export async function pickFiles(options?: {
   if (selected === null) return null;
   return Array.isArray(selected) ? selected : [selected];
 }
+
+/**
+ * Open a local path with the OS default app via `@tauri-apps/plugin-opener`.
+ * Throws when not in Tauri or when the native open fails.
+ */
+export async function openPath(path: string): Promise<void> {
+  if (!isTauriRuntime()) {
+    throw new Error("当前为浏览器模式，无法用系统应用打开文件");
+  }
+  const { openPath: openNativePath } = await import("@tauri-apps/plugin-opener");
+  await openNativePath(path);
+}
+
+/** Known deliverable suffixes for path linkification. */
+export const DELIVERABLE_SUFFIXES = [
+  ".docx",
+  ".xlsx",
+  ".pdf",
+  ".md",
+  ".txt",
+  ".json",
+] as const;
+
+const DELIVERABLE_SUFFIX_RE = /\.(docx|xlsx|pdf|md|txt|json)$/i;
+
+/** True when path has a known deliverable extension. */
+export function hasDeliverableSuffix(path: string): boolean {
+  return DELIVERABLE_SUFFIX_RE.test(path.trim());
+}
+
+/**
+ * Relative deliverable fragment in backticks, e.g. `output/a.docx` or `.office-agent/b.md`.
+ * Rejects absolute paths and `..` segments.
+ */
+export function isRelativeDeliverablePath(path: string): boolean {
+  const p = path.trim().replace(/\\/g, "/");
+  if (!p || p.startsWith("/") || /^[a-zA-Z]:\//.test(p)) return false;
+  if (p.includes("..")) return false;
+  if (!hasDeliverableSuffix(p)) return false;
+  return /^(output\/|\.office-agent\/)/.test(p) || !p.startsWith(".");
+}
+
+/** Join workspace root with a relative path (forward slashes). */
+export function resolveUnderWorkspace(workspacePath: string, relativePath: string): string {
+  const root = normalizeFsPath(workspacePath);
+  const rel = relativePath.trim().replace(/\\/g, "/").replace(/^\.\//, "");
+  return `${root}/${rel}`;
+}

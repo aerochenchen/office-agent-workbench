@@ -100,10 +100,12 @@ function PendingBody({ message, now }: { message: ChatMessage; now: number }) {
 function Bubble({
   message,
   now,
+  workspacePath,
   onToggleSteps,
 }: {
   message: ChatMessage;
   now: number;
+  workspacePath: string | null;
   onToggleSteps?: (messageId: string) => void;
 }) {
   const roleClass =
@@ -132,7 +134,7 @@ function Bubble({
         {inFlight ? (
           <PendingBody message={message} now={now} />
         ) : message.role === "assistant" && message.phase === "done" ? (
-          <MarkdownMessage content={message.content} />
+          <MarkdownMessage content={message.content} workspacePath={workspacePath} />
         ) : (
           message.content
         )}
@@ -357,7 +359,13 @@ export default function ChatPanel({
           </div>
         )}
         {messages.map((m) => (
-          <Bubble key={m.id} message={m} now={now} onToggleSteps={onToggleSteps} />
+          <Bubble
+            key={m.id}
+            message={m}
+            now={now}
+            workspacePath={workspacePath}
+            onToggleSteps={onToggleSteps}
+          />
         ))}
       </div>
 
