@@ -159,6 +159,23 @@ shared_scripts:
 
 导入时展示权限清单，用户确认后启用。
 
+### 6.3.1 Progressive Disclosure（正文按需加载）
+
+系统提示只注入已启用 Skill 的 `enabled_catalog()`（id / name / description / tier），**不含 SKILL.md 正文**——否则技能一多，每轮上下文就被撑满。
+
+正文靠 `read_skill` 工具按需加载：
+
+| 参数 | 说明 |
+|---|---|
+| `skill_id` | 技能目录名 |
+| `file` | 技能内相对路径，默认 `SKILL.md`；可读 `references/`、`templates/`、`scripts/` |
+
+约束：路径限制在 `{app_data}/skills/{id}/` 内（`skill_id` 与 `file` 都做逃逸校验）；后缀白名单 `.md .txt .json .py .yaml .yml .csv .tmpl`；单文件超 64KB 截断并置 `truncated`；返回值带该技能的文本文件清单 `files`，供 Agent 继续钻取。
+
+系统提示中有对应纪律：任务命中某个 Skill 时**必须先 `read_skill` 读全文再执行**，禁止只凭 description 发挥。这条纪律是 prompt-only Skill（仅有 SKILL.md、无脚本）能够生效的前提。
+
+因此 `description` 要写成"何时启用 + 产出什么"的短句（≤60 字，每轮都注入），步骤细节一律进正文，正文 ≤8000 字符，更细的规范下沉到 `references/`。
+
 ### 6.4 Mapping Existing Skills
 
 **公文写作 `gongwen-rag-writing`（混合，Agent 不可替代性高 · tier=heavy）**

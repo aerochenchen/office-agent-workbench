@@ -14,7 +14,9 @@ TOOL_LABELS: dict[str, str] = {
     "workspace_list": "查看工作区",
     "workspace_read": "读取文件",
     "workspace_write": "写入文件",
+    "workspace_extract": "抽取文档内容",
     "run_workspace_script": "运行工作区脚本",
+    "read_skill": "读取技能说明",
     "run_skill_script": "运行 Skill 脚本",
     "run_shared_script": "运行共享脚本",
     "ask_user": "需要你确认",
@@ -46,10 +48,43 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "workspace_read",
-            "description": "读取工作区内文本文件内容",
+            "description": (
+                "读取工作区内【纯文本】文件内容。"
+                "Office 文件（.docx/.doc/.xlsx/.xls）请改用 workspace_extract。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {"path": {"type": "string", "description": "相对文件路径"}},
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "workspace_extract",
+            "description": (
+                "从工作区 Office 文件抽取可引用文本单元（含 unit_id）。"
+                "支持 .docx/.xlsx；.doc/.xls 会先规范化为 docx/xlsx 再抽取。"
+                "不要用 workspace_read 读这些二进制格式。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "工作区内相对路径"},
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "抽取正文总字符上限，默认 80000",
+                    },
+                    "max_units": {
+                        "type": "integer",
+                        "description": "最多返回的单元数，默认 200",
+                    },
+                    "force_normalize": {
+                        "type": "boolean",
+                        "description": "为 true 时强制重新做 .doc/.xls 转换",
+                    },
+                },
                 "required": ["path"],
             },
         },
@@ -96,6 +131,28 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "args": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_skill",
+            "description": (
+                "读取已安装 Skill 的说明文件。Skill 目录只给了用途摘要，"
+                "完整工作流写在它的 SKILL.md 里，执行前必须先读。"
+                "默认读 SKILL.md；再用 file 读它的 references/、templates/、scripts/ 文件。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill_id": {"type": "string", "description": "Skill 目录名，如 multidoc-digest"},
+                    "file": {
+                        "type": "string",
+                        "description": "Skill 内相对路径，默认 SKILL.md，如 references/citation-format.md",
+                    },
+                },
+                "required": ["skill_id"],
             },
         },
     },
@@ -193,13 +250,21 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "- 工作区内的 .py 用 run_workspace_script 执行（写完脚本后立刻执行）；\n"
         "- Skill 的 scripts/ 不在工作区内，必须用 run_skill_script 或 run_shared_script；\n"
         "- 公文排版优先 run_shared_script(name=format_gongwen, args=[docx路径])；\n"
+        "- 读取 .docx/.doc/.xlsx/.xls 请用 workspace_extract（.doc/.xls 会先转为 docx/xlsx）；"
+        "纯文本才用 workspace_read；\n"
         "- 不要对「scripts」调用 workspace_list，除非工作区里真有该目录。\n"
         "执行纪律：\n"
         "- 禁止让用户去终端/命令行自行运行 python、bash 或其它命令；你必须用工具代为执行；\n"
         "- 用户已给出足够信息时，立即调用工具执行，不要反复确认；\n"
         "- 若历史里用户已回答过你的问题，直接执行，禁止再次用 ask_user 问同一问题；\n"
         "- ask_user 整轮最多使用一次，且仅当缺少关键路径/文件名导致无法动手时才用；\n"
-        "- 可用 workspace_list 自行查找 .docx，而不是不停问用户。\n"
+        "- 可用 workspace_list 自行查找材料文件，而不是不停问用户。\n"
+        "Skill 使用纪律：\n"
+        "- 下面的 Skill 目录只给出名称与用途摘要，不含具体步骤；\n"
+        "- 当任务命中某个 Skill 时，必须先 read_skill(skill_id=...) 读取它的 SKILL.md 全文，"
+        "再严格按其中的步骤执行；\n"
+        "- 需要格式细节或脚本参数时，再 read_skill 读它的 references/、templates/、scripts/ 文件；\n"
+        "- 禁止只凭用途摘要就自行发挥。\n"
         f"\n已启用的 Skill 目录（JSON）：\n{catalog_json}"
     )
 
@@ -253,7 +318,6 @@ def _assistant_message_from_response(message: Any) -> dict[str, Any]:
     return out
 
 
-
 def _complete_orphan_tool_calls(
     messages: list[dict[str, Any]],
     *,
@@ -296,6 +360,8 @@ def args_summary(name: str, args: dict[str, Any]) -> str:
         return str(args.get("path") or "")
     if name == "run_skill_script":
         return f"{args.get('skill_id', '')}/{args.get('script', '')}".strip("/")
+    if name == "read_skill":
+        return f"{args.get('skill_id', '')}/{args.get('file') or 'SKILL.md'}".strip("/")
     if name == "run_shared_script":
         script = str(args.get("name") or "")
         extra = args.get("args") or []
@@ -322,6 +388,8 @@ def result_summary(name: str, result: dict[str, Any]) -> str:
         return f"{len(entries)} 项"
     if name == "workspace_write":
         return str(result.get("path") or "已写入")
+    if name == "read_skill":
+        return f"{len(str(result.get('content') or ''))} 字符"
     if name in {"run_workspace_script", "run_skill_script", "run_shared_script"}:
         code = result.get("returncode", result.get("exit_code"))
         out = str(result.get("stdout") or "").strip().splitlines()

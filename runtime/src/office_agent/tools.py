@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from office_agent.audit import AuditLog
+from office_agent.doc_io import extract_file
 from office_agent.paths import app_data_dir
 from office_agent.script_policy import assert_argv_within_roots, build_script_env
 from office_agent.permissions import (
@@ -24,6 +25,14 @@ from office_agent.workspace import (
 
 class ToolError(ValueError):
     pass
+
+
+# Files an installed Skill may expose to the agent via read_skill.
+SKILL_TEXT_SUFFIXES = frozenset(
+    {".md", ".txt", ".json", ".py", ".yaml", ".yml", ".csv", ".tmpl"}
+)
+MAX_SKILL_FILE_BYTES = 64 * 1024
+MAX_SKILL_FILE_ENTRIES = 60
 
 
 def _normalize_rel(rel: str) -> str:
@@ -86,7 +95,9 @@ class ToolExecutor:
             "workspace_list": self._workspace_list,
             "workspace_read": self._workspace_read,
             "workspace_write": self._workspace_write,
+            "workspace_extract": self._workspace_extract,
             "run_workspace_script": self._run_workspace_script,
+            "read_skill": self._read_skill,
             "run_skill_script": self._run_skill_script,
             "run_shared_script": self._run_shared_script,
             "ask_user": self._ask_user,
@@ -123,7 +134,10 @@ class ToolExecutor:
         for meta in self.skills.scan():
             if meta.id == skill_id:
                 return meta
-        skill_dir = self._app_data / "skills" / skill_id
+        try:
+            skill_dir = self._skill_dir(skill_id)
+        except ToolError:
+            return None
         md = skill_dir / "SKILL.md"
         if not md.is_file():
             return None
@@ -152,6 +166,7 @@ class ToolExecutor:
             return
 
         if name == "workspace_write":
+            # No skill_id on bare writes; skill ACL applies when skill_id is provided.
             skill_id = args.get("skill_id")
             if not skill_id:
                 return
@@ -173,6 +188,30 @@ class ToolExecutor:
     def _workspace_read(self, args: dict) -> dict:
         content = self.workspace.read_text(str(args["path"]))
         return {"ok": True, "content": content}
+
+    def _workspace_extract(self, args: dict) -> dict:
+        """Normalize .doc/.xls if needed, then extract text units from Office files."""
+        rel = str(args["path"])
+        path = self.workspace.resolve(rel)
+        if not path.is_file():
+            return {"ok": False, "error": f"not a file: {rel}"}
+        max_chars = int(args.get("max_chars") or 80_000)
+        max_units = int(args.get("max_units") or 200)
+        force = bool(args.get("force_normalize") or False)
+        result = extract_file(
+            path,
+            self.workspace.root,
+            max_chars=max_chars,
+            max_units=max_units,
+            force_normalize=force,
+        )
+        payload = result.to_dict()
+        # Prefer workspace-relative path in response
+        try:
+            payload["path"] = str(path.relative_to(self.workspace.root))
+        except ValueError:
+            pass
+        return payload
 
     def _workspace_write(self, args: dict) -> dict:
         rel = relocate_write_path(str(args["path"]))
@@ -196,12 +235,62 @@ class ToolExecutor:
         if ".." in script or script.startswith(("/", "\\")):
             raise ToolError(f"invalid script name: {script}")
 
+    def _skill_dir(self, skill_id: str) -> Path:
+        self._validate_script_name(skill_id)
+        skills_root = (self._app_data / "skills").resolve()
+        skill_dir = (skills_root / skill_id).resolve()
+        try:
+            skill_dir.relative_to(skills_root)
+        except ValueError as e:
+            raise ToolError(f"invalid skill_id: {skill_id}") from e
+        return skill_dir
+
+    def _list_skill_files(self, skill_dir: Path) -> list[str]:
+        out: list[str] = []
+        for p in sorted(skill_dir.rglob("*")):
+            if "__pycache__" in p.parts:
+                continue
+            if not p.is_file() or p.suffix.lower() not in SKILL_TEXT_SUFFIXES:
+                continue
+            out.append(p.relative_to(skill_dir).as_posix())
+            if len(out) >= MAX_SKILL_FILE_ENTRIES:
+                break
+        return out
+
+    def _read_skill(self, args: dict) -> dict:
+        """Read one text file from an installed Skill; defaults to SKILL.md."""
+        skill_id = str(args["skill_id"])
+        rel = str(args.get("file") or "SKILL.md").replace("\\", "/")
+        skill_dir = self._skill_dir(skill_id)
+        if not skill_dir.is_dir():
+            return {"ok": False, "error": f"skill not installed: {skill_id}"}
+        self._validate_script_name(rel)
+        target = (skill_dir / rel).resolve()
+        try:
+            target.relative_to(skill_dir)
+        except ValueError as e:
+            raise ToolError("file path escapes skill directory") from e
+        files = self._list_skill_files(skill_dir)
+        if not target.is_file():
+            return {"ok": False, "error": f"file not found in skill: {rel}", "files": files}
+        if target.suffix.lower() not in SKILL_TEXT_SUFFIXES:
+            return {"ok": False, "error": f"not a readable text file: {rel}", "files": files}
+        raw = target.read_bytes()
+        return {
+            "ok": True,
+            "skill_id": skill_id,
+            "file": rel,
+            "content": raw[:MAX_SKILL_FILE_BYTES].decode("utf-8", errors="replace"),
+            "truncated": len(raw) > MAX_SKILL_FILE_BYTES,
+            "files": files,
+        }
+
     def _run_skill_script(self, args: dict) -> dict:
         skill_id = str(args["skill_id"])
         script = str(args["script"])
         argv = [str(a) for a in args.get("args", [])]
         self._validate_script_name(script)
-        scripts_dir = (self._app_data / "skills" / skill_id / "scripts").resolve()
+        scripts_dir = (self._skill_dir(skill_id) / "scripts").resolve()
         script_path = (scripts_dir / script).resolve()
         try:
             script_path.relative_to(scripts_dir)
@@ -209,7 +298,7 @@ class ToolExecutor:
             raise ToolError("script path escapes skill scripts directory") from e
         if not script_path.is_file():
             return {"ok": False, "error": f"script not found: {script}"}
-        skill_dir = (self._app_data / "skills" / skill_id).resolve()
+        skill_dir = self._skill_dir(skill_id)
         return self._run_python(
             script_path,
             argv,

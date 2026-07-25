@@ -87,13 +87,65 @@ def test_tool_schema_names_match_executor():
         "workspace_list",
         "workspace_read",
         "workspace_write",
+        "workspace_extract",
         "run_workspace_script",
+        "read_skill",
         "run_skill_script",
         "run_shared_script",
         "ask_user",
         "finish",
     }
     assert names == expected
+
+
+def test_system_prompt_requires_reading_skill_body(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "ws").mkdir()
+    executor = ToolExecutor(Workspace(tmp_path / "ws"), SkillRegistry(), permission_mode="trust")
+    gateway = FakeGateway(responses=[_completion(content="好")])
+    run_agent(
+        user_message="排版",
+        attached_paths=[],
+        gateway=gateway,
+        tools=executor,
+        catalog=[{"id": "s1", "name": "示例", "description": "测试", "tier": "light"}],
+        max_steps=3,
+    )
+    system = gateway.chat_calls[0]["messages"][0]["content"]
+    assert "read_skill" in system
+    assert "SKILL.md" in system
+
+
+def test_read_skill_returns_body_to_model(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    skill = tmp_path / "skills" / "s1"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: s1\ndescription: d\n---\n\n# 三步纪律\n\nStep 1 先读素材\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "ws").mkdir()
+    executor = ToolExecutor(Workspace(tmp_path / "ws"), SkillRegistry(), permission_mode="trust")
+    gateway = FakeGateway(
+        responses=[
+            _completion(tool_calls=[_tool_call("c1", "read_skill", {"skill_id": "s1"})]),
+            _completion(content="已按技能步骤执行"),
+        ]
+    )
+    result = run_agent(
+        user_message="用 s1 干活",
+        attached_paths=[],
+        gateway=gateway,
+        tools=executor,
+        catalog=[{"id": "s1", "name": "示例", "description": "d", "tier": "light"}],
+        max_steps=5,
+    )
+    assert result.final_text == "已按技能步骤执行"
+    assert result.tool_events[0]["result"]["ok"] is True
+    # The workflow body must reach the model on the follow-up request.
+    tool_msg = next(m for m in gateway.chat_calls[1]["messages"] if m["role"] == "tool")
+    assert "三步纪律" in tool_msg["content"]
 
 
 def test_finish_tool_ends_with_summary(tmp_path: Path, monkeypatch):

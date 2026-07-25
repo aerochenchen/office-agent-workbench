@@ -41,6 +41,8 @@ hiddenimports: list = list(
         "email.mime.text",
         "docx",
         "pptx",
+        "openpyxl",
+        "xlrd",
     ]
 )
 
@@ -56,6 +58,8 @@ for pkg in (
     "sniffio",
     "yaml",
     "multipart",
+    "openpyxl",
+    "xlrd",
 ):
     try:
         d, b, h = collect_all(pkg)
