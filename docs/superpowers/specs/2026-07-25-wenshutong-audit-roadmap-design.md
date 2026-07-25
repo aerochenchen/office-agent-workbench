@@ -189,8 +189,10 @@
 
 - 附件 / 选中文件上下文（`attached_paths` 接 UI）  
 - Markdown 气泡；产物「用系统默认程序打开」  
-- 写作 RAG 目标机端到端验收；决定是否做「无向量降级写作 Skill」  
-- 安装前结构校验（复用 skill-builder 类 validate）
+- ~~写作 RAG 目标机端到端验收；决定是否做「无向量降级写作 Skill」~~ → **本轮明确不做（C）**  
+- 安装前结构校验（Runtime 轻量 `skill_validate`，对标 skill-builder 核心规则）
+
+**实施计划：** `docs/superpowers/plans/2026-07-25-wenshutong-q1-product-loop.md`（Tasks 1–7；范围 A+B+D）。
 
 ### 5.4 Q+2 · 交付与生态（Windows 为主）
 
