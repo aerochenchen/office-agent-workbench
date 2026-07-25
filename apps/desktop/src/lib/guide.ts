@@ -41,4 +41,5 @@ export const GUIDE_HINTS = {
   workspaceReady: "在本项目文件夹内描述任务即可；对话与成果会留在本地。",
   noSessions: "暂无对话。点击上方「新建对话」开始本项目工作。",
   noSkills: "可导入本地技能包增强能力；安装与运行均在本机。",
+  noEnabledSkills: "暂无启用中的技能；可在技能管理中启用或导入。",
 } as const;
