@@ -267,3 +267,44 @@ def test_sessions_api_list_create_delete(client: TestClient, tmp_path: Path):
     deleted = client.delete(f"/sessions/{sid}")
     assert deleted.status_code == 200
     assert client.get(f"/sessions/{sid}").status_code == 404
+
+
+def test_prepare_chat_injects_audit(client: TestClient, tmp_path: Path, app_state: ProcessState):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    from office_agent.tools import ToolExecutor
+
+    tools = ToolExecutor(
+        app_state.workspace,
+        app_state.registry,
+        permission_mode=app_state.config.permission_mode,
+        audit=app_state.audit,
+    )
+    assert app_state.audit is not None
+    tools.execute("workspace_list", {"path": "."})
+    import sqlite3
+
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute("SELECT tool, ok FROM audit").fetchall()
+    assert ("workspace_list", 1) in rows
+
+
+def test_chat_uses_state_audit(client: TestClient, tmp_path: Path, app_state: ProcessState, monkeypatch):
+    """Regression: _prepare_chat must pass office.audit into ToolExecutor."""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    seen: dict = {}
+
+    from office_agent.tools import ToolExecutor
+
+    class Spy(ToolExecutor):
+        def __init__(self, *a, **kw):
+            seen["audit"] = kw.get("audit")
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr("office_agent.app.ToolExecutor", Spy)
+    r = client.post("/chat", json={"message": "hi"})
+    assert r.status_code == 200
+    assert seen.get("audit") is app_state.audit

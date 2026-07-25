@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from office_agent.agent_loop import run_agent
+from office_agent.audit import AuditLog
 from office_agent.bundled_seed import seed_bundled_assets
 from office_agent.config import AppConfig
 from office_agent.gateway import GatewayError, ModelGateway
@@ -69,11 +70,16 @@ def save_config(cfg: AppConfig) -> None:
     _config_path().write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _default_audit() -> AuditLog:
+    return AuditLog(app_data_dir() / "db" / "audit.sqlite")
+
+
 @dataclass
 class ProcessState:
     config: AppConfig = field(default_factory=load_config)
     registry: SkillRegistry = field(default_factory=SkillRegistry)
     sessions: SessionStore = field(default_factory=SessionStore)
+    audit: AuditLog = field(default_factory=_default_audit)
     workspace: Workspace | None = None
     gateway_factory: Callable[[AppConfig], Any] = ModelGateway
     # Soft-fail localize attempts this process (avoid re-calling LLM on every refresh)
@@ -330,6 +336,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             ws,
             office.registry,
             permission_mode=office.config.permission_mode,
+            audit=office.audit,
         )
         catalog = office.registry.enabled_catalog()
         history = office.sessions.get_messages(session_id)
