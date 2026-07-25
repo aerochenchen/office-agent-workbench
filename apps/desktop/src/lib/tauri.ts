@@ -103,13 +103,18 @@ export async function openPath(path: string): Promise<void> {
 export const DELIVERABLE_SUFFIXES = [
   ".docx",
   ".xlsx",
+  ".pptx",
+  ".ppt",
   ".pdf",
   ".md",
   ".txt",
   ".json",
 ] as const;
 
-const DELIVERABLE_SUFFIX_RE = /\.(docx|xlsx|pdf|md|txt|json)$/i;
+/** Extension alternation for path scanners (no leading dots), e.g. `docx|xlsx|pptx`. */
+export const DELIVERABLE_EXT_ALT = DELIVERABLE_SUFFIXES.map((s) => s.slice(1)).join("|");
+
+const DELIVERABLE_SUFFIX_RE = new RegExp(`\\.(?:${DELIVERABLE_EXT_ALT})$`, "i");
 
 /** True when path has a known deliverable extension. */
 export function hasDeliverableSuffix(path: string): boolean {

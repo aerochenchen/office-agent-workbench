@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterPathsUnderWorkspace,
+  hasDeliverableSuffix,
   isPathUnderWorkspace,
   isRelativeDeliverablePath,
   normalizeFsPath,
@@ -41,9 +42,19 @@ describe("parsePastedPaths", () => {
   });
 });
 
+describe("hasDeliverableSuffix", () => {
+  it("recognizes Office and text deliverables including pptx", () => {
+    expect(hasDeliverableSuffix("deck.pptx")).toBe(true);
+    expect(hasDeliverableSuffix("old.ppt")).toBe(true);
+    expect(hasDeliverableSuffix("report.docx")).toBe(true);
+    expect(hasDeliverableSuffix("notes.exe")).toBe(false);
+  });
+});
+
 describe("isRelativeDeliverablePath", () => {
   it("accepts output deliverables and rejects absolute paths", () => {
     expect(isRelativeDeliverablePath("output/report.docx")).toBe(true);
+    expect(isRelativeDeliverablePath("output/slides.pptx")).toBe(true);
     expect(isRelativeDeliverablePath("/tmp/report.docx")).toBe(false);
   });
 });

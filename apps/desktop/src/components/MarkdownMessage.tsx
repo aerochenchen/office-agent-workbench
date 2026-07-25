@@ -2,6 +2,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
+  DELIVERABLE_EXT_ALT,
   hasDeliverableSuffix,
   isPathUnderWorkspace,
   isRelativeDeliverablePath,
@@ -49,7 +50,7 @@ function linkifyAbsolutePaths(
   if (!root) return [text];
 
   const re = new RegExp(
-    `${escapeRegExp(root)}/[^\\s\\\`"'<>\\]\\)]+\\.(?:docx|xlsx|pdf|md|txt|json)`,
+    `${escapeRegExp(root)}/[^\\s\\\`"'<>\\]\\)]+\\.(?:${DELIVERABLE_EXT_ALT})`,
     "gi",
   );
 
