@@ -131,18 +131,21 @@ def test_install_skill_and_set_enabled(client: TestClient, tmp_path: Path):
     src = tmp_path / "pkg" / "my-skill"
     src.mkdir(parents=True)
     (src / "SKILL.md").write_text(
-        "---\nname: my-skill\ndescription: install test\ntier: light\n"
+        "---\nname: my-skill\ndescription: install test\nversion: 0.1.0\ntier: light\n"
         "permissions:\n  - run_python\n---\n\n# y\n",
         encoding="utf-8",
     )
     preview = client.post("/skills/inspect", json={"path": str(src)})
     assert preview.status_code == 200
     assert preview.json()["skill"]["permissions"] == ["run_python"]
+    assert "validation" in preview.json()
+    assert preview.json()["validation"]["ok"] is True
 
     r = client.post("/skills/install", json={"path": str(src), "enabled": True})
     assert r.status_code == 200
     assert r.json()["skill"]["id"] == "my-skill"
     assert r.json()["skill"]["permissions"] == ["run_python"]
+    assert r.json()["validation"]["ok"] is True
 
     off = client.post("/skills/my-skill/enabled", json={"enabled": False})
     assert off.status_code == 200
@@ -154,7 +157,7 @@ def test_install_zip_via_api(client: TestClient, tmp_path: Path):
     src = tmp_path / "pkg" / "zip-skill"
     src.mkdir(parents=True)
     (src / "SKILL.md").write_text(
-        "---\nname: zip-skill\ndescription: from zip\ntier: light\n---\n\n# z\n",
+        "---\nname: zip-skill\ndescription: from zip\nversion: 0.1.0\ntier: light\n---\n\n# z\n",
         encoding="utf-8",
     )
     z = tmp_path / "s.zip"
@@ -163,6 +166,26 @@ def test_install_zip_via_api(client: TestClient, tmp_path: Path):
     r = client.post("/skills/install", json={"path": str(z)})
     assert r.status_code == 200
     assert r.json()["skill"]["id"] == "zip-skill"
+
+
+def test_install_rejects_invalid_package_with_validation(client: TestClient, tmp_path: Path):
+    src = tmp_path / "pkg" / "no-version"
+    src.mkdir(parents=True)
+    (src / "SKILL.md").write_text(
+        "---\nname: no-version\ndescription: d\ntier: light\n---\n\n#\n",
+        encoding="utf-8",
+    )
+    preview = client.post("/skills/inspect", json={"path": str(src)})
+    assert preview.status_code == 200
+    assert preview.json()["validation"]["ok"] is False
+    assert any("version" in e for e in preview.json()["validation"]["errors"])
+
+    r = client.post("/skills/install", json={"path": str(src)})
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert isinstance(detail, dict)
+    assert any("version" in e for e in detail["errors"])
+    assert detail["validation"]["ok"] is False
 
 
 def test_post_config_updates_state(client: TestClient, app_state: ProcessState):

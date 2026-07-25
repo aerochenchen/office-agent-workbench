@@ -26,6 +26,7 @@ from office_agent.paths import app_data_dir
 from office_agent.permissions import PermissionGate, PermissionRequest
 from office_agent.session_store import SessionStore, history_to_ui_messages
 from office_agent.skill_localize import needs_zh_display, try_localize_installed_skill
+from office_agent.skill_validate import validate_skill_dir
 from office_agent.skills import SkillError, SkillRegistry
 from office_agent.tools import ToolExecutor
 from office_agent.workspace import SandboxError, Workspace
@@ -303,14 +304,36 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             )
         return {"skills": skills}
 
+    def _skill_error_detail(exc: SkillError) -> dict[str, Any] | str:
+        validation = getattr(exc, "validation", None)
+        if not validation:
+            return str(exc)
+        return {
+            "error": str(exc),
+            "errors": list(validation.get("errors") or []),
+            "warnings": list(validation.get("warnings") or []),
+            "validation": {
+                "ok": bool(validation.get("ok")),
+                "errors": list(validation.get("errors") or []),
+                "warnings": list(validation.get("warnings") or []),
+            },
+        }
+
     @app.post("/skills/inspect")
     def inspect_skill(body: InstallSkillBody) -> dict[str, Any]:
         src = Path(body.path).expanduser()
         try:
-            meta = office.registry.inspect_path(src)
+            meta, validation = office.registry.inspect_with_validation(src)
         except SkillError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
-        return {"skill": office.registry.meta_payload(meta)}
+            raise HTTPException(status_code=400, detail=_skill_error_detail(e)) from e
+        return {
+            "skill": office.registry.meta_payload(meta),
+            "validation": {
+                "ok": bool(validation.get("ok")),
+                "errors": list(validation.get("errors") or []),
+                "warnings": list(validation.get("warnings") or []),
+            },
+        }
 
     @app.post("/skills/install")
     def install_skill(body: InstallSkillBody) -> dict[str, Any]:
@@ -318,11 +341,26 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         try:
             meta = office.registry.install_path(src, enabled=body.enabled)
         except SkillError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+            raise HTTPException(status_code=400, detail=_skill_error_detail(e)) from e
         # Allow a fresh localize attempt after (re)install
         office.zh_locale_tried.discard(meta.id)
         meta = office.maybe_localize_skill(meta)
-        return {"ok": True, "skill": office.registry.meta_payload(meta)}
+        # Install already gated on ok; re-check for warnings in the response body.
+        installed = office.registry.skills_dir / meta.id
+        validation = (
+            validate_skill_dir(installed)
+            if installed.is_dir()
+            else {"ok": True, "errors": [], "warnings": []}
+        )
+        return {
+            "ok": True,
+            "skill": office.registry.meta_payload(meta),
+            "validation": {
+                "ok": bool(validation.get("ok")),
+                "errors": list(validation.get("errors") or []),
+                "warnings": list(validation.get("warnings") or []),
+            },
+        }
 
     @app.post("/skills/{skill_id}/enabled")
     def set_skill_enabled(skill_id: str, body: SetEnabledBody) -> dict[str, Any]:

@@ -142,7 +142,7 @@ def test_install_localizes_via_api(tmp_path: Path, monkeypatch):
     src = tmp_path / "pkg" / "my-skill"
     src.mkdir(parents=True)
     (src / "SKILL.md").write_text(
-        "---\nname: my-skill\ndescription: install test\ntier: light\n---\n\n# y\n",
+        "---\nname: my-skill\ndescription: install test\nversion: 0.1.0\ntier: light\n---\n\n# y\n",
         encoding="utf-8",
     )
     r = client.post("/skills/install", json={"path": str(src), "enabled": True})
@@ -174,7 +174,7 @@ def test_install_succeeds_when_localize_fails(tmp_path: Path, monkeypatch):
     src = tmp_path / "pkg" / "my-skill"
     src.mkdir(parents=True)
     (src / "SKILL.md").write_text(
-        "---\nname: my-skill\ndescription: install test\ntier: light\n---\n\n# y\n",
+        "---\nname: my-skill\ndescription: install test\nversion: 0.1.0\ntier: light\n---\n\n# y\n",
         encoding="utf-8",
     )
     r = client.post("/skills/install", json={"path": str(src), "enabled": True})

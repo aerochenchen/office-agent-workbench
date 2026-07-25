@@ -62,7 +62,8 @@ def test_install_path_zip_and_disable(tmp_path: Path, monkeypatch):
     src = tmp_path / "pkg" / "z-demo"
     src.mkdir(parents=True)
     (src / "SKILL.md").write_text(
-        "---\nname: z-demo\ndescription: d\ntier: light\npermissions:\n  - workspace_write\n---\n\n#\n",
+        "---\nname: z-demo\ndescription: d\nversion: 0.1.0\ntier: light\n"
+        "permissions:\n  - workspace_write\n---\n\n#\n",
         encoding="utf-8",
     )
     z = tmp_path / "z.zip"
@@ -78,7 +79,7 @@ def test_install_md_lightweight(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     md = tmp_path / "公文助手.md"
     md.write_text(
-        "---\nname: memo-helper\ndescription: 仅说明\ntier: light\n---\n\n# 用法\n",
+        "---\nname: memo-helper\ndescription: 仅说明\nversion: 0.1.0\ntier: light\n---\n\n# 用法\n",
         encoding="utf-8",
     )
     meta = SkillRegistry().install_path(md)
@@ -166,3 +167,52 @@ def test_uninstall_rejects_path_escape(tmp_path: Path, monkeypatch):
             reg.uninstall(bad_id)
     assert outside.is_dir()
     assert (outside / "SKILL.md").is_file()
+
+
+def test_install_rejects_invalid_package(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    src = tmp_path / "pkg" / "bad-pkg"
+    src.mkdir(parents=True)
+    (src / "SKILL.md").write_text(
+        "---\nname: bad-pkg\ndescription: d\ntier: light\n---\n\n# missing version\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SkillError) as ei:
+        SkillRegistry().install_dir(src)
+    assert ei.value.validation is not None
+    assert ei.value.validation["ok"] is False
+    assert any("version" in e for e in ei.value.validation["errors"])
+    assert not (tmp_path / "skills" / "bad-pkg").exists()
+
+
+def test_install_rejects_forbidden_script_import(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    src = tmp_path / "pkg" / "net-skill"
+    src.mkdir(parents=True)
+    (src / "SKILL.md").write_text(
+        "---\nname: net-skill\ndescription: d\nversion: 0.1.0\ntier: light\n"
+        "permissions:\n  - run_python\n---\n\n#\n",
+        encoding="utf-8",
+    )
+    scripts = src / "scripts"
+    scripts.mkdir()
+    (scripts / "fetch.py").write_text("import httpx\n", encoding="utf-8")
+    with pytest.raises(SkillError) as ei:
+        SkillRegistry().install_dir(src)
+    assert any("httpx" in e for e in ei.value.validation["errors"])
+    assert not (tmp_path / "skills" / "net-skill").exists()
+
+
+def test_inspect_returns_validation(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    src = tmp_path / "pkg" / "peek-ok"
+    src.mkdir(parents=True)
+    (src / "SKILL.md").write_text(
+        "---\nname: peek-ok\ndescription: 预览\nversion: 0.1.0\ntier: light\n"
+        "display_name: 预览技能\npermissions:\n  - workspace_read\n---\n\n#\n",
+        encoding="utf-8",
+    )
+    meta, validation = SkillRegistry().inspect_with_validation(src)
+    assert meta.name == "peek-ok"
+    assert validation["ok"] is True
+    assert validation["errors"] == []

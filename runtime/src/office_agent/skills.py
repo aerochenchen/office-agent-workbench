@@ -11,10 +11,21 @@ from pathlib import Path
 import yaml
 
 from office_agent.paths import app_data_dir
+from office_agent.skill_validate import validate_skill_dir, validate_skill_text
 
 
 class SkillError(ValueError):
-    pass
+    def __init__(self, message: str, *, validation: dict | None = None) -> None:
+        super().__init__(message)
+        self.validation = validation
+
+
+def _raise_if_invalid(validation: dict) -> None:
+    if validation.get("ok"):
+        return
+    errors = validation.get("errors") or []
+    summary = "; ".join(str(e) for e in errors[:3]) or "skill validation failed"
+    raise SkillError(summary, validation=validation)
 
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
@@ -177,28 +188,36 @@ class SkillRegistry:
 
     def inspect_path(self, path: Path) -> SkillMeta:
         """Parse Skill metadata from dir / zip / md without installing."""
+        meta, _ = self.inspect_with_validation(path)
+        return meta
+
+    def inspect_with_validation(self, path: Path) -> tuple[SkillMeta, dict]:
+        """Parse metadata and run lightweight validation (does not install)."""
         path = path.expanduser().resolve()
         if not path.exists():
             raise SkillError(f"path not found: {path}")
         if path.is_dir():
             root = _resolve_skill_root(path)
-            return parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
+            meta = parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
+            return meta, validate_skill_dir(root)
         if path.is_file() and path.suffix.lower() == ".zip":
-            return self._inspect_zip(path)
+            return self._inspect_zip_with_validation(path)
         if path.is_file() and (path.suffix.lower() == ".md" or path.name == "SKILL.md"):
             text = path.read_text(encoding="utf-8")
             fallback = path.stem if path.name.lower() != "skill.md" else path.parent.name
             skill_id = _skill_id_from_text(text, fallback)
-            return parse_skill_md(text, Path(skill_id))
+            meta = parse_skill_md(text, Path(skill_id))
+            return meta, validate_skill_text(text, skill_id)
         raise SkillError("unsupported package: use a Skill folder, .zip, or .md / SKILL.md")
 
-    def _inspect_zip(self, zip_path: Path) -> SkillMeta:
+    def _inspect_zip_with_validation(self, zip_path: Path) -> tuple[SkillMeta, dict]:
         with tempfile.TemporaryDirectory(prefix="oa-skill-inspect-") as tmp:
             extract = Path(tmp)
             with zipfile.ZipFile(zip_path, "r") as zf:
                 _safe_extractall(zf, extract)
             root = _resolve_skill_root(extract)
-            return parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
+            meta = parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
+            return meta, validate_skill_dir(root)
 
     def install_path(self, path: Path, *, enabled: bool = True) -> SkillMeta:
         """Install from folder, zip, or single markdown file."""
@@ -219,6 +238,7 @@ class SkillRegistry:
 
     def install_dir(self, src: Path) -> SkillMeta:
         src = _resolve_skill_root(src)
+        _raise_if_invalid(validate_skill_dir(src))
         meta = parse_skill_md((src / "SKILL.md").read_text(encoding="utf-8"), src)
         dest = self.skills_dir / meta.id
         self.skills_dir.mkdir(parents=True, exist_ok=True)
@@ -245,8 +265,8 @@ class SkillRegistry:
         text = md_path.read_text(encoding="utf-8")
         fallback = md_path.stem if md_path.name.lower() != "skill.md" else md_path.parent.name
         skill_id = _skill_id_from_text(text, fallback)
-        # Validate frontmatter before writing
         parse_skill_md(text, Path(skill_id))
+        _raise_if_invalid(validate_skill_text(text, skill_id))
         dest = self.skills_dir / skill_id
         self.skills_dir.mkdir(parents=True, exist_ok=True)
         if dest.exists():
