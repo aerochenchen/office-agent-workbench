@@ -138,7 +138,8 @@ type StreamOutcome = {
   sawError: boolean;
 };
 
-function createSseDispatcher(handlers: ChatStreamHandlers): {
+/** @internal Exported for Vitest SSE parsing smoke tests. */
+export function createSseDispatcher(handlers: ChatStreamHandlers): {
   dispatchBlock: (block: string) => void;
   outcome: StreamOutcome;
 } {

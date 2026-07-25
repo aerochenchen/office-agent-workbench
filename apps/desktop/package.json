@@ -10,6 +10,7 @@
     "tauri": "tauri",
     "build:windows": "powershell -ExecutionPolicy Bypass -File ../../scripts/build-windows.ps1",
     "build:macos": "bash ../../scripts/build-macos.sh",
+    "test": "vitest run",
     "check:licenses": "license-checker --production --summary --failOn \"GPL;AGPL;GNU General Public License;GNU Affero General Public License;GNU General Public License v2;GNU General Public License v3;GNU Affero General Public License v3\"",
     "licenses:list": "license-checker --production --csv"
   },
@@ -29,6 +30,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "license-checker": "^25.0.1",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^3.2.4"
   }
 }
