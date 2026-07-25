@@ -1,0 +1,62 @@
+[
+  {
+    "doc_index": 1,
+    "filename": "数字化转型专项材料01.docx",
+    "must_contain": "覆盖基层网点 128 个",
+    "theme": "数字化转型"
+  },
+  {
+    "doc_index": 2,
+    "filename": "安全生产专项材料02.docx",
+    "must_contain": "排查隐患 56 处",
+    "theme": "安全生产"
+  },
+  {
+    "doc_index": 3,
+    "filename": "人才培养专项材料03.docx",
+    "must_contain": "专题培训 320 人次",
+    "theme": "人才培养"
+  },
+  {
+    "doc_index": 4,
+    "filename": "服务提升专项材料04.docx",
+    "must_contain": "群众满意度达到 97%",
+    "theme": "服务提升"
+  },
+  {
+    "doc_index": 5,
+    "filename": "党建引领专项材料05.docx",
+    "must_contain": "主题党日 12 次",
+    "theme": "党建引领"
+  },
+  {
+    "doc_index": 6,
+    "filename": "财务合规专项材料06.docx",
+    "must_contain": "审计发现问题 7 项",
+    "theme": "财务合规"
+  },
+  {
+    "doc_index": 7,
+    "filename": "数字化转型专项材料07.docx",
+    "must_contain": "覆盖基层网点 210 个",
+    "theme": "数字化转型"
+  },
+  {
+    "doc_index": 8,
+    "filename": "安全生产专项材料08.docx",
+    "must_contain": "排查隐患 41 处",
+    "theme": "安全生产"
+  },
+  {
+    "doc_index": 9,
+    "filename": "人才培养专项材料09.docx",
+    "must_contain": "专题培训 150 人次",
+    "theme": "人才培养"
+  },
+  {
+    "doc_index": 10,
+    "filename": "服务提升专项材料10.docx",
+    "must_contain": "群众满意度达到 95%",
+    "theme": "服务提升"
+  }
+]

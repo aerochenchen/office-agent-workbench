@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""{{一句话说明脚本做什么}}
+
+Usage:
+    python {{脚本名}}.py <输入路径> [--work-dir <path>]
+
+约定：cwd 是工作区根目录，路径参数按相对工作区解析；成功时 stdout 打 JSON 摘要。
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+WORK_REL = Path(".office-agent") / "work" / "{{skill_id}}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="{{脚本用途}}")
+    parser.add_argument("input", help="工作区内相对路径")
+    parser.add_argument("--work-dir", default=str(WORK_REL), help="过程文件目录")
+    args = parser.parse_args(argv)
+
+    src = Path(args.input)
+    if not src.exists():
+        print(f"ERROR: 输入不存在: {src}", file=sys.stderr)
+        return 2
+
+    work = Path(args.work_dir)
+    work.mkdir(parents=True, exist_ok=True)
+
+    # {{在此处理确定性重活：遍历、抽取、统计、改写。}}
+    # 单个文件失败不要中断整批：记录到 failed 里继续。
+    processed: list[str] = []
+    failed: list[dict[str, str]] = []
+
+    summary = {
+        "ok": True,
+        "input": str(src),
+        "work_dir": str(work),
+        "processed": len(processed),
+        "failed": failed,
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
