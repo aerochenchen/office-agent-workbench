@@ -22,7 +22,7 @@ from office_agent.auth import install_api_token_middleware
 from office_agent.audit import AuditLog
 from office_agent.bundled_seed import seed_bundled_assets
 from office_agent.cancel import CancelToken
-from office_agent.config import AppConfig
+from office_agent.config import AppConfig, merge_allowed_hosts
 from office_agent.gateway import GatewayError, ModelGateway
 from office_agent.paths import app_data_dir
 from office_agent.permissions import PermissionGate, PermissionRequest
@@ -68,11 +68,13 @@ def load_config() -> AppConfig:
         return DEFAULT_CONFIG
     # PowerShell / Notepad may write UTF-8 BOM; utf-8-sig strips it.
     data = json.loads(path.read_text(encoding="utf-8-sig"))
+    api_base = str(data.get("api_base", DEFAULT_CONFIG.api_base))
+    allowed = list(data.get("allowed_hosts", DEFAULT_CONFIG.allowed_hosts))
     return AppConfig(
-        api_base=str(data.get("api_base", DEFAULT_CONFIG.api_base)),
+        api_base=api_base,
         api_key=str(data.get("api_key", DEFAULT_CONFIG.api_key)),
         model=str(data.get("model", DEFAULT_CONFIG.model)),
-        allowed_hosts=list(data.get("allowed_hosts", DEFAULT_CONFIG.allowed_hosts)),
+        allowed_hosts=merge_allowed_hosts(api_base, allowed),
         permission_mode=str(data.get("permission_mode", DEFAULT_CONFIG.permission_mode)),
         max_tool_steps=int(data.get("max_tool_steps", DEFAULT_CONFIG.max_tool_steps)),
     )
@@ -388,6 +390,12 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             office.config.api_base = body.api_base
         if body.allowed_hosts is not None:
             office.config.allowed_hosts = body.allowed_hosts
+        if body.api_base is not None:
+            # Auto-allow the configured API host so users never manage the allowlist.
+            office.config.allowed_hosts = merge_allowed_hosts(
+                office.config.api_base,
+                office.config.allowed_hosts,
+            )
         if body.api_key is not None:
             office.config.api_key = body.api_key
         if body.model is not None:

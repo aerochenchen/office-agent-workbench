@@ -21,7 +21,6 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   const [apiBase, setApiBase] = useState(initial.api_base);
   const [apiKey, setApiKey] = useState(initial.api_key);
   const [model, setModel] = useState(initial.model);
-  const [allowedHosts, setAllowedHosts] = useState(initial.allowed_hosts.join(", "));
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(
     initial.permission_mode ?? "standard",
   );
@@ -33,7 +32,6 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setApiBase(initial.api_base);
       setApiKey(initial.api_key);
       setModel(initial.model);
-      setAllowedHosts(initial.allowed_hosts.join(", "));
       setPermissionMode(initial.permission_mode ?? "standard");
       setError(null);
     }
@@ -48,10 +46,6 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       const partial: Partial<RuntimeConfig> = {
         api_base: apiBase.trim(),
         model: model.trim(),
-        allowed_hosts: allowedHosts
-          .split(",")
-          .map((h) => h.trim())
-          .filter(Boolean),
         permission_mode: permissionMode,
       };
       const trimmedKey = apiKey.trim();
@@ -126,16 +120,6 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 className="field-input"
                 value={model}
                 onChange={(e) => setModel(e.currentTarget.value)}
-              />
-            </label>
-
-            <label className="field">
-              <span className="field-label">允许的主机（逗号分隔）</span>
-              <input
-                className="field-input"
-                value={allowedHosts}
-                onChange={(e) => setAllowedHosts(e.currentTarget.value)}
-                placeholder="127.0.0.1, localhost"
               />
             </label>
 

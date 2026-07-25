@@ -201,9 +201,26 @@ def test_post_config_updates_state(client: TestClient, app_state: ProcessState):
     )
     assert r.status_code == 200
     assert app_state.config.api_base == "http://10.0.0.8:8000/v1"
-    assert app_state.config.allowed_hosts == ["10.0.0.8"]
+    # api_base host is always merged; local hosts always kept
+    assert "10.0.0.8" in app_state.config.allowed_hosts
+    assert "127.0.0.1" in app_state.config.allowed_hosts
+    assert "localhost" in app_state.config.allowed_hosts
     assert app_state.config.api_key == "k2"
     assert app_state.config.model == "other-model"
+
+
+def test_post_config_auto_allows_api_base_host(client: TestClient, app_state: ProcessState):
+    """Saving api_base without allowed_hosts still allowlists its hostname."""
+    app_state.config.allowed_hosts = ["127.0.0.1", "localhost"]
+    r = client.post(
+        "/config",
+        json={"api_base": "https://api.openai.com/v1"},
+    )
+    assert r.status_code == 200
+    hosts = app_state.config.allowed_hosts
+    assert "api.openai.com" in hosts
+    assert "127.0.0.1" in hosts
+    assert "localhost" in hosts
 
 
 def test_get_config_does_not_return_plaintext_key(client: TestClient, app_state: ProcessState):
