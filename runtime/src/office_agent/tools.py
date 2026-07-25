@@ -7,7 +7,12 @@ from pathlib import Path
 
 from office_agent.audit import AuditLog
 from office_agent.paths import app_data_dir
-from office_agent.skills import SkillRegistry
+from office_agent.permissions import (
+    RISKY_TOOLS,
+    PermissionDenied,
+    PermissionGate,
+)
+from office_agent.skills import SkillRegistry, parse_skill_md
 from office_agent.workspace import (
     AGENT_OUTPUT_REL,
     AGENT_WORK_REL,
@@ -61,6 +66,7 @@ class ToolExecutor:
         permission_mode: str = "standard",
         audit: AuditLog | None = None,
         python_bin: str | None = None,
+        gate: PermissionGate | None = None,
     ) -> None:
         self.workspace = workspace
         self.skills = skills
@@ -68,6 +74,12 @@ class ToolExecutor:
         self.audit = audit
         self.python_bin = python_bin or sys.executable
         self._app_data = app_data_dir()
+        if gate is not None:
+            self.gate = gate
+        else:
+            # Default auto-allow keeps headless / existing tests green.
+            self.gate = PermissionGate(permission_mode)
+            self.gate.set_auto(True)
 
     def execute(self, name: str, args: dict) -> dict:
         handlers = {
@@ -86,10 +98,17 @@ class ToolExecutor:
             return result
 
         try:
+            self._enforce_skill_permissions(name, args)
+            if self.gate is not None and name in RISKY_TOOLS:
+                self.gate.check(name, args)
             result = handlers[name](args)
             ok = bool(result.get("ok", True))
             detail = str(result.get("error") or result.get("stderr") or "")[:500]
             self._audit(name, args, ok, detail)
+            return result
+        except PermissionDenied as e:
+            result = {"ok": False, "error": f"permission denied: {e}"}
+            self._audit(name, args, False, str(result["error"])[:500])
             return result
         except (SandboxError, ToolError) as e:
             result = {"ok": False, "error": str(e)}
@@ -99,6 +118,48 @@ class ToolExecutor:
             result = {"ok": False, "error": f"tool failed: {e}"}
             self._audit(name, args, False, str(e)[:500])
             return result
+
+    def _skill_meta_for(self, skill_id: str):
+        for meta in self.skills.scan():
+            if meta.id == skill_id:
+                return meta
+        skill_dir = self._app_data / "skills" / skill_id
+        md = skill_dir / "SKILL.md"
+        if not md.is_file():
+            return None
+        return parse_skill_md(md.read_text(encoding="utf-8"), skill_dir)
+
+    def _enforce_skill_permissions(self, name: str, args: dict) -> None:
+        """Skill frontmatter ACL. Empty permissions list = legacy compat (mode gate only)."""
+        if name == "run_skill_script":
+            skill_id = str(args.get("skill_id") or "")
+            meta = self._skill_meta_for(skill_id)
+            if meta is not None and meta.permissions and "run_python" not in meta.permissions:
+                raise PermissionDenied(
+                    f"skill {skill_id} missing run_python in permissions"
+                )
+            return
+
+        if name == "run_shared_script":
+            script_name = str(args.get("name") or "")
+            for meta in self.skills.scan():
+                if script_name not in (meta.shared_scripts or []):
+                    continue
+                if meta.permissions and "run_python" not in meta.permissions:
+                    raise PermissionDenied(
+                        f"skill {meta.id} missing run_python in permissions"
+                    )
+            return
+
+        if name == "workspace_write":
+            skill_id = args.get("skill_id")
+            if not skill_id:
+                return
+            meta = self._skill_meta_for(str(skill_id))
+            if meta is not None and meta.permissions and "workspace_write" not in meta.permissions:
+                raise PermissionDenied(
+                    f"skill {skill_id} missing workspace_write in permissions"
+                )
 
     def _audit(self, tool: str, args: dict, ok: bool, detail: str) -> None:
         if self.audit is not None:
