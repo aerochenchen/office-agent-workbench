@@ -2,17 +2,29 @@ import { useEffect, useMemo, useState } from "react";
 import type { ChatMessage, LiveStep } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
 import { GUIDE_HINTS, GUIDE_PILLARS, GUIDE_WELCOME_TITLE } from "../lib/guide";
+import {
+  filterPathsUnderWorkspace,
+  isTauriRuntime,
+  parsePastedPaths,
+  pickFiles,
+} from "../lib/tauri";
 import "./ChatPanel.css";
 
 interface Props {
   workspaceOpen: boolean;
+  workspacePath: string | null;
   messages: ChatMessage[];
   sending: boolean;
   runtimeReady: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, attachedPaths: string[]) => void | Promise<void>;
   onStop?: () => void;
   onOpenWorkspace?: () => void;
   onToggleSteps?: (messageId: string) => void;
+}
+
+function basename(path: string): string {
+  const parts = path.replace(/\\/g, "/").split("/");
+  return parts.filter(Boolean).pop() || path;
 }
 
 const PHASE_HINTS = ["理解指令…", "查看工作区…", "读写或运行脚本…", "整理结果…"] as const;
@@ -163,6 +175,7 @@ function Bubble({
 
 export default function ChatPanel({
   workspaceOpen,
+  workspacePath,
   messages,
   sending,
   runtimeReady,
@@ -172,6 +185,10 @@ export default function ChatPanel({
   onToggleSteps,
 }: Props) {
   const [draft, setDraft] = useState("");
+  const [attachedPaths, setAttachedPaths] = useState<string[]>([]);
+  const [attachHint, setAttachHint] = useState<string | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteDraft, setPasteDraft] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const hasPending = useMemo(
     () => messages.some((m) => m.phase === "pending" || m.phase === "live"),
@@ -189,13 +206,84 @@ export default function ChatPanel({
     return () => window.clearInterval(timer);
   }, [hasPending]);
 
+  useEffect(() => {
+    setAttachedPaths([]);
+    setAttachHint(null);
+    setPasteOpen(false);
+    setPasteDraft("");
+  }, [workspacePath]);
+
   const disabled = !workspaceOpen || sending || !runtimeReady;
 
-  function submit() {
+  function mergeAccepted(paths: string[]) {
+    if (!workspacePath) return;
+    const { accepted, rejected } = filterPathsUnderWorkspace(paths, workspacePath);
+    if (rejected.length > 0) {
+      setAttachHint(`已忽略 ${rejected.length} 个不在工作区内的路径`);
+    } else {
+      setAttachHint(null);
+    }
+    if (accepted.length === 0) return;
+    setAttachedPaths((prev) => {
+      const seen = new Set(prev.map((p) => p.toLowerCase()));
+      const next = [...prev];
+      for (const path of accepted) {
+        const key = path.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        next.push(path);
+      }
+      return next;
+    });
+  }
+
+  async function handleAttachClick() {
+    if (disabled || !workspacePath) return;
+    setAttachHint(null);
+    if (!isTauriRuntime()) {
+      setPasteOpen(true);
+      return;
+    }
+    const picked = await pickFiles({
+      defaultPath: workspacePath,
+      title: "选择工作区内的附件",
+    });
+    if (picked === null) return;
+    mergeAccepted(picked);
+  }
+
+  function applyPastePaths() {
+    if (!workspacePath) return;
+    const paths = parsePastedPaths(pasteDraft);
+    if (paths.length === 0) {
+      setAttachHint("请粘贴工作区内绝对路径（一行一个）");
+      return;
+    }
+    mergeAccepted(paths);
+    setPasteDraft("");
+    setPasteOpen(false);
+  }
+
+  function removeAttachment(path: string) {
+    setAttachedPaths((prev) => prev.filter((p) => p !== path));
+  }
+
+  async function submit() {
     const text = draft.trim();
     if (!text || disabled) return;
-    onSend(text);
+    const paths = [...attachedPaths];
     setDraft("");
+    setAttachedPaths([]);
+    setAttachHint(null);
+    setPasteOpen(false);
+    setPasteDraft("");
+    try {
+      await onSend(text, paths);
+    } catch {
+      // Restore composer if send failed before the turn was accepted.
+      setDraft(text);
+      setAttachedPaths(paths);
+    }
   }
 
   return (
@@ -266,49 +354,124 @@ export default function ChatPanel({
         ))}
       </div>
 
-      <form
-        className="chat-input-row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <textarea
-          className="chat-input"
-          placeholder={
-            !runtimeReady
-              ? "本地运行时未就绪…"
-              : sending
-                ? "处理中，完成后可继续…"
-                : workspaceOpen
-                  ? "输入指令，Enter 发送，Shift+Enter 换行"
-                  : "请先打开工作区"
-          }
-          value={draft}
-          disabled={!workspaceOpen || sending || !runtimeReady}
-          rows={2}
-          onChange={(e) => setDraft(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-        />
-        {sending ? (
-          <button type="button" className="btn btn--ghost" onClick={() => onStop?.()}>
-            停止
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className={`btn${workspaceOpen && runtimeReady ? " btn--primary" : " btn--ghost"}`}
-            disabled={disabled || !draft.trim()}
-          >
-            发送
-          </button>
+      <div className="chat-composer">
+        {attachedPaths.length > 0 && (
+          <div className="attach-chips" aria-label="已选附件">
+            {attachedPaths.map((path) => (
+              <span key={path} className="attach-chip" title={path}>
+                <span className="attach-chip-name">{basename(path)}</span>
+                <button
+                  type="button"
+                  className="attach-chip-remove"
+                  aria-label={`移除 ${basename(path)}`}
+                  disabled={sending}
+                  onClick={() => removeAttachment(path)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
         )}
-      </form>
+        {attachHint && <div className="attach-hint">{attachHint}</div>}
+        {pasteOpen && (
+          <div className="attach-paste">
+            <label className="attach-paste-label" htmlFor="attach-paste-input">
+              浏览器模式：粘贴工作区内绝对路径（一行一个）
+            </label>
+            <textarea
+              id="attach-paste-input"
+              className="attach-paste-input"
+              rows={3}
+              value={pasteDraft}
+              disabled={disabled}
+              placeholder="/path/to/workspace/file.md"
+              onChange={(e) => setPasteDraft(e.currentTarget.value)}
+            />
+            <div className="attach-paste-actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={disabled}
+                onClick={() => {
+                  setPasteOpen(false);
+                  setPasteDraft("");
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={disabled || !pasteDraft.trim()}
+                onClick={applyPastePaths}
+              >
+                添加
+              </button>
+            </div>
+          </div>
+        )}
+        <form
+          className="chat-input-row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn--ghost chat-attach-btn"
+            disabled={disabled}
+            title={
+              !runtimeReady
+                ? "本地运行时未就绪"
+                : !workspaceOpen
+                  ? "请先打开工作区"
+                  : isTauriRuntime()
+                    ? "选择工作区内文件作为附件"
+                    : "粘贴工作区内绝对路径"
+            }
+            onClick={() => void handleAttachClick()}
+          >
+            附件
+          </button>
+          <textarea
+            className="chat-input"
+            placeholder={
+              !runtimeReady
+                ? "本地运行时未就绪…"
+                : sending
+                  ? "处理中，完成后可继续…"
+                  : workspaceOpen
+                    ? "输入指令，Enter 发送，Shift+Enter 换行"
+                    : "请先打开工作区"
+            }
+            value={draft}
+            disabled={!workspaceOpen || sending || !runtimeReady}
+            rows={2}
+            onChange={(e) => setDraft(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+          />
+          {sending ? (
+            <button type="button" className="btn btn--ghost" onClick={() => onStop?.()}>
+              停止
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className={`btn${workspaceOpen && runtimeReady ? " btn--primary" : " btn--ghost"}`}
+              disabled={disabled || !draft.trim()}
+            >
+              发送
+            </button>
+          )}
+        </form>
+      </div>
     </section>
   );
 }

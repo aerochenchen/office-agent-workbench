@@ -243,7 +243,7 @@ function App() {
   );
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (text: string, attachedPaths: string[] = []) => {
       if (!workspacePath || !runtimeReady) return;
       let activeId = sessionIdRef.current;
       if (!activeId) {
@@ -274,6 +274,7 @@ function App() {
         const stream = runtimeClient.chatStream(
           {
             message: text,
+            attached_paths: attachedPaths.length > 0 ? attachedPaths : undefined,
             session_id: activeId,
           },
           {
@@ -498,6 +499,7 @@ function App() {
 
         <ChatPanel
           workspaceOpen={workspacePath !== null}
+          workspacePath={workspacePath}
           messages={messages}
           sending={sending}
           runtimeReady={runtimeReady}
