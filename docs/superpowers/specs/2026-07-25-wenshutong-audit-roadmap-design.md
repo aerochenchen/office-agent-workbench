@@ -59,7 +59,7 @@
 | A5 | 排版 Skill 触发共享脚本 | **通过** | `government-document-format` + `format_gongwen` |
 | A6 | 选装写作 RAG 主路径 | 待验证 | 可选包存在；需目标机端到端 |
 | A7 | 工具可追溯；审计落库 | 通过 | Sprint A 已接线生产 `AuditLog`；UI 有工具步骤 |
-| A8 | 许可证扫描 / NOTICE | 待验证 | 设置页有 OSS 致谢；缺系统化扫描流水线 |
+| A8 | 许可证扫描 / NOTICE | **通过** | Q+2：`check_licenses.sh`（pip + npm）+ `NOTICE` 生成与打包 |
 
 ---
 
@@ -217,6 +217,21 @@
 - **明确排除：** macOS 公证  
 
 **实施计划：** `docs/superpowers/plans/2026-07-25-wenshutong-q2-delivery.md`（Tasks 1–4 + 6；Task 5 跳过）。
+
+### Q+2 完成记录
+
+| 项 | 状态 |
+|----|------|
+| A 许可证扫描 + NOTICE | 已完成 2026-07-25 |
+| B turn_id / SSE / AuditLog | 已完成 2026-07-25 |
+| B Vitest 冒烟 | 已完成 2026-07-25 |
+| C 本机 API token | 已完成 2026-07-25 |
+| C Skill 本地许可证 / 机器码（Task 5） | **跳过 / 本轮不做** |
+| 写作 RAG / 无向量降级 Skill | **仍分期 / 本轮不做** |
+| 完整脚本 jail / macOS 公证 | **仍分期 / 不做** |
+
+**验收：** 2026-07-25 · 分支 `q2-delivery` · Runtime pytest **135 passed** · desktop `npm test` **17 passed** · `npm run build` 通过 · `check_licenses.sh` 通过 · `NOTICE` 存在。  
+**提交摘要：** `6c575bd`/`4212321` A 许可证+NOTICE → `cdb7250` B turn_id → `eba7efd` B vitest → `11535b3` C API token → docs Task 6。
 
 ### 5.5 规格落盘后的建议下一动作
 

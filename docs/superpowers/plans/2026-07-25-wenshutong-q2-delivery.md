@@ -148,10 +148,10 @@ runtime/tests/
 
 ### Task 6: 回归与规格回写
 
-- [ ] Full `pytest` + `npm test` + `npm run build`
-- [ ] 跑 `scripts/check_licenses.sh`（及 npm 扫描）+ 确认 `NOTICE` 存在
-- [ ] 更新审计规格 §5.4 / A8：标注 A/B 完成、C=仅 API token（Skill 授权跳过）；写作 RAG 与 jail / 机器码仍分期
-- [ ] Commit `docs: record Q+2 A/B/C-token completion`
+- [x] Full `pytest` + `npm test` + `npm run build`
+- [x] 跑 `scripts/check_licenses.sh`（及 npm 扫描）+ 确认 `NOTICE` 存在
+- [x] 更新审计规格 §5.4 / A8：标注 A/B 完成、C=仅 API token（Skill 授权跳过）；写作 RAG 与 jail / 机器码仍分期
+- [x] Commit `docs: record Q+2 A/B/C-token completion`
 
 ---
 
