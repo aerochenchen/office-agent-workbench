@@ -51,9 +51,9 @@ export function isBundledSkillId(id: string): boolean;
 export function filterEnabledSkills<T extends { enabled: boolean }>(skills: T[]): T[];
 ```
 
-- [ ] **Step 1:** Vitest：enabled 过滤；bundled id 识别。
-- [ ] **Step 2:** 实现最小函数；`npm test` 通过。
-- [ ] **Step 3:** Commit `feat: add skill list helpers for enabled filter`
+- [x] **Step 1:** Vitest：enabled 过滤；bundled id 识别。
+- [x] **Step 2:** 实现最小函数；`npm test` 通过。
+- [x] **Step 3:** Commit `feat: add skill list helpers for enabled filter`
 
 ---
 
@@ -86,8 +86,8 @@ interface SkillManagerProps {
 - 顶栏或底栏：刷新、关闭；Esc / 遮罩关闭调用 `onClose`。
 - 浏览器模式：无 Tauri 时隐藏文件夹/zip 选择（与现逻辑一致），开关/卸载仍可用。
 
-- [ ] **Step 1–3:** 从 `SkillPanel.tsx` 迁出管理相关 state/JSX，拼成 SkillManager；`npm run build`。
-- [ ] **Step 4:** Commit `feat: add SkillManager modal for install and lifecycle`
+- [x] **Step 1–3:** 从 `SkillPanel.tsx` 迁出管理相关 state/JSX，拼成 SkillManager；`npm run build`。
+- [x] **Step 4:** Commit `feat: add SkillManager modal for install and lifecycle`
 
 ---
 
@@ -107,18 +107,18 @@ interface SkillManagerProps {
 - 内嵌 `<SkillManager open={...} ... />`。
 - 去掉右栏内原导入/卸载/开关 UI。
 
-- [ ] **Step 1–2:** 改面板；目测结构符合规格 §4.1。
-- [ ] **Step 3:** `npm test` + `npm run build`。
-- [ ] **Step 4:** Commit `feat: show only enabled skills in side panel`
+- [x] **Step 1–2:** 改面板；目测结构符合规格 §4.1。
+- [x] **Step 3:** `npm test` + `npm run build`。
+- [x] **Step 4:** Commit `feat: show only enabled skills in side panel`
 
 ---
 
 ### Task 4: 回归与规格勾选
 
-- [ ] `npm test` + `npm run build`
-- [ ] 手工核对验收：右栏无开关/卸载；管理内可开/关/导入/卸；关后右栏消失
-- [ ] 规格审批表已标明已批准；计划 Task 勾选完成
-- [ ] Commit `docs: note skill panel IA implementation complete`（若仅改计划/规格一小段）或与 Task 3 合并若无文档增量
+- [x] `npm test` + `npm run build`
+- [x] 手工核对验收：右栏无开关/卸载；管理内可开/关/导入/卸；关后右栏消失
+- [x] 规格审批表已标明已批准；计划 Task 勾选完成
+- [x] Commit `docs: note skill panel IA implementation complete`（若仅改计划/规格一小段）或与 Task 3 合并若无文档增量
 
 ---
 

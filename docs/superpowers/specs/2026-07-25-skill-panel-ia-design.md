@@ -168,5 +168,6 @@
 | 节 | 状态 |
 |----|------|
 | §2 决策 / §4 界面 | 用户批准 2026-07-25 |
+| 实施 | 完成 2026-07-25（Tasks 1–4，分支 `skill-panel-ia`） |
 
 实施计划：`docs/superpowers/plans/2026-07-25-skill-panel-ia.md`。
