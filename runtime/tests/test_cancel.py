@@ -79,6 +79,76 @@ def test_run_agent_stops_on_cancel_before_max_steps(tmp_path: Path, monkeypatch)
     assert "取消" in result.final_text
 
 
+def _pending_tool_call_ids(messages: list[dict[str, Any]]) -> set[str]:
+    """Return tool_call ids that lack a following tool-role message."""
+    answered: set[str] = set()
+    pending: set[str] = set()
+    for msg in messages:
+        role = msg.get("role")
+        if role == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                tc_id = tc.get("id") if isinstance(tc, dict) else None
+                if tc_id:
+                    pending.add(tc_id)
+        elif role == "tool":
+            tc_id = msg.get("tool_call_id")
+            if tc_id:
+                answered.add(tc_id)
+                pending.discard(tc_id)
+    return pending - answered
+
+
+def test_run_agent_cancel_completes_orphan_tool_calls(tmp_path: Path, monkeypatch):
+    """Cancel after assistant tool_calls are appended must not leave orphan tool_calls."""
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+
+    @dataclass
+    class CancelBeforeToolsGateway:
+        calls: int = 0
+        token: CancelToken | None = None
+
+        def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None):
+            self.calls += 1
+            # Cancel after model returns so assistant+tool_calls is appended,
+            # then cancel.check() before tools execute raises CancelledError.
+            if self.token is not None:
+                self.token.cancel()
+            return _completion(
+                tool_calls=[
+                    _tool_call("tc-a", "workspace_list", {"path": "."}),
+                    _tool_call("tc-b", "workspace_list", {"path": "."}),
+                ]
+            )
+
+    token = CancelToken()
+    gateway = CancelBeforeToolsGateway(token=token)
+    executor = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust_workspace")
+    result = run_agent(
+        user_message="列出",
+        attached_paths=[],
+        gateway=gateway,
+        tools=executor,
+        catalog=[],
+        max_steps=5,
+        cancel=token,
+    )
+
+    assert gateway.calls == 1
+    assert "取消" in result.final_text
+    orphan_ids = _pending_tool_call_ids(result.messages)
+    assert orphan_ids == set(), f"orphan tool_calls in history: {orphan_ids}"
+    # Prefer synthetic tool results so the turn stays well-formed.
+    tool_msgs = [m for m in result.messages if m.get("role") == "tool"]
+    answered = {m.get("tool_call_id") for m in tool_msgs}
+    assert {"tc-a", "tc-b"} <= answered
+    for m in tool_msgs:
+        if m.get("tool_call_id") in {"tc-a", "tc-b"}:
+            assert "cancel" in str(m.get("content", "")).lower()
+
+
 @pytest.fixture
 def app_state(tmp_path: Path, monkeypatch) -> ProcessState:
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))

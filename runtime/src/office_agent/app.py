@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import queue
 import threading
@@ -28,6 +29,8 @@ from office_agent.skill_localize import needs_zh_display, try_localize_installed
 from office_agent.skills import SkillError, SkillRegistry
 from office_agent.tools import ToolExecutor
 from office_agent.workspace import SandboxError, Workspace
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = AppConfig(
     api_base="https://api.deepseek.com/v1",
@@ -487,7 +490,11 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 try:
                     office.sessions.append_messages(session_id, result.messages)
                 except Exception:
-                    pass
+                    logger.warning(
+                        "failed to append messages for session %s",
+                        session_id,
+                        exc_info=True,
+                    )
                 emit(
                     "final",
                     {

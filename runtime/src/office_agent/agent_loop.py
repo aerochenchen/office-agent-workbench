@@ -253,6 +253,38 @@ def _assistant_message_from_response(message: Any) -> dict[str, Any]:
     return out
 
 
+
+def _complete_orphan_tool_calls(
+    messages: list[dict[str, Any]],
+    *,
+    content: str = "cancelled",
+) -> None:
+    """Append synthetic tool results for unanswered tool_call ids (in-place)."""
+    answered: set[str] = set()
+    pending: list[str] = []
+    for msg in messages:
+        role = msg.get("role")
+        if role == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                if isinstance(tc, dict) and tc.get("id"):
+                    pending.append(str(tc["id"]))
+        elif role == "tool":
+            tc_id = msg.get("tool_call_id")
+            if tc_id:
+                answered.add(str(tc_id))
+    for tc_id in pending:
+        if tc_id in answered:
+            continue
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tc_id,
+                "content": content,
+            }
+        )
+        answered.add(tc_id)
+
+
 def tool_label(name: str) -> str:
     return TOOL_LABELS.get(name, name)
 
@@ -412,6 +444,9 @@ def run_agent(
                     tool_events=tool_events,
                 )
     except CancelledError:
+        # Keep session history well-formed for the next model turn: every
+        # assistant tool_calls entry must have a matching tool result.
+        _complete_orphan_tool_calls(messages, content="cancelled")
         if not final_text:
             final_text = "已取消生成。"
         emit({"type": "status", "phase": "finishing"})
