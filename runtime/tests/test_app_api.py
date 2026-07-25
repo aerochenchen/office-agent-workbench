@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from office_agent.agent_loop import AgentResult
 from office_agent.app import ProcessState, create_app
+from office_agent.audit import AuditLog
 from office_agent.config import AppConfig
 from office_agent.session_store import SessionStore
 from office_agent.skills import SkillRegistry
@@ -286,6 +287,135 @@ def test_chat_returns_reply_and_session(client: TestClient, tmp_path: Path, app_
     assert body["session_id"]
     msgs = app_state.sessions.get_messages(body["session_id"])
     assert any(m.get("role") == "user" for m in msgs)
+
+
+def _parse_sse_events(text: str) -> list[tuple[str, dict[str, Any]]]:
+    events: list[tuple[str, dict[str, Any]]] = []
+    for block in text.split("\n\n"):
+        if not block.strip():
+            continue
+        event_name = "message"
+        data: dict[str, Any] | None = None
+        for line in block.splitlines():
+            if line.startswith("event:"):
+                event_name = line[6:].strip()
+            elif line.startswith("data:"):
+                data = json.loads(line[5:].strip())
+        if data is not None:
+            events.append((event_name, data))
+    return events
+
+
+def test_chat_stream_started_includes_turn_id(client: TestClient, tmp_path: Path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    with client.stream("POST", "/chat/stream", json={"message": "你好"}) as r:
+        assert r.status_code == 200
+        text = "".join(r.iter_text())
+
+    started = next((data for ev, data in _parse_sse_events(text) if ev == "started"), None)
+    assert started is not None
+    assert started.get("session_id")
+    turn_id = started.get("turn_id")
+    assert isinstance(turn_id, str)
+    assert turn_id
+
+
+def test_chat_stream_tool_events_include_turn_id(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[_tool_call("t1", "workspace_list", {"path": "."})],
+            ),
+            _completion(content="已列出"),
+        ]
+    )
+
+    with client.stream("POST", "/chat/stream", json={"message": "列出文件"}) as r:
+        assert r.status_code == 200
+        text = "".join(r.iter_text())
+
+    events = _parse_sse_events(text)
+    started = next(data for ev, data in events if ev == "started")
+    turn_id = started["turn_id"]
+    tool_starts = [data for ev, data in events if ev == "tool_start"]
+    tool_dones = [data for ev, data in events if ev == "tool_done"]
+    assert tool_starts and tool_dones
+    assert all(data.get("turn_id") == turn_id for data in tool_starts)
+    assert all(data.get("turn_id") == turn_id for data in tool_dones)
+
+
+def test_chat_stream_audit_records_turn_id(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[_tool_call("t1", "workspace_list", {"path": "."})],
+            ),
+            _completion(content="已列出"),
+        ]
+    )
+
+    with client.stream("POST", "/chat/stream", json={"message": "列出文件"}) as r:
+        assert r.status_code == 200
+        text = "".join(r.iter_text())
+
+    started = next(data for ev, data in _parse_sse_events(text) if ev == "started")
+    turn_id = started["turn_id"]
+    import sqlite3
+
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT tool, turn_id FROM audit WHERE tool = ?",
+            ("workspace_list",),
+        ).fetchall()
+    assert rows
+    assert all(row[1] == turn_id for row in rows)
+
+
+def test_audit_log_migrates_old_db_without_turn_id(tmp_path: Path):
+    db_path = tmp_path / "legacy.sqlite"
+    import sqlite3
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE audit (
+                ts REAL,
+                tool TEXT,
+                args_json TEXT,
+                ok INTEGER,
+                detail TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO audit (ts, tool, args_json, ok, detail) VALUES (?, ?, ?, ?, ?)",
+            (1.0, "legacy_tool", "{}", 1, ""),
+        )
+
+    audit = AuditLog(db_path)
+    audit.record("new_tool", {"x": 1}, True, turn_id="turn-abc")
+
+    with sqlite3.connect(db_path) as conn:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(audit)").fetchall()}
+        assert "turn_id" in cols
+        rows = conn.execute("SELECT tool, turn_id FROM audit ORDER BY ts").fetchall()
+    assert rows[0] == ("legacy_tool", None)
+    assert rows[1] == ("new_tool", "turn-abc")
 
 
 def test_chat_stream_emits_started_and_final(client: TestClient, tmp_path: Path, app_state: ProcessState):

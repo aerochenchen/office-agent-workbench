@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -429,6 +430,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         body: ChatBody,
         *,
         interactive: bool = False,
+        turn_id: str | None = None,
     ) -> tuple[str, Any, ToolExecutor, list[dict[str, Any]], list[str], int, list[dict[str, Any]]]:
         # Sidecar restarts drop in-memory workspace; recover from session path.
         if office.workspace is None and body.session_id:
@@ -462,6 +464,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             permission_mode=office.config.permission_mode,
             audit=office.audit,
             gate=gate,
+            turn_id=turn_id,
         )
         catalog = office.registry.enabled_catalog()
         history = office.sessions.get_messages(session_id)
@@ -512,9 +515,10 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     async def chat_stream(body: ChatBody) -> StreamingResponse:
         """SSE progress for one chat turn: started/status/tool_*/permission_request/final/error."""
         session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(
-            body, interactive=True
+            body, interactive=True, turn_id=str(uuid4())
         )
         message = body.message
+        turn_id = tools.turn_id
         event_q: queue.Queue[tuple[str, dict[str, Any]] | None] = queue.Queue()
 
         def emit(event: str, data: dict[str, Any]) -> None:
@@ -548,7 +552,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
         def worker() -> None:
             try:
-                emit("started", {"session_id": session_id})
+                emit("started", {"session_id": session_id, "turn_id": turn_id})
                 result = run_agent(
                     message,
                     attached,
@@ -559,6 +563,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     history=history,
                     on_event=on_event,
                     cancel=cancel_token,
+                    turn_id=turn_id,
                 )
                 # Best-effort: persist whatever the turn produced (incl. cancel truncation).
                 try:

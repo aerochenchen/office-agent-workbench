@@ -91,6 +91,8 @@ export interface ChatMessage {
   phase?: AssistantPhase;
   liveSteps?: LiveStep[];
   startedAt?: number;
+  /** Server-assigned UUID for one chat turn (SSE started). */
+  turnId?: string;
   statusPhase?: "planning" | "tools" | "finishing";
   stepsExpanded?: boolean;
 }
@@ -129,13 +131,14 @@ export interface PermissionRequestEvent {
 }
 
 export interface ChatStreamHandlers {
-  onStarted?: (sessionId: string) => void;
+  onStarted?: (sessionId: string, turnId?: string) => void;
   onStatus?: (phase: string) => void;
   onToolStart?: (ev: {
     id: string;
     name: string;
     label: string;
     args_summary?: string;
+    turn_id?: string;
   }) => void;
   onToolDone?: (ev: {
     id: string;
@@ -143,6 +146,7 @@ export interface ChatStreamHandlers {
     label: string;
     ok: boolean;
     summary?: string;
+    turn_id?: string;
   }) => void;
   onPermissionRequest?: (ev: PermissionRequestEvent) => void;
   onFinal?: (reply: ChatReply) => void;

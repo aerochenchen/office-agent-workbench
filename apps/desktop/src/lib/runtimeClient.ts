@@ -162,7 +162,12 @@ function createSseDispatcher(handlers: ChatStreamHandlers): {
     outcome.sawAny = true;
     switch (eventName) {
       case "started":
-        if (typeof data.session_id === "string") handlers.onStarted?.(data.session_id);
+        if (typeof data.session_id === "string") {
+          handlers.onStarted?.(
+            data.session_id,
+            typeof data.turn_id === "string" ? data.turn_id : undefined,
+          );
+        }
         break;
       case "status":
         if (typeof data.phase === "string") handlers.onStatus?.(data.phase);
@@ -173,6 +178,7 @@ function createSseDispatcher(handlers: ChatStreamHandlers): {
           name: String(data.name ?? ""),
           label: String(data.label ?? data.name ?? ""),
           args_summary: typeof data.args_summary === "string" ? data.args_summary : undefined,
+          turn_id: typeof data.turn_id === "string" ? data.turn_id : undefined,
         });
         break;
       case "tool_done":
@@ -182,6 +188,7 @@ function createSseDispatcher(handlers: ChatStreamHandlers): {
           label: String(data.label ?? data.name ?? ""),
           ok: Boolean(data.ok),
           summary: typeof data.summary === "string" ? data.summary : undefined,
+          turn_id: typeof data.turn_id === "string" ? data.turn_id : undefined,
         });
         break;
       case "permission_request":

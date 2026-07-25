@@ -74,6 +74,7 @@ class ToolExecutor:
         *,
         permission_mode: str = "standard",
         audit: AuditLog | None = None,
+        turn_id: str | None = None,
         python_bin: str | None = None,
         gate: PermissionGate | None = None,
     ) -> None:
@@ -81,6 +82,7 @@ class ToolExecutor:
         self.skills = skills
         self.permission_mode = permission_mode
         self.audit = audit
+        self.turn_id = turn_id
         self.python_bin = python_bin or sys.executable
         self._app_data = app_data_dir()
         if gate is not None:
@@ -178,7 +180,7 @@ class ToolExecutor:
 
     def _audit(self, tool: str, args: dict, ok: bool, detail: str) -> None:
         if self.audit is not None:
-            self.audit.record(tool, args, ok, detail)
+            self.audit.record(tool, args, ok, detail, turn_id=self.turn_id)
 
     def _workspace_list(self, args: dict) -> dict:
         rel = str(args.get("path", "."))

@@ -278,8 +278,11 @@ function App() {
             session_id: activeId,
           },
           {
-            onStarted: (sid) => {
+            onStarted: (sid, turnId) => {
               if (sid) setSessionId(sid);
+              if (turnId) {
+                patchAssistant((m) => ({ ...m, turnId }));
+              }
             },
             onStatus: (phase) => {
               patchAssistant((m) => ({

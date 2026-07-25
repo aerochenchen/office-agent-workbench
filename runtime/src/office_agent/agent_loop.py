@@ -414,6 +414,7 @@ def run_agent(
     history: list[dict[str, Any]] | None = None,
     on_event: EventCallback | None = None,
     cancel: CancelToken | None = None,
+    turn_id: str | None = None,
 ) -> AgentResult:
     """Run one user turn. ``history`` is prior session turns (no system message)."""
 
@@ -450,30 +451,32 @@ def run_agent(
                     name = tc.function.name
                     args = _parse_tool_args(tc.function.arguments)
                     label = tool_label(name)
-                    emit(
-                        {
-                            "type": "tool_start",
-                            "id": tc.id,
-                            "name": name,
-                            "label": label,
-                            "args_summary": args_summary(name, args),
-                        }
-                    )
+                    tool_start: dict[str, Any] = {
+                        "type": "tool_start",
+                        "id": tc.id,
+                        "name": name,
+                        "label": label,
+                        "args_summary": args_summary(name, args),
+                    }
+                    if turn_id is not None:
+                        tool_start["turn_id"] = turn_id
+                    emit(tool_start)
                     result = tools.execute(name, args)
                     ok = bool(result.get("ok", True)) if isinstance(result, dict) else True
                     summary = result_summary(
                         name, result if isinstance(result, dict) else {"ok": False, "error": str(result)}
                     )
-                    emit(
-                        {
-                            "type": "tool_done",
-                            "id": tc.id,
-                            "name": name,
-                            "label": label,
-                            "ok": ok,
-                            "summary": summary,
-                        }
-                    )
+                    tool_done: dict[str, Any] = {
+                        "type": "tool_done",
+                        "id": tc.id,
+                        "name": name,
+                        "label": label,
+                        "ok": ok,
+                        "summary": summary,
+                    }
+                    if turn_id is not None:
+                        tool_done["turn_id"] = turn_id
+                    emit(tool_done)
                     tool_events.append({"name": name, "args": args, "result": result})
                     messages.append(
                         {

@@ -25,16 +25,34 @@ class AuditLog:
                 )
                 """
             )
+            cols = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(audit)").fetchall()
+            }
+            if "turn_id" not in cols:
+                conn.execute("ALTER TABLE audit ADD COLUMN turn_id TEXT")
 
-    def record(self, tool: str, args: dict, ok: bool, detail: str = "") -> None:
+    def record(
+        self,
+        tool: str,
+        args: dict,
+        ok: bool,
+        detail: str = "",
+        *,
+        turn_id: str | None = None,
+    ) -> None:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
-                "INSERT INTO audit (ts, tool, args_json, ok, detail) VALUES (?, ?, ?, ?, ?)",
+                """
+                INSERT INTO audit (ts, tool, args_json, ok, detail, turn_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
                 (
                     time.time(),
                     tool,
                     json.dumps(args, ensure_ascii=False),
                     1 if ok else 0,
                     detail,
+                    turn_id,
                 ),
             )

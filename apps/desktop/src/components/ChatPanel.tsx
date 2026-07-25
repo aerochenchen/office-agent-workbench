@@ -83,6 +83,11 @@ function PendingBody({ message, now }: { message: ChatMessage; now: number }) {
         <span className="pending-elapsed mono">已等待 {formatElapsed(message.startedAt, now)}</span>
       </div>
       {!hasLive && <div className="pending-hint">{phaseText}</div>}
+      {message.turnId ? (
+        <div className="pending-hint mono" title="内测排障用轮次 ID">
+          轮次 {message.turnId.slice(0, 8)}
+        </div>
+      ) : null}
       {hasLive && (
         <div className="live-steps">
           {message.liveSteps!.map((step) => (
