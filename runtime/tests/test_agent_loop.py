@@ -253,6 +253,31 @@ def test_max_steps_stops_loop(tmp_path: Path, monkeypatch):
     assert len(gateway.chat_calls) == 1
 
 
+def test_attached_paths_injected_into_user_content(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "report.docx").write_text("x", encoding="utf-8")
+
+    executor = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    gateway = FakeGateway(responses=[_completion(content="已收到")])
+    result = run_agent(
+        user_message="请处理这个文件",
+        attached_paths=["report.docx"],
+        gateway=gateway,
+        tools=executor,
+        catalog=[],
+        max_steps=3,
+    )
+
+    user_msg = gateway.chat_calls[0]["messages"][-1]
+    assert user_msg["role"] == "user"
+    assert "report.docx" in user_msg["content"]
+    assert "用户附带的文件路径" in user_msg["content"]
+    assert result.messages[0]["content"] == user_msg["content"]
+
+
 def test_on_event_emits_tool_and_status(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     (tmp_path / "skills").mkdir()

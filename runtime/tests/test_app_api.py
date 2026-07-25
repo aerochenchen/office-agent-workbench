@@ -201,6 +201,55 @@ def test_post_config_omitted_key_keeps_previous(client: TestClient, app_state: P
     assert app_state.config.api_key == "keep-me"
 
 
+def test_chat_rejects_attached_path_outside_workspace(client: TestClient, tmp_path: Path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    r = client.post(
+        "/chat",
+        json={"message": "处理文件", "attached_paths": ["../outside.txt"]},
+    )
+    assert r.status_code == 400
+    assert "escapes workspace" in r.json()["detail"]
+
+
+def test_chat_stream_rejects_attached_path_outside_workspace(client: TestClient, tmp_path: Path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    r = client.post(
+        "/chat/stream",
+        json={"message": "处理文件", "attached_paths": ["/etc/passwd"]},
+    )
+    assert r.status_code == 400
+    assert "escapes workspace" in r.json()["detail"]
+
+
+def test_chat_attached_paths_in_session_history(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "doc.txt").write_text("hi", encoding="utf-8")
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    r = client.post(
+        "/chat",
+        json={"message": "处理", "attached_paths": ["doc.txt"]},
+    )
+    assert r.status_code == 200
+    sid = r.json()["session_id"]
+    user_contents = [
+        m.get("content", "")
+        for m in app_state.sessions.get_messages(sid)
+        if m.get("role") == "user"
+    ]
+    assert any("doc.txt" in c for c in user_contents)
+    assert any("用户附带的文件路径" in c for c in user_contents)
+
+
 def test_chat_returns_reply_and_session(client: TestClient, tmp_path: Path, app_state: ProcessState):
     ws = tmp_path / "ws"
     ws.mkdir()

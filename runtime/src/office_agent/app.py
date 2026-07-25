@@ -43,6 +43,18 @@ DEFAULT_CONFIG = AppConfig(
 ALLOW_PROCESS_EXIT = True
 
 
+def _validate_attached_paths(ws: Workspace, paths: list[str]) -> list[str]:
+    """Resolve each path inside the workspace; return workspace-relative strings."""
+    validated: list[str] = []
+    for p in paths:
+        try:
+            resolved = ws.resolve(p)
+        except SandboxError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        validated.append(str(resolved.relative_to(ws.root)))
+    return validated
+
+
 def _config_path() -> Path:
     return app_data_dir() / "config.json"
 
@@ -415,12 +427,13 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         )
         catalog = office.registry.enabled_catalog()
         history = office.sessions.get_messages(session_id)
+        attached = _validate_attached_paths(ws, body.attached_paths)
         return (
             session_id,
             gateway,
             tools,
             catalog,
-            list(body.attached_paths),
+            attached,
             office.config.max_tool_steps,
             history,
         )
