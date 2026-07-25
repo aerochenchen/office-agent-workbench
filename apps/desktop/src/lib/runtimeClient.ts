@@ -474,7 +474,8 @@ export const runtimeClient = {
    * One chat turn with live progress callbacks.
    * Desktop (Tauri): XHR progressive SSE — WebView often cannot stream fetch bodies.
    * Browser: fetch ReadableStream SSE.
-   * Sync `/chat` only when the stream never delivered any event (no mid-flight double-run).
+   * No silent sync `/chat` fallback — sync auto-allows tools and would bypass
+   * permission UI (cautious/standard confirmation).
    * Returns an abort handle so the UI can stop the in-flight XHR/fetch.
    */
   chatStream(
@@ -493,71 +494,22 @@ export const runtimeClient = {
     };
 
     const done = (async () => {
-      const runSync = async () => {
-        handlers.onStatus?.("planning");
-        const reply = await this.chat(input);
-        handlers.onStarted?.(reply.session_id);
-        handlers.onStatus?.("finishing");
-        handlers.onFinal?.(reply);
-      };
-
-      let delivered = false;
-      const tracking: ChatStreamHandlers = {
-        onStarted: (sessionId) => {
-          delivered = true;
-          handlers.onStarted?.(sessionId);
-        },
-        onStatus: (phase) => {
-          delivered = true;
-          handlers.onStatus?.(phase);
-        },
-        onToolStart: (ev) => {
-          delivered = true;
-          handlers.onToolStart?.(ev);
-        },
-        onToolDone: (ev) => {
-          delivered = true;
-          handlers.onToolDone?.(ev);
-        },
-        onPermissionRequest: (ev) => {
-          delivered = true;
-          handlers.onPermissionRequest?.(ev);
-        },
-        onFinal: (reply) => {
-          delivered = true;
-          handlers.onFinal?.(reply);
-        },
-        onError: (message) => {
-          delivered = true;
-          handlers.onError?.(message);
-        },
-      };
-
       const bindHandle = (h: ChatStreamHandle) => {
         streamAbort = h.abort;
       };
 
       try {
         const outcome = isTauriRuntime()
-          ? await streamChatViaXhr(input, tracking, 600_000, bindHandle)
-          : await streamChatViaFetch(input, tracking, 600_000, bindHandle);
+          ? await streamChatViaXhr(input, handlers, 600_000, bindHandle)
+          : await streamChatViaFetch(input, handlers, 600_000, bindHandle);
 
         if (outcome.sawFinal || outcome.sawError) return;
-        if (!outcome.sawAny && !delivered) {
-          await runSync();
-          return;
-        }
-        handlers.onError?.("流式对话异常结束，未收到最终结果");
+        handlers.onError?.(
+          outcome.sawAny
+            ? "流式对话异常结束，未收到最终结果"
+            : "流式对话未能建立（未回退到同步接口，以避免绕过权限确认）",
+        );
       } catch (err) {
-        if (!delivered) {
-          try {
-            await runSync();
-            return;
-          } catch (syncErr) {
-            handlers.onError?.(mapNetworkError(syncErr, "600s"));
-            return;
-          }
-        }
         handlers.onError?.(mapNetworkError(err, "600s"));
       }
     })();

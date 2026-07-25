@@ -256,7 +256,20 @@ class SkillRegistry:
         return parse_skill_md((dest / "SKILL.md").read_text(encoding="utf-8"), dest)
 
     def uninstall(self, skill_id: str) -> None:
-        dest = self.skills_dir / skill_id
+        if (
+            not skill_id
+            or skill_id in (".", "..")
+            or ".." in skill_id
+            or "/" in skill_id
+            or "\\" in skill_id
+        ):
+            raise SkillError(f"invalid skill_id: {skill_id}")
+        skills_root = self.skills_dir.resolve()
+        dest = (self.skills_dir / skill_id).resolve()
+        try:
+            dest.relative_to(skills_root)
+        except ValueError as e:
+            raise SkillError(f"invalid skill_id: {skill_id}") from e
         if not dest.is_dir() or not (dest / "SKILL.md").is_file():
             raise SkillError(f"skill not found: {skill_id}")
         shutil.rmtree(dest)

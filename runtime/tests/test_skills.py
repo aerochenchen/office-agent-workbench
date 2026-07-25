@@ -150,3 +150,19 @@ def test_uninstall_unknown_raises(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     with pytest.raises(SkillError, match="not found"):
         SkillRegistry().uninstall("missing-skill")
+
+
+def test_uninstall_rejects_path_escape(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    outside = tmp_path / "outside-skill"
+    outside.mkdir()
+    (outside / "SKILL.md").write_text(
+        "---\nname: outside\ndescription: d\ntier: light\n---\n\n#\n",
+        encoding="utf-8",
+    )
+    reg = SkillRegistry()
+    for bad_id in ("../outside-skill", "..\\outside-skill", "a/b", "a\\b", ".."):
+        with pytest.raises(SkillError, match="invalid skill_id"):
+            reg.uninstall(bad_id)
+    assert outside.is_dir()
+    assert (outside / "SKILL.md").is_file()

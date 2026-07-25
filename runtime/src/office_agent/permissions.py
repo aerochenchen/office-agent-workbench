@@ -144,3 +144,17 @@ class PermissionGate:
                 raise KeyError(f"unknown permission request: {request_id}")
             self._decisions[request_id] = allow
         event.set()
+
+    def cancel_all(self) -> list[str]:
+        """Wake every waiter with deny so Cancel/UI stop does not run the tool.
+
+        Returns the cancelled request ids (for clearing ProcessState.gates).
+        """
+        with self._lock:
+            ids = list(self._pending.keys())
+            for request_id in ids:
+                self._decisions[request_id] = False
+            events = list(self._pending.values())
+        for event in events:
+            event.set()
+        return ids

@@ -93,6 +93,8 @@ class ProcessState:
     gates: dict[str, PermissionGate] = field(default_factory=dict)
     # session_id → CancelToken for the in-flight agent turn
     active_cancel: dict[str, CancelToken] = field(default_factory=dict)
+    # session_id → PermissionGate for the in-flight stream turn
+    active_gates: dict[str, PermissionGate] = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> ProcessState:
@@ -366,6 +368,11 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         if token is None:
             raise HTTPException(status_code=404, detail="no active chat for session")
         token.cancel()
+        # Unblock PermissionGate.wait so cancelled turns do not run the tool.
+        gate = office.active_gates.get(body.session_id)
+        if gate is not None:
+            for request_id in gate.cancel_all():
+                office.gates.pop(request_id, None)
         return {"ok": True}
 
     def _prepare_chat(
@@ -486,6 +493,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
         cancel_token = CancelToken()
         office.active_cancel[session_id] = cancel_token
+        office.active_gates[session_id] = gate
 
         def worker() -> None:
             try:
@@ -522,6 +530,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 emit("error", {"message": f"agent error: {e}"})
             finally:
                 office.active_cancel.pop(session_id, None)
+                office.active_gates.pop(session_id, None)
                 event_q.put(None)
 
         threading.Thread(target=worker, daemon=True).start()

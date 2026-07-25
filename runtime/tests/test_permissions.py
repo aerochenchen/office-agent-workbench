@@ -101,6 +101,44 @@ def test_standard_remembers_same_script(tmp_path: Path, monkeypatch) -> None:
     assert len(seen) == before
 
 
+def test_cancel_all_unblocks_wait_without_running_tool(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+
+    gate = PermissionGate(mode="cautious")
+    gate.set_auto(None)
+    seen: list = []
+    gate.on_request = lambda req: seen.append(req)
+
+    ex = ToolExecutor(
+        Workspace(ws),
+        SkillRegistry(),
+        permission_mode="cautious",
+        gate=gate,
+    )
+
+    results: list[dict] = []
+
+    def run() -> None:
+        results.append(
+            ex.execute("workspace_write", {"path": "notes.txt", "content": "hi\n"})
+        )
+
+    t = threading.Thread(target=run)
+    t.start()
+    _wait_until(lambda: len(seen) >= 1)
+    cancelled = gate.cancel_all()
+    assert seen[0].id in cancelled
+    t.join(timeout=5)
+    assert not t.is_alive()
+    assert len(results) == 1
+    assert results[0]["ok"] is False
+    assert "permission denied" in results[0]["error"].lower()
+    assert not (ws / "notes.txt").exists()
+
+
 def test_skill_missing_run_python_denied(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     skill = tmp_path / "skills" / "limited"
