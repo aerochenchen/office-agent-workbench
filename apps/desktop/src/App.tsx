@@ -10,7 +10,7 @@ import type {
   PermissionRequestEvent,
   RuntimeConfig,
   SessionMeta,
-  SkillInspect,
+  SkillInspectResult,
   SkillMeta,
 } from "./lib/types";
 import SessionList from "./components/SessionList";
@@ -384,9 +384,8 @@ function App() {
     }
   }, [refreshSkills]);
 
-  const handleInspectSkill = useCallback(async (path: string): Promise<SkillInspect> => {
-    const res = await runtimeClient.inspectSkill(path);
-    return res.skill;
+  const handleInspectSkill = useCallback(async (path: string): Promise<SkillInspectResult> => {
+    return runtimeClient.inspectSkill(path);
   }, []);
 
   const handleConfirmInstallSkill = useCallback(

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SkillInspect, SkillMeta } from "../lib/types";
+import type { SkillInspectResult, SkillMeta } from "../lib/types";
 import { GUIDE_HINTS } from "../lib/guide";
 import { isTauriRuntime, pickFolder, pickSkillFile } from "../lib/tauri";
 import "./SkillPanel.css";
@@ -8,7 +8,7 @@ interface Props {
   skills: SkillMeta[];
   collapsed: boolean;
   onToggle: (id: string, enabled: boolean) => void;
-  onInspect: (path: string) => Promise<SkillInspect>;
+  onInspect: (path: string) => Promise<SkillInspectResult>;
   onConfirmInstall: (path: string, enabled: boolean) => Promise<void>;
   onUninstall: (id: string) => Promise<void>;
   onRefresh: () => void;
@@ -33,7 +33,7 @@ export default function SkillPanel({
   const [installing, setInstalling] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
-  const [preview, setPreview] = useState<SkillInspect | null>(null);
+  const [preview, setPreview] = useState<SkillInspectResult | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<SkillMeta | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
 
@@ -46,8 +46,8 @@ export default function SkillPanel({
     setPreview(null);
     setPreviewPath(null);
     try {
-      const skill = await onInspect(trimmed);
-      setPreview(skill);
+      const result = await onInspect(trimmed);
+      setPreview(result);
       setPreviewPath(trimmed);
     } catch (err) {
       setInstallError(err instanceof Error ? err.message : "无法读取技能包");
@@ -216,24 +216,40 @@ export default function SkillPanel({
             <h3 id="skill-preview-title">确认导入技能</h3>
             <div className="skill-preview-card">
               <div className="skill-preview-card-title">
-                {preview.display_name || preview.name}
+                {preview.skill.display_name || preview.skill.name}
               </div>
-              <p className="skill-preview-card-desc">{preview.description || "暂无简介"}</p>
+              <p className="skill-preview-card-desc">{preview.skill.description || "暂无简介"}</p>
               <div className="skill-preview-card-meta">
-                <span>v{preview.version}</span>
-                <span>{preview.tier === "heavy" ? "增强" : "标准"}</span>
-                {preview.tier === "heavy" && preview.min_ram_gb ? (
-                  <span>建议 ≥ {preview.min_ram_gb}GB 内存</span>
+                <span>v{preview.skill.version}</span>
+                <span>{preview.skill.tier === "heavy" ? "增强" : "标准"}</span>
+                {preview.skill.tier === "heavy" && preview.skill.min_ram_gb ? (
+                  <span>建议 ≥ {preview.skill.min_ram_gb}GB 内存</span>
                 ) : null}
               </div>
             </div>
-            {preview.tier === "heavy" && (
+            {preview.validation.errors.length > 0 && (
+              <ul className="skill-preview-validation skill-preview-validation--error" aria-label="校验错误">
+                {preview.validation.errors.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+            )}
+            {preview.validation.warnings.length > 0 && (
+              <ul className="skill-preview-validation skill-preview-validation--warn" aria-label="校验警告">
+                {preview.validation.warnings.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+            )}
+            {preview.skill.tier === "heavy" && (
               <p className="skill-preview-warn">
                 该技能依赖较重，可能占用更多内存与磁盘，请确认本机配置后再启用。
               </p>
             )}
             <p className="skill-preview-note">
-              将安装到本机技能区。可选择「安装并启用」，或仅安装稍后启用。
+              {preview.validation.errors.length > 0
+                ? "技能包存在校验错误，请修正后重新导入。"
+                : "将安装到本机技能区。可选择「安装并启用」，或仅安装稍后启用。"}
             </p>
             <div className="skill-preview-actions">
               <button
@@ -250,7 +266,7 @@ export default function SkillPanel({
               <button
                 type="button"
                 className="btn btn--ghost"
-                disabled={installing}
+                disabled={installing || preview.validation.errors.length > 0}
                 onClick={() => void confirmInstall(false)}
               >
                 仅安装
@@ -258,7 +274,7 @@ export default function SkillPanel({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={installing}
+                disabled={installing || preview.validation.errors.length > 0}
                 onClick={() => void confirmInstall(true)}
               >
                 {installing ? "安装中…" : "安装并启用"}

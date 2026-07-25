@@ -5,7 +5,9 @@ import type {
   RuntimeConfig,
   SessionMeta,
   SessionUiMessage,
-  SkillInspect,
+  SkillErrorDetail,
+  SkillInspectResult,
+  SkillInstallResult,
   SkillMeta,
   TreeEntry,
 } from "./types";
@@ -16,12 +18,43 @@ export const RUNTIME_BASE_URL = "http://127.0.0.1:8765";
 
 export class RuntimeClientError extends Error {
   status?: number;
+  skillDetail?: SkillErrorDetail;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, skillDetail?: SkillErrorDetail) {
     super(message);
     this.name = "RuntimeClientError";
     this.status = status;
+    this.skillDetail = skillDetail;
   }
+}
+
+function parseSkillErrorDetail(detail: unknown): SkillErrorDetail | undefined {
+  if (!detail || typeof detail !== "object") return undefined;
+  const d = detail as SkillErrorDetail;
+  if (
+    d.validation ||
+    Array.isArray(d.errors) ||
+    Array.isArray(d.warnings) ||
+    typeof d.error === "string"
+  ) {
+    return d;
+  }
+  return undefined;
+}
+
+export function formatSkillErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  const skillDetail = parseSkillErrorDetail(detail);
+  if (!skillDetail) {
+    return typeof detail === "object" ? JSON.stringify(detail) : String(detail);
+  }
+  const lines: string[] = [];
+  if (skillDetail.error) lines.push(skillDetail.error);
+  const errors = skillDetail.validation?.errors ?? skillDetail.errors ?? [];
+  const warnings = skillDetail.validation?.warnings ?? skillDetail.warnings ?? [];
+  for (const e of errors) lines.push(e);
+  for (const w of warnings) lines.push(`警告：${w}`);
+  return lines.length > 0 ? lines.join("\n") : "技能包校验失败";
 }
 
 /** Cross-platform hint for where the desktop sidecar writes logs. */
@@ -51,14 +84,18 @@ async function request<T>(
       },
     });
     if (!res.ok) {
-      let detail = res.statusText;
+      let detail: unknown = res.statusText;
+      let skillDetail: SkillErrorDetail | undefined;
       try {
-        const body = (await res.json()) as { detail?: string };
-        if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+        const body = (await res.json()) as { detail?: unknown };
+        if (body?.detail !== undefined) {
+          detail = body.detail;
+          skillDetail = parseSkillErrorDetail(body.detail);
+        }
       } catch {
         // ignore non-JSON error bodies
       }
-      throw new RuntimeClientError(detail, res.status);
+      throw new RuntimeClientError(formatSkillErrorDetail(detail), res.status, skillDetail);
     }
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
@@ -401,17 +438,14 @@ export const runtimeClient = {
     });
   },
 
-  inspectSkill(path: string): Promise<{ skill: SkillInspect }> {
+  inspectSkill(path: string): Promise<SkillInspectResult> {
     return request("/skills/inspect", {
       method: "POST",
       body: JSON.stringify({ path }),
     });
   },
 
-  installSkillWithOptions(
-    path: string,
-    enabled: boolean,
-  ): Promise<{ ok: boolean; skill: SkillInspect }> {
+  installSkillWithOptions(path: string, enabled: boolean): Promise<SkillInstallResult> {
     return request("/skills/install", {
       method: "POST",
       body: JSON.stringify({ path, enabled }),

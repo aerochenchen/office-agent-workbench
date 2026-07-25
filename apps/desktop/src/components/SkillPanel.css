@@ -271,6 +271,28 @@
   color: var(--status-warn);
 }
 
+.skill-preview-validation {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  list-style: disc;
+  padding-left: calc(var(--space-3) + 1em);
+}
+
+.skill-preview-validation--error {
+  color: var(--status-error);
+  background: #faf0ef;
+  border: 1px solid #e8c4c0;
+}
+
+.skill-preview-validation--warn {
+  color: var(--status-warn);
+  background: #f7f1e6;
+  border: 1px solid #e2d2b8;
+}
+
 .skill-preview-note {
   margin: var(--space-2) 0 0;
   font-size: var(--font-size-xs);

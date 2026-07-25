@@ -31,6 +31,31 @@ export interface SkillInspect {
   enabled?: boolean;
 }
 
+export interface SkillValidation {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface SkillInspectResult {
+  skill: SkillInspect;
+  validation: SkillValidation;
+}
+
+export interface SkillInstallResult {
+  ok: boolean;
+  skill: SkillInspect;
+  validation: SkillValidation;
+}
+
+/** Runtime 400 detail when skill install/inspect fails validation. */
+export interface SkillErrorDetail {
+  error?: string;
+  errors?: string[];
+  warnings?: string[];
+  validation?: SkillValidation;
+}
+
 export interface ToolEvent {
   name: string;
   args: Record<string, unknown>;
