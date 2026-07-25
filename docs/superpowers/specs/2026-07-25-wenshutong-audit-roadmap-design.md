@@ -52,13 +52,13 @@
 
 | # | 验收项 | 状态 | 说明 |
 |---|--------|------|------|
-| A1 | 工作区沙箱有效 | 部分通过 | Tool 路径有沙箱；`run_*_script` 任意 Python 可逃逸 |
+| A1 | 工作区沙箱有效 | 部分通过 | Tool 沙箱 + 脚本 env/argv 约束；脚本进程级仍可逃逸（分期） |
 | A2 | 仅白名单内网 API | 部分通过 | Gateway 有 host 白名单；脚本无网络隔离 |
-| A3 | Skill 权限未确认则不可用高危能力 | **未达标** | 可导入；`permissions` / `permission_mode` 未强制 |
+| A3 | Skill 权限未确认则不可用高危能力 | 部分通过/已修 | stream 路径强制确认；sync `/chat` 桌面不用（非交互自动放行） |
 | A4 | 标准包不含 Torch / bge | **通过** | 分层交付符合产品原则 |
 | A5 | 排版 Skill 触发共享脚本 | **通过** | `government-document-format` + `format_gongwen` |
 | A6 | 选装写作 RAG 主路径 | 待验证 | 可选包存在；需目标机端到端 |
-| A7 | 工具可追溯；审计落库 | **未达标** | UI 有工具步骤；生产未接线 `AuditLog` |
+| A7 | 工具可追溯；审计落库 | 通过 | Sprint A 已接线生产 `AuditLog`；UI 有工具步骤 |
 | A8 | 许可证扫描 / NOTICE | 待验证 | 设置页有 OSS 致谢；缺系统化扫描流水线 |
 
 ---
