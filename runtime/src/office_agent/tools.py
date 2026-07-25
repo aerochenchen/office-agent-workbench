@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 from office_agent.audit import AuditLog
 from office_agent.paths import app_data_dir
+from office_agent.script_policy import assert_argv_within_roots, build_script_env
 from office_agent.permissions import (
     RISKY_TOOLS,
     PermissionDenied,
@@ -209,7 +209,13 @@ class ToolExecutor:
             raise ToolError("script path escapes skill scripts directory") from e
         if not script_path.is_file():
             return {"ok": False, "error": f"script not found: {script}"}
-        return self._run_python(script_path, argv, self.workspace.root)
+        skill_dir = (self._app_data / "skills" / skill_id).resolve()
+        return self._run_python(
+            script_path,
+            argv,
+            self.workspace.root,
+            allowed_roots=[skill_dir, scripts_dir],
+        )
 
     def _run_shared_script(self, args: dict) -> dict:
         name = str(args["name"])
@@ -219,12 +225,31 @@ class ToolExecutor:
         script_path = self._app_data / "shared-scripts" / f"{name}.py"
         if not script_path.is_file():
             return {"ok": False, "error": f"shared script not found: {name}"}
-        return self._run_python(script_path, argv, self.workspace.root)
+        return self._run_python(
+            script_path,
+            argv,
+            self.workspace.root,
+            allowed_roots=[script_path.parent],
+        )
 
-    def _run_python(self, script: Path, argv: list[str], cwd: Path) -> dict:
-        env = os.environ.copy()
-        env.setdefault("HF_HUB_OFFLINE", "1")
-        env.setdefault("TRANSFORMERS_OFFLINE", "1")
+    def _run_python(
+        self,
+        script: Path,
+        argv: list[str],
+        cwd: Path,
+        *,
+        allowed_roots: list[Path] | None = None,
+    ) -> dict:
+        roots = [self.workspace.root.resolve()]
+        if allowed_roots:
+            seen = {roots[0]}
+            for root in allowed_roots:
+                resolved = Path(root).resolve()
+                if resolved not in seen:
+                    roots.append(resolved)
+                    seen.add(resolved)
+        assert_argv_within_roots(argv, roots)
+        env = build_script_env()
         # PyInstaller sidecar: sys.executable is office-agent-runtime.exe.
         # Re-enter via --run-script so scripts get a real interpreter context.
         if getattr(sys, "frozen", False):
