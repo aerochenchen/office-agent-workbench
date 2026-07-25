@@ -76,9 +76,9 @@
 
 | ID | 域 | 问题 | 证据位置 |
 |----|-----|------|----------|
-| C1 | 安全 | 任意 Python 脚本 ≈ 完整用户权限，无 FS/网络 jail | `runtime/.../tools.py` `_run_python` |
+| C1 | 安全 | 任意 Python 脚本 ≈ 完整用户权限，无 FS/网络 jail（Sprint B 已修·分期：env 断网 + argv 路径校验，非完整 jail） | `runtime/.../tools.py` `_run_python` |
 | C2 | 安全 | 生产路径未接线 `AuditLog`（Sprint A 已修） | `app.py` `_prepare_chat` |
-| C3 | 安全 | `permission_mode` / Skill `permissions` 为死字段 | `ToolExecutor` / `skills.py` |
+| C3 | 安全 | `permission_mode` / Skill `permissions` 为死字段（Sprint B 已修） | `ToolExecutor` / `skills.py` |
 
 ### 3.2 P0
 
@@ -94,11 +94,11 @@
 
 | ID | 域 | 问题 |
 |----|-----|------|
-| P1-1 | 产品 | 无取消生成（设计 §8.3 User stop） |
-| P1-2 | 产品 | Seed `overwrite=True` 覆盖用户改过的预置 Skill |
-| P1-3 | 产品 | 无 Skill 卸载 API；浏览器模式几乎无导入入口 |
+| P1-1 | 产品 | 无取消生成（设计 §8.3 User stop）（Sprint B 已修） |
+| P1-2 | 产品 | Seed `overwrite=True` 覆盖用户改过的预置 Skill（Sprint B 已修） |
+| P1-3 | 产品 | 无 Skill 卸载 API；浏览器模式几乎无导入入口（Sprint B 已修） |
 | P1-4 | 文档 | README/打包文档漂移（文件树描述、旧品牌「办公智能体工作台」）（Sprint A 已修） |
-| P1-5 | 安全 | WebView `CSP: null`；CORS `allow_origins=["*"]` + credentials |
+| P1-5 | 安全 | WebView `CSP: null`；CORS `allow_origins=["*"]` + credentials（Sprint B 已修） |
 
 ### 3.4 P2
 
@@ -171,6 +171,19 @@
 | CSP / CORS 收紧 | P1-5 |
 
 **完成标准：** 设计 §10.3 的 A3、A7 可宣称达标；A1 对外声明「Tool 沙箱 + 脚本约束边界」清晰（完整进程级 jail 可再分期）。
+
+**实施计划：** `docs/superpowers/plans/2026-07-25-wenshutong-sprint-b-security.md`（7 Tasks；C1 不含容器级 jail）。
+
+### Sprint B 完成记录
+
+| 项 | 状态 |
+|----|------|
+| C3 `permission_mode` + UI | 已完成 2026-07-25 |
+| C1 脚本约束（env 断网 + argv 路径校验；非完整 jail） | 已完成 2026-07-25 |
+| P1-1 取消生成 | 已完成 2026-07-25 |
+| P1-2 Seed 不盲覆盖 | 已完成 2026-07-25 |
+| P1-3 Skill 卸载 | 已完成 2026-07-25 |
+| P1-5 CSP / CORS 收紧 | 已完成 2026-07-25 |
 
 ### 5.3 Q+1 · 产品闭环
 
