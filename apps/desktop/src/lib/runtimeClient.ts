@@ -425,6 +425,12 @@ export const runtimeClient = {
     });
   },
 
+  uninstallSkill(id: string): Promise<{ ok: boolean; id: string }> {
+    return request(`/skills/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+
   getConfig(): Promise<RuntimeConfig> {
     return request("/config", { timeoutMs: 5_000 });
   },

@@ -26,11 +26,12 @@ def bundled_dir() -> Path:
     return Path(__file__).resolve().parents[3] / "bundled"
 
 
-def seed_bundled_assets(bundled_root: Path | None = None, *, overwrite: bool = True) -> None:
+def seed_bundled_assets(bundled_root: Path | None = None, *, overwrite: bool = False) -> None:
     """Sync standard bundled skills/scripts into app_data.
 
-    When overwrite=True (default), refresh files from the product bundle so
-    updates to format_gongwen / light skills ship with the app.
+    Skills are copied only when missing (overwrite=False by default) so user
+    copies are not clobbered on startup. Shared product scripts always refresh.
+    Pass overwrite=True to replace existing bundled skill directories.
     """
     src_root = bundled_root or bundled_dir()
     if not src_root.is_dir():
@@ -46,8 +47,8 @@ def seed_bundled_assets(bundled_root: Path | None = None, *, overwrite: bool = T
             if not item.is_file():
                 continue
             target = scripts_dest / item.name
-            if overwrite or not target.exists():
-                shutil.copy2(item, target)
+            # Product formatting scripts should always ship with updates.
+            shutil.copy2(item, target)
 
     skills_src = src_root / "skills"
     skills_dest = data / "skills"

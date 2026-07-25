@@ -396,6 +396,14 @@ function App() {
     [refreshSkills],
   );
 
+  const handleUninstallSkill = useCallback(
+    async (id: string) => {
+      await runtimeClient.uninstallSkill(id);
+      await refreshSkills();
+    },
+    [refreshSkills],
+  );
+
   const handleSaveConfig = useCallback(async (partial: Partial<RuntimeConfig>) => {
     // Omit undefined fields; do not send api_key: null (JSON.stringify drops undefined).
     await runtimeClient.saveConfig(partial);
@@ -505,6 +513,7 @@ function App() {
           onToggle={handleToggleSkill}
           onInspect={handleInspectSkill}
           onConfirmInstall={handleConfirmInstallSkill}
+          onUninstall={handleUninstallSkill}
           onRefresh={refreshSkills}
         />
       </div>

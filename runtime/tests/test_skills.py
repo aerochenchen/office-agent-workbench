@@ -127,3 +127,26 @@ def test_inspect_zip_rejects_path_escape(tmp_path: Path, monkeypatch):
         zf.writestr("/tmp/evil-skill/SKILL.md", "---\nname: evil\ndescription: x\ntier: light\n---\n\n#\n")
     with pytest.raises(SkillError, match="unsafe zip"):
         SkillRegistry().inspect_path(z)
+
+
+def test_uninstall_removes_skill(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    skill = tmp_path / "skills" / "to-remove"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: to-remove\ndescription: d\ntier: light\n---\n\n#\n",
+        encoding="utf-8",
+    )
+    reg = SkillRegistry()
+    reg.set_enabled("to-remove", False)
+    assert len(reg.scan()) == 1
+    reg.uninstall("to-remove")
+    assert len(reg.scan()) == 0
+    assert not skill.exists()
+    assert "to-remove" not in reg._state.get("enabled", {})
+
+
+def test_uninstall_unknown_raises(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    with pytest.raises(SkillError, match="not found"):
+        SkillRegistry().uninstall("missing-skill")

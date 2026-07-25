@@ -312,6 +312,15 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         office.registry.set_enabled(skill_id, body.enabled)
         return {"ok": True, "id": skill_id, "enabled": body.enabled}
 
+    @app.delete("/skills/{skill_id}")
+    def uninstall_skill(skill_id: str) -> dict[str, Any]:
+        try:
+            office.registry.uninstall(skill_id)
+        except SkillError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        office.zh_locale_tried.discard(skill_id)
+        return {"ok": True, "id": skill_id}
+
     @app.post("/config")
     def update_config(body: ConfigBody) -> dict[str, Any]:
         if body.api_base is not None:

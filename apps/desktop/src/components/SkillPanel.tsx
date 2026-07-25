@@ -10,6 +10,7 @@ interface Props {
   onToggle: (id: string, enabled: boolean) => void;
   onInspect: (path: string) => Promise<SkillInspect>;
   onConfirmInstall: (path: string, enabled: boolean) => Promise<void>;
+  onUninstall: (id: string) => Promise<void>;
   onRefresh: () => void;
 }
 
@@ -25,6 +26,7 @@ export default function SkillPanel({
   onToggle,
   onInspect,
   onConfirmInstall,
+  onUninstall,
   onRefresh,
 }: Props) {
   const [pickMenuOpen, setPickMenuOpen] = useState(false);
@@ -32,6 +34,8 @@ export default function SkillPanel({
   const [installError, setInstallError] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [preview, setPreview] = useState<SkillInspect | null>(null);
+  const [uninstallTarget, setUninstallTarget] = useState<SkillMeta | null>(null);
+  const [uninstalling, setUninstalling] = useState(false);
 
   async function beginPreview(path: string) {
     const trimmed = path.trim();
@@ -77,6 +81,20 @@ export default function SkillPanel({
     }
   }
 
+  async function confirmUninstall() {
+    if (!uninstallTarget) return;
+    setUninstalling(true);
+    setInstallError(null);
+    try {
+      await onUninstall(uninstallTarget.id);
+      setUninstallTarget(null);
+    } catch (err) {
+      setInstallError(err instanceof Error ? err.message : "卸载失败");
+    } finally {
+      setUninstalling(false);
+    }
+  }
+
   if (collapsed) {
     return <section className="pane skill-pane skill-pane--collapsed" aria-hidden="true" />;
   }
@@ -119,16 +137,27 @@ export default function SkillPanel({
                     <p className="skill-card-desc skill-card-desc--empty">暂无简介</p>
                   )}
                 </div>
-                <label className="skill-switch" title={s.enabled ? "已启用" : "已停用"}>
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    checked={s.enabled}
-                    aria-label={`${title}：${s.enabled ? "已启用" : "已停用"}`}
-                    onChange={(e) => onToggle(s.id, e.currentTarget.checked)}
-                  />
-                  <span className="skill-switch-ui" aria-hidden="true" />
-                </label>
+                <div className="skill-card-actions">
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--xs skill-uninstall-btn"
+                    title={`卸载 ${title}`}
+                    disabled={uninstalling}
+                    onClick={() => setUninstallTarget(s)}
+                  >
+                    卸载
+                  </button>
+                  <label className="skill-switch" title={s.enabled ? "已启用" : "已停用"}>
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={s.enabled}
+                      aria-label={`${title}：${s.enabled ? "已启用" : "已停用"}`}
+                      onChange={(e) => onToggle(s.id, e.currentTarget.checked)}
+                    />
+                    <span className="skill-switch-ui" aria-hidden="true" />
+                  </label>
+                </div>
               </li>
             );
           })}
@@ -233,6 +262,35 @@ export default function SkillPanel({
                 onClick={() => void confirmInstall(true)}
               >
                 {installing ? "安装中…" : "安装并启用"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {uninstallTarget && (
+        <div className="skill-preview-backdrop" role="presentation">
+          <div className="skill-preview" role="dialog" aria-labelledby="skill-uninstall-title">
+            <h3 id="skill-uninstall-title">确认卸载技能</h3>
+            <p className="skill-preview-note">
+              将永久删除「{uninstallTarget.display_name || uninstallTarget.name}」及其本地文件，此操作不可恢复。
+            </p>
+            <div className="skill-preview-actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={uninstalling}
+                onClick={() => setUninstallTarget(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={uninstalling}
+                onClick={() => void confirmUninstall()}
+              >
+                {uninstalling ? "卸载中…" : "确认卸载"}
               </button>
             </div>
           </div>

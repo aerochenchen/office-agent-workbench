@@ -254,3 +254,13 @@ class SkillRegistry:
         dest.mkdir(parents=True)
         (dest / "SKILL.md").write_text(text, encoding="utf-8")
         return parse_skill_md((dest / "SKILL.md").read_text(encoding="utf-8"), dest)
+
+    def uninstall(self, skill_id: str) -> None:
+        dest = self.skills_dir / skill_id
+        if not dest.is_dir() or not (dest / "SKILL.md").is_file():
+            raise SkillError(f"skill not found: {skill_id}")
+        shutil.rmtree(dest)
+        enabled = self._state.get("enabled", {})
+        if skill_id in enabled:
+            del enabled[skill_id]
+            self._save_state()
