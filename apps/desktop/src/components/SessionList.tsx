@@ -9,6 +9,7 @@ interface Props {
   sessions: SessionMeta[];
   activeSessionId: string | undefined;
   sending: boolean;
+  runtimeReady: boolean;
   onPickWorkspace: () => void;
   onOpenWorkspacePath: (path: string) => void;
   onNewSession: () => void;
@@ -40,6 +41,7 @@ export default function SessionList({
   sessions,
   activeSessionId,
   sending,
+  runtimeReady,
   onPickWorkspace,
   onOpenWorkspacePath,
   onNewSession,
@@ -55,13 +57,27 @@ export default function SessionList({
         <span className="pane-title">对话</span>
       </div>
 
+      {!runtimeReady && (
+        <div className="empty-hint" style={{ padding: "8px 12px" }}>
+          本地运行时未就绪，请稍候或重启应用
+        </div>
+      )}
+
       <div className="session-toolbar">
         <button
           type="button"
           className="btn btn--ghost btn--full"
-          disabled={!workspacePath || sending}
+          disabled={!workspacePath || sending || !runtimeReady}
           onClick={onNewSession}
-          title={!workspacePath ? "请先打开工作区" : sending ? "请等待当前回复结束" : undefined}
+          title={
+            !runtimeReady
+              ? "本地运行时未就绪"
+              : !workspacePath
+                ? "请先打开工作区"
+                : sending
+                  ? "请等待当前回复结束"
+                  : undefined
+          }
         >
           新建对话
         </button>
@@ -105,11 +121,11 @@ export default function SessionList({
                   <button
                     type="button"
                     className="session-delete"
-                    title="删除对话"
-                    disabled={sending}
+                    title={!runtimeReady ? "本地运行时未就绪" : "删除对话"}
+                    disabled={sending || !runtimeReady}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (sending) return;
+                      if (sending || !runtimeReady) return;
                       if (window.confirm(`删除对话「${s.title}」？此操作无法恢复。`)) {
                         onDeleteSession(s.id);
                       }
@@ -137,6 +153,8 @@ export default function SessionList({
         <button
           type="button"
           className={`btn btn--full${workspacePath ? " btn--ghost" : " btn--primary"}`}
+          disabled={!runtimeReady}
+          title={!runtimeReady ? "本地运行时未就绪" : undefined}
           onClick={onPickWorkspace}
         >
           {workspacePath ? "更换文件夹" : "打开文件夹"}
@@ -146,16 +164,21 @@ export default function SessionList({
             className="session-manual-path"
             onSubmit={(e) => {
               e.preventDefault();
-              if (manualPath.trim()) onOpenWorkspacePath(manualPath.trim());
+              if (manualPath.trim() && runtimeReady) onOpenWorkspacePath(manualPath.trim());
             }}
           >
             <input
               className="session-manual-input"
               placeholder="或粘贴工作区绝对路径"
               value={manualPath}
+              disabled={!runtimeReady}
               onChange={(e) => setManualPath(e.currentTarget.value)}
             />
-            <button type="submit" className="btn btn--ghost btn--full" disabled={!manualPath.trim()}>
+            <button
+              type="submit"
+              className="btn btn--ghost btn--full"
+              disabled={!manualPath.trim() || !runtimeReady}
+            >
               打开路径
             </button>
           </form>

@@ -8,6 +8,7 @@ interface Props {
   workspaceOpen: boolean;
   messages: ChatMessage[];
   sending: boolean;
+  runtimeReady: boolean;
   onSend: (text: string) => void;
   onOpenWorkspace?: () => void;
   onToggleSteps?: (messageId: string) => void;
@@ -163,6 +164,7 @@ export default function ChatPanel({
   workspaceOpen,
   messages,
   sending,
+  runtimeReady,
   onSend,
   onOpenWorkspace,
   onToggleSteps,
@@ -185,7 +187,7 @@ export default function ChatPanel({
     return () => window.clearInterval(timer);
   }, [hasPending]);
 
-  const disabled = !workspaceOpen || sending;
+  const disabled = !workspaceOpen || sending || !runtimeReady;
 
   function submit() {
     const text = draft.trim();
@@ -226,7 +228,13 @@ export default function ChatPanel({
               ))}
             </ul>
             {onOpenWorkspace ? (
-              <button type="button" className="btn btn--primary guide-welcome-cta" onClick={onOpenWorkspace}>
+              <button
+                type="button"
+                className="btn btn--primary guide-welcome-cta"
+                disabled={!runtimeReady}
+                title={!runtimeReady ? "本地运行时未就绪" : undefined}
+                onClick={onOpenWorkspace}
+              >
                 打开文件夹
               </button>
             ) : (
@@ -266,14 +274,16 @@ export default function ChatPanel({
         <textarea
           className="chat-input"
           placeholder={
-            sending
-              ? "处理中，完成后可继续…"
-              : workspaceOpen
-                ? "输入指令，Enter 发送，Shift+Enter 换行"
-                : "请先打开工作区"
+            !runtimeReady
+              ? "本地运行时未就绪…"
+              : sending
+                ? "处理中，完成后可继续…"
+                : workspaceOpen
+                  ? "输入指令，Enter 发送，Shift+Enter 换行"
+                  : "请先打开工作区"
           }
           value={draft}
-          disabled={!workspaceOpen || sending}
+          disabled={!workspaceOpen || sending || !runtimeReady}
           rows={2}
           onChange={(e) => setDraft(e.currentTarget.value)}
           onKeyDown={(e) => {
@@ -285,7 +295,7 @@ export default function ChatPanel({
         />
         <button
           type="submit"
-          className={`btn${workspaceOpen ? " btn--primary" : " btn--ghost"}`}
+          className={`btn${workspaceOpen && runtimeReady ? " btn--primary" : " btn--ghost"}`}
           disabled={disabled || !draft.trim()}
         >
           发送

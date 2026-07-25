@@ -23,6 +23,16 @@ export class RuntimeClientError extends Error {
   }
 }
 
+/** Cross-platform hint for where the desktop sidecar writes logs. */
+export function runtimeLogHint(): string {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isWin = /Windows/i.test(ua);
+  if (isWin) {
+    return "%TEMP%\\office-agent-desktop.log";
+  }
+  return "系统临时目录中的 office-agent-desktop.log（macOS 多为 $TMPDIR）";
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit & { timeoutMs?: number },
@@ -62,7 +72,7 @@ async function request<T>(
     }
     if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
       throw new RuntimeClientError(
-        "无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 %TEMP%\\office-agent-desktop.log",
+        `无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 ${runtimeLogHint()}`,
       );
     }
     throw new RuntimeClientError(`运行时请求失败：${msg || name || "未知错误"}`);
@@ -79,7 +89,7 @@ function mapNetworkError(err: unknown, timeoutLabel = "300s"): string {
     return `请求超时（${timeoutLabel}）。若正在长对话/调工具，请稍候再试；勿反复刷新。`;
   }
   if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
-    return "无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 %TEMP%\\office-agent-desktop.log";
+    return `无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 ${runtimeLogHint()}`;
   }
   return msg || "对话请求失败";
 }

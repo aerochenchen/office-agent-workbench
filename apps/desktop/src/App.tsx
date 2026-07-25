@@ -128,8 +128,14 @@ function App() {
     );
   }, []);
 
+  const runtimeReady = health === "ok";
+
   const handleOpenPath = useCallback(
     async (path: string) => {
+      if (!runtimeReady) {
+        setWorkspaceError("本地运行时未就绪，请稍候或重启应用");
+        return;
+      }
       setWorkspaceError(null);
       try {
         const res = await runtimeClient.openWorkspace(path);
@@ -148,7 +154,7 @@ function App() {
         setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开工作区失败");
       }
     },
-    [loadSessionMessages, refreshSessions],
+    [runtimeReady, loadSessionMessages, refreshSessions],
   );
 
   const handlePickFolder = useCallback(async () => {
@@ -157,12 +163,22 @@ function App() {
   }, [handleOpenPath]);
 
   const handleNewSession = useCallback(async () => {
-    if (!workspacePath || sending) return;
-    const created = await runtimeClient.createSession(workspacePath);
-    setSessionId(created.session.id);
-    setMessages([]);
-    await refreshSessions(workspacePath);
-  }, [workspacePath, sending, refreshSessions]);
+    if (!workspacePath || sending || !runtimeReady) return;
+    try {
+      const created = await runtimeClient.createSession(workspacePath);
+      setSessionId(created.session.id);
+      setMessages([]);
+      await refreshSessions(workspacePath);
+    } catch (err) {
+      setMessages([
+        {
+          id: nextId(),
+          role: "error",
+          content: err instanceof RuntimeClientError ? err.message : "新建会话失败",
+        },
+      ]);
+    }
+  }, [workspacePath, sending, runtimeReady, refreshSessions]);
 
   const handleSelectSession = useCallback(
     async (id: string) => {
@@ -186,30 +202,40 @@ function App() {
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
-      if (sending) return;
-      await runtimeClient.deleteSession(id);
-      const list = await refreshSessions(workspacePath);
-      if (id === sessionIdRef.current) {
-        if (list.length > 0) {
-          setSessionId(list[0].id);
-          await loadSessionMessages(list[0].id);
-        } else if (workspacePath) {
-          const created = await runtimeClient.createSession(workspacePath);
-          setSessionId(created.session.id);
-          setMessages([]);
-          await refreshSessions(workspacePath);
-        } else {
-          setSessionId(undefined);
-          setMessages([]);
+      if (sending || !runtimeReady) return;
+      try {
+        await runtimeClient.deleteSession(id);
+        const list = await refreshSessions(workspacePath);
+        if (id === sessionIdRef.current) {
+          if (list.length > 0) {
+            setSessionId(list[0].id);
+            await loadSessionMessages(list[0].id);
+          } else if (workspacePath) {
+            const created = await runtimeClient.createSession(workspacePath);
+            setSessionId(created.session.id);
+            setMessages([]);
+            await refreshSessions(workspacePath);
+          } else {
+            setSessionId(undefined);
+            setMessages([]);
+          }
         }
+      } catch (err) {
+        setMessages([
+          {
+            id: nextId(),
+            role: "error",
+            content: err instanceof RuntimeClientError ? err.message : "删除会话失败",
+          },
+        ]);
       }
     },
-    [sending, workspacePath, refreshSessions, loadSessionMessages],
+    [sending, runtimeReady, workspacePath, refreshSessions, loadSessionMessages],
   );
 
   const handleSend = useCallback(
     async (text: string) => {
-      if (!workspacePath) return;
+      if (!workspacePath || !runtimeReady) return;
       let activeId = sessionIdRef.current;
       if (!activeId) {
         const created = await runtimeClient.createSession(workspacePath);
@@ -312,7 +338,7 @@ function App() {
         setSending(false);
       }
     },
-    [workspacePath, refreshSessions],
+    [workspacePath, runtimeReady, refreshSessions],
   );
 
   const handleToggleSteps = useCallback((messageId: string) => {
@@ -408,6 +434,7 @@ function App() {
           sessions={sessions}
           activeSessionId={sessionId}
           sending={sending}
+          runtimeReady={runtimeReady}
           onPickWorkspace={handlePickFolder}
           onOpenWorkspacePath={handleOpenPath}
           onNewSession={() => void handleNewSession()}
@@ -420,6 +447,7 @@ function App() {
           workspaceOpen={workspacePath !== null}
           messages={messages}
           sending={sending}
+          runtimeReady={runtimeReady}
           onSend={handleSend}
           onOpenWorkspace={handlePickFolder}
           onToggleSteps={handleToggleSteps}
