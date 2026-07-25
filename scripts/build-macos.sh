@@ -116,6 +116,11 @@ stage_resources() {
     exit 1
   fi
   cp -R "${BUNDLED_SRC}/." "${STAGED_BUNDLED}/"
+  if [[ ! -f "${ROOT}/NOTICE" ]]; then
+    echo "NOTICE missing at ${ROOT}/NOTICE — run scripts/generate_notice.sh before packaging" >&2
+    exit 1
+  fi
+  cp -f "${ROOT}/NOTICE" "${RESOURCES}/NOTICE"
   if [[ ! -x "${STAGED_RUNTIME}/${SIDECAR_NAME}" ]]; then
     echo "Staged sidecar missing: ${STAGED_RUNTIME}/${SIDECAR_NAME}" >&2
     exit 1

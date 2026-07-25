@@ -40,7 +40,8 @@
     ],
     "resources": [
       "resources/runtime/**/*",
-      "resources/bundled/**/*"
+      "resources/bundled/**/*",
+      "resources/NOTICE"
     ],
     "windows": {
       "webviewInstallMode": {

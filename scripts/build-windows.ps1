@@ -114,6 +114,12 @@ function Stage-Resources {
     }
     Copy-Item -Path (Join-Path $BundledSrc "*") -Destination $StagedBundled -Recurse -Force
 
+    $noticeSrc = Join-Path $RepoRoot "NOTICE"
+    if (-not (Test-Path $noticeSrc)) {
+        throw "NOTICE missing at $noticeSrc — run scripts/generate_notice.sh before packaging"
+    }
+    Copy-Item -Path $noticeSrc -Destination (Join-Path $ResourcesDir "NOTICE") -Force
+
     $stagedExe = Join-Path $StagedRuntime "office-agent-runtime.exe"
     if (-not (Test-Path $stagedExe)) {
         throw "Staged sidecar missing: $stagedExe"
