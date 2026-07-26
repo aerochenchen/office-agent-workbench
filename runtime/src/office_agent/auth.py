@@ -26,7 +26,8 @@ def install_api_token_middleware(app: FastAPI) -> None:
 
     @app.middleware("http")
     async def _require_api_token(request: Request, call_next):
-        if request.url.path in EXEMPT_PATHS:
+        # CORS preflight has no Bearer; must pass through to CORSMiddleware.
+        if request.method == "OPTIONS" or request.url.path in EXEMPT_PATHS:
             return await call_next(request)
         auth = request.headers.get("Authorization", "")
         if auth == f"Bearer {expected}":

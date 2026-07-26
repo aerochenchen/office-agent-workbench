@@ -17,10 +17,13 @@ class ModelGateway:
     def __init__(self, cfg: AppConfig) -> None:
         self._cfg = cfg
         self.assert_allowed()
+        api_key = (cfg.api_key or "").strip()
+        if not api_key:
+            raise GatewayError("未配置 API Key，请在设置中填写后再试")
         # Long tool-heavy turns (PPT/docx scripting) need more than the SDK default.
         self._client = OpenAI(
             base_url=cfg.api_base,
-            api_key=cfg.api_key,
+            api_key=api_key,
             timeout=Timeout(600.0, connect=30.0),
         )
 

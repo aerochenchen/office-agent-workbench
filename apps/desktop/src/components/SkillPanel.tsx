@@ -42,13 +42,6 @@ export default function SkillPanel({
           {enabled.length === 0 ? (
             <div className="skill-empty">
               <p className="empty-hint">{GUIDE_HINTS.noEnabledSkills}</p>
-              <button
-                type="button"
-                className="btn btn--ghost btn--full"
-                onClick={() => setManagerOpen(true)}
-              >
-                技能管理
-              </button>
             </div>
           ) : (
             <ul className="skill-list">

@@ -3,6 +3,11 @@ import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
 import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
+import {
+  deriveRuntimeStatus,
+  runtimeStatusLabel,
+  type HealthState,
+} from "./lib/runtimeStatus";
 import { getRuntimeToken, isTauriRuntime, pickFolder } from "./lib/tauri";
 import type {
   ChatMessage,
@@ -18,8 +23,6 @@ import ChatPanel from "./components/ChatPanel";
 import SkillPanel from "./components/SkillPanel";
 import SettingsModal from "./components/SettingsModal";
 import PermissionModal from "./components/PermissionModal";
-
-type HealthState = "checking" | "ok" | "down";
 
 const DEFAULT_CONFIG: RuntimeConfig = {
   api_base: "https://api.deepseek.com/v1",
@@ -37,6 +40,7 @@ function nextId(): string {
 
 function App() {
   const [health, setHealth] = useState<HealthState>("checking");
+  const [configReady, setConfigReady] = useState(false);
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
@@ -85,7 +89,10 @@ function App() {
   }, [checkHealth]);
 
   useEffect(() => {
-    if (health !== "ok") return;
+    if (health !== "ok") {
+      setConfigReady(false);
+      return;
+    }
     void (async () => {
       try {
         const cfg = await runtimeClient.getConfig();
@@ -99,7 +106,9 @@ function App() {
           permission_mode: cfg.permission_mode ?? "standard",
         });
       } catch {
-        // keep defaults
+        // keep defaults — still mark ready so UI can show「待配置」
+      } finally {
+        setConfigReady(true);
       }
     })();
   }, [health]);
@@ -113,9 +122,11 @@ function App() {
     }
   }, []);
 
+  // Wait until runtime is healthy (token already applied in the health bootstrap).
   useEffect(() => {
+    if (health !== "ok") return;
     void refreshSkills();
-  }, [refreshSkills]);
+  }, [health, refreshSkills]);
 
   const refreshSessions = useCallback(async (wsPath?: string | null) => {
     const path = wsPath ?? workspacePath;
@@ -146,6 +157,10 @@ function App() {
   }, []);
 
   const runtimeReady = health === "ok";
+  const status = deriveRuntimeStatus(health, {
+    configReady,
+    apiKeySet: Boolean(config.api_key_set),
+  });
 
   const handleOpenPath = useCallback(
     async (path: string) => {
@@ -476,10 +491,26 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
-          <span className={`health-dot health-dot--${health}`} aria-hidden="true" />
-          <span className="health-label">
-            {health === "ok" ? "就绪" : health === "down" ? "未就绪" : "启动中…"}
-          </span>
+          <button
+            type="button"
+            className={`health-status health-status--${status}`}
+            onClick={() => {
+              if (status === "needs_config") setSettingsOpen(true);
+            }}
+            title={
+              status === "needs_config"
+                ? "本地运行时已启动，请先在设置中配置 API Key"
+                : status === "down"
+                  ? "无法连接本地运行时"
+                  : status === "ok"
+                    ? "本地运行时已就绪，API 已配置"
+                    : "正在启动本地运行时…"
+            }
+            disabled={status !== "needs_config"}
+          >
+            <span className={`health-dot health-dot--${status}`} aria-hidden="true" />
+            <span className="health-label">{runtimeStatusLabel(status)}</span>
+          </button>
           <button
             type="button"
             className="btn btn--ghost"

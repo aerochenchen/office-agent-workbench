@@ -60,6 +60,29 @@
   gap: var(--space-3);
 }
 
+.health-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.health-status:disabled {
+  cursor: default;
+}
+
+.health-status--needs_config {
+  cursor: pointer;
+}
+
+.health-status--needs_config:hover .health-label {
+  color: var(--ink-0);
+}
+
 .health-dot {
   width: 7px;
   height: 7px;
@@ -74,6 +97,11 @@
   box-shadow: 0 0 0 3px var(--accent-teal-soft);
 }
 
+.health-dot--needs_config {
+  background: var(--status-warn);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-warn) 22%, transparent);
+}
+
 .health-dot--down {
   background: var(--status-error);
 }
@@ -82,6 +110,7 @@
   font-size: var(--font-size-xs);
   color: var(--ink-1);
   min-width: 6.5em;
+  text-align: left;
 }
 
 .btn {

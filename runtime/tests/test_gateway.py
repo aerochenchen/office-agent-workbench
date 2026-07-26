@@ -22,3 +22,14 @@ def test_allows_configured_host():
         allowed_hosts=["10.0.0.8"],
     )
     ModelGateway(cfg).assert_allowed()
+
+
+def test_rejects_missing_api_key():
+    cfg = AppConfig(
+        api_base="https://api.deepseek.com/v1",
+        api_key="  ",
+        model="deepseek-v4-flash",
+        allowed_hosts=["api.deepseek.com"],
+    )
+    with pytest.raises(GatewayError, match="API Key"):
+        ModelGateway(cfg)

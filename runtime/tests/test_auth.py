@@ -61,3 +61,19 @@ def test_wrong_bearer_returns_401(app_state: ProcessState, monkeypatch):
     client = TestClient(create_app(app_state))
     r = client.get("/skills", headers={"Authorization": "Bearer wrong-token"})
     assert r.status_code == 401
+
+
+def test_options_preflight_exempt_when_token_configured(app_state: ProcessState, monkeypatch):
+    """WebView CORS preflight must not be blocked by Bearer middleware."""
+    monkeypatch.setenv("OFFICE_AGENT_API_TOKEN", "secret-token")
+    client = TestClient(create_app(app_state))
+    r = client.options(
+        "/workspace/open",
+        headers={
+            "Origin": "https://tauri.localhost",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers.get("access-control-allow-origin") == "https://tauri.localhost"
