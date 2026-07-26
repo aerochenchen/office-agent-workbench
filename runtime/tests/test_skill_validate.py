@@ -138,3 +138,20 @@ def test_validate_skill_text_ok():
     )
     result = validate_skill_text(text, "memo")
     assert result["ok"] is True
+
+
+def test_validate_ignores_temp_extract_dirname(tmp_path: Path):
+    """Install staging dirs like _tmp_extract must not fail id checks."""
+    skill = _write_skill(
+        tmp_path / "_tmp_extract",
+        name="my-exported-skill",
+        description="短描述",
+        version="1.0.0",
+        tier="light",
+        display_name="导出技能",
+        permissions="workspace_read",
+        body="# Demo\n\n## 何时\n用。\n\n## 步数预算\n3。\n",
+    )
+    result = validate_skill_dir(skill)
+    assert result["ok"] is True
+    assert result["errors"] == []

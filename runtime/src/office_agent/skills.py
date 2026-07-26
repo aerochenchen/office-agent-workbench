@@ -59,9 +59,10 @@ def parse_skill_md(text: str, skill_dir: Path) -> SkillMeta:
         raise SkillError("SKILL.md missing YAML frontmatter")
     data = yaml.safe_load(m.group(1)) or {}
     name = str(data.get("name") or skill_dir.name)
+    skill_id = _slug_id(name, fallback=_slug_id(skill_dir.name))
     display_name = str(data.get("display_name") or data.get("title") or "").strip()
     return SkillMeta(
-        id=skill_dir.name,
+        id=skill_id,
         name=name,
         description=str(data.get("description") or ""),
         version=str(data.get("version") or "0.0.0"),
@@ -248,16 +249,11 @@ class SkillRegistry:
         return parse_skill_md((dest / "SKILL.md").read_text(encoding="utf-8"), dest)
 
     def install_zip(self, zip_path: Path) -> SkillMeta:
-        extract = self.root / "_tmp_extract"
-        if extract.exists():
-            shutil.rmtree(extract)
-        extract.mkdir(parents=True)
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            _safe_extractall(zf, extract)
-        try:
+        with tempfile.TemporaryDirectory(prefix="oa-skill-install-") as tmp:
+            extract = Path(tmp)
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                _safe_extractall(zf, extract)
             return self.install_dir(extract)
-        finally:
-            shutil.rmtree(extract, ignore_errors=True)
 
     def install_md(self, md_path: Path) -> SkillMeta:
         """Install a lightweight prompt-only Skill from a single markdown file."""

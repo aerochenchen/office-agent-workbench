@@ -57,6 +57,24 @@ def test_install_zip_heavy_tier(tmp_path: Path, monkeypatch):
     assert (tmp_path / "skills" / "heavy-demo" / "SKILL.md").is_file()
 
 
+def test_install_zip_flat_root_uses_frontmatter_name(tmp_path: Path, monkeypatch):
+    """Explorer-style zips put SKILL.md at archive root; id must come from frontmatter."""
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    z = tmp_path / "flat.zip"
+    md = (
+        "---\nname: flat-skill\ndisplay_name: 扁平包\ndescription: 短\n"
+        "version: 0.1.0\ntier: light\npermissions:\n  - workspace_read\n---\n\n"
+        "# Demo\n\n## 何时\n用。\n\n## 步数预算\n2。\n"
+    )
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("SKILL.md", md)
+    meta = SkillRegistry().install_zip(z)
+    assert meta.id == "flat-skill"
+    assert meta.name == "flat-skill"
+    assert (tmp_path / "skills" / "flat-skill" / "SKILL.md").is_file()
+    assert not (tmp_path / "skills" / "_tmp_extract").exists()
+
+
 def test_install_path_zip_and_disable(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     src = tmp_path / "pkg" / "z-demo"

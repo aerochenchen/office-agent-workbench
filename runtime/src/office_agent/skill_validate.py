@@ -160,7 +160,10 @@ def validate_skill_dir(skill_dir: Path) -> dict[str, Any]:
         result["errors"].append(str(e))
         return result
 
-    skill_id = skill_dir.name
+    # Prefer frontmatter name so temp extract dirs (e.g. _tmp_extract) are not
+    # treated as the skill id. Directory name is only a fallback.
+    frontmatter_name = str(data.get("name") or "").strip()
+    skill_id = frontmatter_name or skill_dir.name
     fm_errors, fm_warnings = _check_frontmatter(data, skill_id)
     result["errors"] = fm_errors + _check_scripts(skill_dir)
     result["warnings"] = fm_warnings + _check_body(body)
