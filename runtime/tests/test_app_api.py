@@ -178,8 +178,11 @@ def test_install_rejects_invalid_package_with_validation(client: TestClient, tmp
     )
     preview = client.post("/skills/inspect", json={"path": str(src)})
     assert preview.status_code == 200
-    assert preview.json()["validation"]["ok"] is False
-    assert any("version" in e for e in preview.json()["validation"]["errors"])
+    body = preview.json()
+    assert body["validation"]["ok"] is False
+    assert any("version" in e for e in body["validation"]["errors"])
+    assert body["can_install_with_fixes"] is True
+    assert any("version=0.1.0" in f for f in body["auto_fixes"])
 
     r = client.post("/skills/install", json={"path": str(src)})
     assert r.status_code == 400
@@ -187,6 +190,29 @@ def test_install_rejects_invalid_package_with_validation(client: TestClient, tmp
     assert isinstance(detail, dict)
     assert any("version" in e for e in detail["errors"])
     assert detail["validation"]["ok"] is False
+
+
+def test_install_with_apply_fixes_fills_missing_fields(client: TestClient, tmp_path: Path):
+    src = tmp_path / "pkg" / "loose-pack"
+    src.mkdir(parents=True)
+    (src / "SKILL.md").write_text(
+        "---\nname: loose-pack\ndescription: 外来包\n---\n\n# body\n",
+        encoding="utf-8",
+    )
+    r = client.post(
+        "/skills/install",
+        json={"path": str(src), "enabled": True, "apply_fixes": True},
+    )
+    assert r.status_code == 200
+    skill = r.json()["skill"]
+    assert skill["id"] == "loose-pack"
+    assert skill["version"] == "0.1.0"
+    assert skill["tier"] == "light"
+    assert skill["display_name"] == "loose-pack"
+    # Source file on disk stays untouched.
+    original = (src / "SKILL.md").read_text(encoding="utf-8")
+    assert "version:" not in original
+
 
 
 def test_post_config_updates_state(client: TestClient, app_state: ProcessState):

@@ -11,7 +11,12 @@ from pathlib import Path
 import yaml
 
 from office_agent.paths import app_data_dir
-from office_agent.skill_validate import validate_skill_dir, validate_skill_text
+from office_agent.skill_validate import (
+    enrich_validation_with_autofix,
+    propose_auto_fixes,
+    validate_skill_dir,
+    validate_skill_text,
+)
 
 
 class SkillError(ValueError):
@@ -199,8 +204,15 @@ class SkillRegistry:
             raise SkillError(f"path not found: {path}")
         if path.is_dir():
             root = _resolve_skill_root(path)
-            meta = parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
-            return meta, validate_skill_dir(root)
+            text = (root / "SKILL.md").read_text(encoding="utf-8")
+            meta = parse_skill_md(text, root)
+            validation = enrich_validation_with_autofix(
+                validate_skill_dir(root),
+                text=text,
+                skill_id=root.name,
+                skill_dir=root,
+            )
+            return meta, validation
         if path.is_file() and path.suffix.lower() == ".zip":
             return self._inspect_zip_with_validation(path)
         if path.is_file() and (path.suffix.lower() == ".md" or path.name == "SKILL.md"):
@@ -208,7 +220,12 @@ class SkillRegistry:
             fallback = path.stem if path.name.lower() != "skill.md" else path.parent.name
             skill_id = _skill_id_from_text(text, fallback)
             meta = parse_skill_md(text, Path(skill_id))
-            return meta, validate_skill_text(text, skill_id)
+            validation = enrich_validation_with_autofix(
+                validate_skill_text(text, skill_id),
+                text=text,
+                skill_id=skill_id,
+            )
+            return meta, validation
         raise SkillError("unsupported package: use a Skill folder, .zip, or .md / SKILL.md")
 
     def _inspect_zip_with_validation(self, zip_path: Path) -> tuple[SkillMeta, dict]:
@@ -217,52 +234,82 @@ class SkillRegistry:
             with zipfile.ZipFile(zip_path, "r") as zf:
                 _safe_extractall(zf, extract)
             root = _resolve_skill_root(extract)
-            meta = parse_skill_md((root / "SKILL.md").read_text(encoding="utf-8"), root)
-            return meta, validate_skill_dir(root)
+            text = (root / "SKILL.md").read_text(encoding="utf-8")
+            meta = parse_skill_md(text, root)
+            validation = enrich_validation_with_autofix(
+                validate_skill_dir(root),
+                text=text,
+                skill_id=root.name,
+                skill_dir=root,
+            )
+            return meta, validation
 
-    def install_path(self, path: Path, *, enabled: bool = True) -> SkillMeta:
+    def install_path(
+        self, path: Path, *, enabled: bool = True, apply_fixes: bool = False
+    ) -> SkillMeta:
         """Install from folder, zip, or single markdown file."""
         path = path.expanduser().resolve()
         if not path.exists():
             raise SkillError(f"path not found: {path}")
         if path.is_dir():
-            meta = self.install_dir(path)
+            meta = self.install_dir(path, apply_fixes=apply_fixes)
         elif path.is_file() and path.suffix.lower() == ".zip":
-            meta = self.install_zip(path)
+            meta = self.install_zip(path, apply_fixes=apply_fixes)
         elif path.is_file() and (path.suffix.lower() == ".md" or path.name == "SKILL.md"):
-            meta = self.install_md(path)
+            meta = self.install_md(path, apply_fixes=apply_fixes)
         else:
             raise SkillError("unsupported package: use a Skill folder, .zip, or .md / SKILL.md")
         self.set_enabled(meta.id, enabled)
         meta.enabled = enabled
         return meta
 
-    def install_dir(self, src: Path) -> SkillMeta:
+    @staticmethod
+    def _apply_fixes_on_dest(dest: Path) -> list[str]:
+        md = dest / "SKILL.md"
+        text = md.read_text(encoding="utf-8")
+        fixed, fixes = propose_auto_fixes(text, dest.name)
+        if fixes:
+            md.write_text(fixed, encoding="utf-8")
+        return fixes
+
+    def install_dir(self, src: Path, *, apply_fixes: bool = False) -> SkillMeta:
         src = _resolve_skill_root(src)
-        _raise_if_invalid(validate_skill_dir(src))
+        validation = validate_skill_dir(src)
+        if not validation.get("ok") and not apply_fixes:
+            _raise_if_invalid(validation)
         meta = parse_skill_md((src / "SKILL.md").read_text(encoding="utf-8"), src)
         dest = self.skills_dir / meta.id
         self.skills_dir.mkdir(parents=True, exist_ok=True)
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(src, dest)
+        if apply_fixes:
+            self._apply_fixes_on_dest(dest)
+        _raise_if_invalid(validate_skill_dir(dest))
         return parse_skill_md((dest / "SKILL.md").read_text(encoding="utf-8"), dest)
 
-    def install_zip(self, zip_path: Path) -> SkillMeta:
+    def install_zip(self, zip_path: Path, *, apply_fixes: bool = False) -> SkillMeta:
         with tempfile.TemporaryDirectory(prefix="oa-skill-install-") as tmp:
             extract = Path(tmp)
             with zipfile.ZipFile(zip_path, "r") as zf:
                 _safe_extractall(zf, extract)
-            return self.install_dir(extract)
+            return self.install_dir(extract, apply_fixes=apply_fixes)
 
-    def install_md(self, md_path: Path) -> SkillMeta:
+    def install_md(self, md_path: Path, *, apply_fixes: bool = False) -> SkillMeta:
         """Install a lightweight prompt-only Skill from a single markdown file."""
         md_path = md_path.resolve()
         text = md_path.read_text(encoding="utf-8")
         fallback = md_path.stem if md_path.name.lower() != "skill.md" else md_path.parent.name
         skill_id = _skill_id_from_text(text, fallback)
         parse_skill_md(text, Path(skill_id))
-        _raise_if_invalid(validate_skill_text(text, skill_id))
+        validation = validate_skill_text(text, skill_id)
+        if not validation.get("ok"):
+            if not apply_fixes:
+                _raise_if_invalid(validation)
+            text, fixes = propose_auto_fixes(text, skill_id)
+            if not fixes:
+                _raise_if_invalid(validation)
+            _raise_if_invalid(validate_skill_text(text, skill_id))
         dest = self.skills_dir / skill_id
         self.skills_dir.mkdir(parents=True, exist_ok=True)
         if dest.exists():

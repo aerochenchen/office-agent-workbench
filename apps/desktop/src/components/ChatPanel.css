@@ -174,7 +174,7 @@
   gap: var(--space-3);
   padding: var(--space-5) var(--space-4);
   text-align: center;
-  max-width: 40em;
+  max-width: 44em;
   margin: 0 auto;
 }
 
@@ -191,8 +191,8 @@
   margin: var(--space-2) 0 0;
   padding: 0;
   width: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
   text-align: left;
 }
@@ -202,6 +202,7 @@
   border: 1px solid var(--line-1);
   border-radius: var(--radius-md);
   background: var(--paper-1);
+  min-width: 0;
 }
 
 .guide-pillar-title {
@@ -563,29 +564,76 @@
   padding: 0 var(--space-3) var(--space-3);
   display: flex;
   gap: var(--space-2);
+  align-items: flex-end;
 }
 
-.chat-attach-btn {
-  align-self: flex-end;
+.chat-input-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  border: 1px solid var(--line-0);
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+  padding: var(--space-1);
+  transition: border-color var(--motion-fast);
+}
+
+.chat-input-shell:focus-within {
+  border-color: var(--accent-teal);
+}
+
+.chat-attach-plus {
   flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 2px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-1);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.chat-attach-plus:hover:not(:disabled) {
+  background: var(--accent-teal-soft);
+  color: var(--accent-teal);
+}
+
+.chat-attach-plus:disabled {
+  color: var(--ink-2);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .chat-input {
   flex: 1 1 auto;
+  min-width: 0;
   resize: none;
-  border: 1px solid var(--line-0);
+  border: none;
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  background: var(--paper-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  background: transparent;
   color: var(--ink-0);
   line-height: 1.5;
 }
 
+.chat-input:focus {
+  outline: none;
+}
+
 .chat-input:disabled {
-  background: var(--paper-1);
   color: var(--ink-2);
 }
 
-.chat-input-row .btn {
-  align-self: flex-end;
+.chat-input-row > .btn {
+  flex: 0 0 auto;
 }

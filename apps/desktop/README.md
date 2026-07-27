@@ -1,6 +1,6 @@
 # 文书通
 
-Tauri 2 + React + TypeScript 桌面壳。定位：**政务文书 · 智能通办**。  
+Tauri 2 + React + TypeScript 桌面壳。定位：**办公文书 · 智能通办**。  
 三栏工作台：会话列表 + 工作区选择 | 对话 | Skill。  
 UI 通过 `src/lib/runtimeClient.ts` 与本地 Python Runtime（`http://127.0.0.1:8765`）通信；
 不直接联网、不直接读写文件系统——所有沙箱与工具调用都在 Runtime 侧完成。

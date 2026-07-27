@@ -155,3 +155,44 @@ def test_validate_ignores_temp_extract_dirname(tmp_path: Path):
     result = validate_skill_dir(skill)
     assert result["ok"] is True
     assert result["errors"] == []
+
+
+def test_propose_auto_fixes_fills_version_tier_display_name():
+    from office_agent.skill_validate import enrich_validation_with_autofix, propose_auto_fixes
+
+    text = "---\nname: loose\ndescription: 外来包\n---\n\n# body\n"
+    fixed, fixes = propose_auto_fixes(text, "loose")
+    assert any("version=0.1.0" in f for f in fixes)
+    assert any("tier=light" in f for f in fixes)
+    assert any("display_name=loose" in f for f in fixes)
+    after = validate_skill_text(fixed, "loose")
+    assert after["ok"] is True
+
+    original = validate_skill_text(text, "loose")
+    enriched = enrich_validation_with_autofix(original, text=text, skill_id="loose")
+    assert enriched["ok"] is False
+    assert enriched["can_install_with_fixes"] is True
+    assert enriched["auto_fixes"]
+
+
+def test_propose_auto_fixes_skips_when_hard_errors_remain(tmp_path: Path):
+    from office_agent.skill_validate import enrich_validation_with_autofix, propose_auto_fixes
+
+    skill = _write_skill(
+        tmp_path / "net-skill",
+        name="net-skill",
+        description="d",
+        # missing version/tier → fixable, but scripts block install
+    )
+    scripts = skill / "scripts"
+    scripts.mkdir()
+    (scripts / "net.py").write_text("import requests\n", encoding="utf-8")
+    text = (skill / "SKILL.md").read_text(encoding="utf-8")
+    _, fixes = propose_auto_fixes(text, skill.name)
+    assert fixes  # still proposes FM fills
+    original = validate_skill_dir(skill)
+    enriched = enrich_validation_with_autofix(
+        original, text=text, skill_id=skill.name, skill_dir=skill
+    )
+    assert enriched["can_install_with_fixes"] is False
+    assert any("requests" in e for e in enriched["validation_after_fixes"]["errors"])

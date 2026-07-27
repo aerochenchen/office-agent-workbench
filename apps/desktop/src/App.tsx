@@ -417,8 +417,8 @@ function App() {
   }, []);
 
   const handleConfirmInstallSkill = useCallback(
-    async (path: string, enabled: boolean) => {
-      await runtimeClient.installSkillWithOptions(path, enabled);
+    async (path: string, enabled: boolean, applyFixes = false) => {
+      await runtimeClient.installSkillWithOptions(path, enabled, applyFixes);
       await refreshSkills();
     },
     [refreshSkills],

@@ -11,7 +11,7 @@ export interface SkillManagerProps {
   onClose: () => void;
   onToggle: (id: string, enabled: boolean) => void;
   onInspect: (path: string) => Promise<SkillInspectResult>;
-  onConfirmInstall: (path: string, enabled: boolean) => Promise<void>;
+  onConfirmInstall: (path: string, enabled: boolean, applyFixes?: boolean) => Promise<void>;
   onUninstall: (id: string) => Promise<void>;
   onRefresh: () => void;
 }
@@ -169,12 +169,12 @@ export default function SkillManager({
     if (path) await beginPreview(path);
   }
 
-  async function confirmInstall(enable: boolean) {
+  async function confirmInstall(enable: boolean, applyFixes = false) {
     if (!previewPath) return;
     setInstalling(true);
     setInstallError(null);
     try {
-      await onConfirmInstall(previewPath, enable);
+      await onConfirmInstall(previewPath, enable, applyFixes);
       setPreview(null);
       setPreviewPath(null);
     } catch (err) {
@@ -355,20 +355,33 @@ export default function SkillManager({
                 ) : null}
               </div>
             </div>
-            {preview.validation.errors.length > 0 && (
+            {preview.validation.errors.length > 0 && !preview.can_install_with_fixes && (
               <ul
                 className="skill-preview-validation skill-preview-validation--error"
-                aria-label="校验错误"
+                aria-label="无法导入的问题"
               >
                 {preview.validation.errors.map((msg) => (
                   <li key={msg}>{msg}</li>
                 ))}
               </ul>
             )}
-            {preview.validation.warnings.length > 0 && (
+            {(preview.auto_fixes?.length ?? 0) > 0 &&
+              preview.validation.errors.length > 0 &&
+              preview.can_install_with_fixes && (
+              <ul
+                className="skill-preview-validation skill-preview-validation--fix"
+                aria-label="可自动修补"
+              >
+                {preview.auto_fixes!.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+            )}
+            {preview.validation.warnings.length > 0 &&
+              !(preview.validation.errors.length > 0 && preview.can_install_with_fixes) && (
               <ul
                 className="skill-preview-validation skill-preview-validation--warn"
-                aria-label="校验警告"
+                aria-label="规范提示"
               >
                 {preview.validation.warnings.map((msg) => (
                   <li key={msg}>{msg}</li>
@@ -382,8 +395,12 @@ export default function SkillManager({
             )}
             <p className="skill-preview-note">
               {preview.validation.errors.length > 0
-                ? "技能包存在校验错误，请修正后重新导入。"
-                : "将安装到本机技能区。可选择「安装并启用」，或仅安装稍后启用。"}
+                ? preview.can_install_with_fixes
+                  ? "缺少部分可推断字段。可一键补全后导入（只写入本机技能区，不改动原文件）。"
+                  : "技能包存在无法自动修补的问题，请按错误修正后重新导入。"
+                : preview.validation.warnings.length > 0
+                  ? "可以导入；下列为推荐规范提示，不影响安装。"
+                  : "将安装到本机技能区。可选择「安装并启用」，或仅安装稍后启用。"}
             </p>
             <div className="skill-preview-actions">
               <button
@@ -397,22 +414,45 @@ export default function SkillManager({
               >
                 取消
               </button>
-              <button
-                type="button"
-                className="btn btn--ghost"
-                disabled={installing || preview.validation.errors.length > 0}
-                onClick={() => void confirmInstall(false)}
-              >
-                仅安装
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={installing || preview.validation.errors.length > 0}
-                onClick={() => void confirmInstall(true)}
-              >
-                {installing ? "安装中…" : "安装并启用"}
-              </button>
+              {preview.validation.errors.length > 0 && preview.can_install_with_fixes ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    disabled={installing}
+                    onClick={() => void confirmInstall(false, true)}
+                  >
+                    修补并仅安装
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    disabled={installing}
+                    onClick={() => void confirmInstall(true, true)}
+                  >
+                    {installing ? "安装中…" : "修补并启用"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    disabled={installing || preview.validation.errors.length > 0}
+                    onClick={() => void confirmInstall(false)}
+                  >
+                    仅安装
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    disabled={installing || preview.validation.errors.length > 0}
+                    onClick={() => void confirmInstall(true)}
+                  >
+                    {installing ? "安装中…" : "安装并启用"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

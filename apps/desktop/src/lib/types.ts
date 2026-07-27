@@ -40,6 +40,10 @@ export interface SkillValidation {
 export interface SkillInspectResult {
   skill: SkillInspect;
   validation: SkillValidation;
+  /** Inferable frontmatter fills (version/tier/display_name). */
+  auto_fixes?: string[];
+  /** True when applying auto_fixes would make the package installable. */
+  can_install_with_fixes?: boolean;
 }
 
 export interface SkillInstallResult {

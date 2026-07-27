@@ -1,0 +1,152 @@
+{
+  "source": "bundled/skills/government-document-format/fixtures/sample.docx",
+  "paragraph_count": 14,
+  "paragraphs": [
+    {
+      "index": 0,
+      "text": "某某市人民政府文件",
+      "stripped": "某某市人民政府文件",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 1,
+      "text": "某某〔2026〕1号",
+      "stripped": "某某〔2026〕1号",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 2,
+      "text": "关于推进政务服务数字化的通知",
+      "stripped": "关于推进政务服务数字化的通知",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 3,
+      "text": "各区县人民政府：",
+      "stripped": "各区县人民政府：",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 4,
+      "text": "为贯彻落实有关要求，现将有关事项通知如下。",
+      "stripped": "为贯彻落实有关要求，现将有关事项通知如下。",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 5,
+      "text": "一、总体要求",
+      "stripped": "一、总体要求",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 6,
+      "text": "坚持系统观念，统筹推进。",
+      "stripped": "坚持系统观念，统筹推进。",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 7,
+      "text": "2.1 贯通业务流程",
+      "stripped": "2.1 贯通业务流程",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 8,
+      "text": "打通部门数据壁垒。",
+      "stripped": "打通部门数据壁垒。",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 9,
+      "text": "2.2 引入智能能力",
+      "stripped": "2.2 引入智能能力",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 10,
+      "text": "1. 建设统一入口",
+      "stripped": "1. 建设统一入口",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 11,
+      "text": "（1）完成身份认证对接",
+      "stripped": "（1）完成身份认证对接",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 12,
+      "text": "某某市人民政府",
+      "stripped": "某某市人民政府",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    },
+    {
+      "index": 13,
+      "text": "2026年7月1日",
+      "stripped": "2026年7月1日",
+      "empty": false,
+      "alignment": null,
+      "style": "Normal"
+    }
+  ],
+  "roles_schema_hint": {
+    "required_fields": [
+      "index",
+      "role"
+    ],
+    "optional_fields": [
+      "text"
+    ],
+    "roles": [
+      "annex_label",
+      "annotation",
+      "attachment_note",
+      "body",
+      "copy_no",
+      "copy_to",
+      "date",
+      "doc_number",
+      "empty",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "main_recipient",
+      "masthead",
+      "print_info",
+      "secrecy",
+      "signature",
+      "signer",
+      "skip",
+      "title",
+      "urgency"
+    ],
+    "note": "空段用 empty；不确定且保持原样用 skip；改标号时填 text"
+  }
+}

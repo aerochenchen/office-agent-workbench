@@ -139,6 +139,7 @@ class OpenWorkspaceBody(BaseModel):
 class InstallSkillBody(BaseModel):
     path: str
     enabled: bool = True
+    apply_fixes: bool = False
 
 
 class SetEnabledBody(BaseModel):
@@ -338,13 +339,21 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 "errors": list(validation.get("errors") or []),
                 "warnings": list(validation.get("warnings") or []),
             },
+            "auto_fixes": list(validation.get("auto_fixes") or []),
+            "can_install_with_fixes": bool(
+                validation.get("can_install_with_fixes")
+                if "can_install_with_fixes" in validation
+                else validation.get("ok")
+            ),
         }
 
     @app.post("/skills/install")
     def install_skill(body: InstallSkillBody) -> dict[str, Any]:
         src = Path(body.path).expanduser()
         try:
-            meta = office.registry.install_path(src, enabled=body.enabled)
+            meta = office.registry.install_path(
+                src, enabled=body.enabled, apply_fixes=body.apply_fixes
+            )
         except SkillError as e:
             raise HTTPException(status_code=400, detail=_skill_error_detail(e)) from e
         # Allow a fresh localize attempt after (re)install

@@ -184,3 +184,88 @@ def validate_skill_text(text: str, skill_id: str) -> dict[str, Any]:
     result["warnings"] = fm_warnings + _check_body(body)
     result["ok"] = not result["errors"]
     return result
+
+
+def propose_auto_fixes(text: str, skill_id: str) -> tuple[str, list[str]]:
+    """Fill a few missing frontmatter fields. Returns (new_text, human-readable fixes).
+
+    Only patches safe, inferable gaps: version, tier, display_name.
+    Does not touch name/description/permissions/scripts.
+    """
+    try:
+        data, body = _parse_frontmatter(text)
+    except ValueError:
+        return text, []
+
+    fixes: list[str] = []
+    if not str(data.get("version") or "").strip():
+        data["version"] = "0.1.0"
+        fixes.append("补全 version=0.1.0")
+    if not str(data.get("tier") or "").strip():
+        data["tier"] = "light"
+        fixes.append("补全 tier=light")
+    if not str(data.get("display_name") or "").strip():
+        name = str(data.get("name") or skill_id).strip() or skill_id
+        data["display_name"] = name
+        fixes.append(f"补全 display_name={name}")
+
+    if not fixes:
+        return text, []
+
+    dumped = yaml.safe_dump(
+        data,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+    )
+    return f"---\n{dumped}---\n{body}", fixes
+
+
+def _validation_after_frontmatter_fix(
+    skill_id: str,
+    fixed_text: str,
+    *,
+    skill_dir: Path | None = None,
+) -> dict[str, Any]:
+    result = _empty_result()
+    try:
+        data, body = _parse_frontmatter(fixed_text)
+    except ValueError as e:
+        result["errors"].append(str(e))
+        return result
+    fm_errors, fm_warnings = _check_frontmatter(data, skill_id)
+    script_errors = _check_scripts(skill_dir) if skill_dir is not None else []
+    result["errors"] = fm_errors + script_errors
+    result["warnings"] = fm_warnings + _check_body(body)
+    result["ok"] = not result["errors"]
+    return result
+
+
+def enrich_validation_with_autofix(
+    validation: dict[str, Any],
+    *,
+    text: str,
+    skill_id: str,
+    skill_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Attach auto_fixes / can_install_with_fixes to a validation payload."""
+    fixed_text, fixes = propose_auto_fixes(text, skill_id)
+    if not fixes:
+        return {
+            **validation,
+            "auto_fixes": [],
+            "can_install_with_fixes": bool(validation.get("ok")),
+        }
+    after = _validation_after_frontmatter_fix(
+        skill_id, fixed_text, skill_dir=skill_dir
+    )
+    return {
+        **validation,
+        "auto_fixes": fixes,
+        "can_install_with_fixes": bool(after.get("ok")),
+        "validation_after_fixes": {
+            "ok": bool(after.get("ok")),
+            "errors": list(after.get("errors") or []),
+            "warnings": list(after.get("warnings") or []),
+        },
+    }

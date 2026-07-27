@@ -304,6 +304,12 @@
   border: 1px solid #e8c4c0;
 }
 
+.skill-preview-validation--fix {
+  color: var(--accent-teal);
+  background: var(--accent-teal-soft);
+  border: 1px solid #c5d9d2;
+}
+
 .skill-preview-validation--warn {
   color: var(--status-warn);
   background: #f7f1e6;

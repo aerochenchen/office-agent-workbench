@@ -10,7 +10,7 @@ interface Props {
   collapsed: boolean;
   onToggle: (id: string, enabled: boolean) => void;
   onInspect: (path: string) => Promise<SkillInspectResult>;
-  onConfirmInstall: (path: string, enabled: boolean) => Promise<void>;
+  onConfirmInstall: (path: string, enabled: boolean, applyFixes?: boolean) => Promise<void>;
   onUninstall: (id: string) => Promise<void>;
   onRefresh: () => void;
 }

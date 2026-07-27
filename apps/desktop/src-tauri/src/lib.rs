@@ -1,4 +1,4 @@
-// 文书通 — Tauri 桌面壳（政务文书 · 智能通办）
+// 文书通 — Tauri 桌面壳（办公文书 · 智能通办）
 //
 // Responsibilities:
 // 1. Expose `pick_folder` / `pick_skill_file` for native dialogs.

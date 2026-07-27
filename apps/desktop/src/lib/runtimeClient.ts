@@ -490,10 +490,14 @@ export const runtimeClient = {
     });
   },
 
-  installSkillWithOptions(path: string, enabled: boolean): Promise<SkillInstallResult> {
+  installSkillWithOptions(
+    path: string,
+    enabled: boolean,
+    applyFixes = false,
+  ): Promise<SkillInstallResult> {
     return request("/skills/install", {
       method: "POST",
-      body: JSON.stringify({ path, enabled }),
+      body: JSON.stringify({ path, enabled, apply_fixes: applyFixes }),
     });
   },
 

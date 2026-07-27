@@ -233,7 +233,11 @@ export default function ChatPanel({
     if (!workspacePath) return;
     const { accepted, rejected } = filterPathsUnderWorkspace(paths, workspacePath);
     if (rejected.length > 0) {
-      setAttachHint(`已忽略 ${rejected.length} 个不在工作区内的路径`);
+      setAttachHint(
+        accepted.length > 0
+          ? `已忽略 ${rejected.length} 个文件：只能附加当前工作区内的文件`
+          : "无法附加：所选文件不在当前工作区内，请只选择工作区文件夹内的文件",
+      );
     } else {
       setAttachHint(null);
     }
@@ -260,7 +264,7 @@ export default function ChatPanel({
     }
     const picked = await pickFiles({
       defaultPath: workspacePath,
-      title: "选择工作区内的附件",
+      title: "选择工作区内的文件（工作区外无法附加）",
     });
     if (picked === null) return;
     mergeAccepted(picked);
@@ -397,7 +401,7 @@ export default function ChatPanel({
         {pasteOpen && (
           <div className="attach-paste">
             <label className="attach-paste-label" htmlFor="attach-paste-input">
-              浏览器模式：粘贴工作区内绝对路径（一行一个）
+              浏览器模式：粘贴工作区内绝对路径（一行一个；工作区外无法附加）
             </label>
             <textarea
               id="attach-paste-input"
@@ -438,45 +442,48 @@ export default function ChatPanel({
             void submit();
           }}
         >
-          <button
-            type="button"
-            className="btn btn--ghost chat-attach-btn"
-            disabled={disabled}
-            title={
-              !runtimeReady
-                ? "本地运行时未就绪"
-                : !workspaceOpen
-                  ? "请先打开工作区"
-                  : isTauriRuntime()
-                    ? "选择工作区内文件作为附件"
-                    : "粘贴工作区内绝对路径"
-            }
-            onClick={() => void handleAttachClick()}
-          >
-            附件
-          </button>
-          <textarea
-            className="chat-input"
-            placeholder={
-              !runtimeReady
-                ? "本地运行时未就绪…"
-                : sending
-                  ? "处理中，完成后可继续…"
-                  : workspaceOpen
-                    ? "输入指令，Enter 发送，Shift+Enter 换行"
-                    : "请先打开工作区"
-            }
-            value={draft}
-            disabled={!workspaceOpen || sending || !runtimeReady}
-            rows={2}
-            onChange={(e) => setDraft(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void submit();
+          <div className="chat-input-shell">
+            <button
+              type="button"
+              className="chat-attach-plus"
+              disabled={disabled}
+              aria-label="添加工作区内文件"
+              title={
+                !runtimeReady
+                  ? "本地运行时未就绪"
+                  : !workspaceOpen
+                    ? "请先打开工作区"
+                    : isTauriRuntime()
+                      ? "添加工作区内文件"
+                      : "粘贴工作区内绝对路径"
               }
-            }}
-          />
+              onClick={() => void handleAttachClick()}
+            >
+              +
+            </button>
+            <textarea
+              className="chat-input"
+              placeholder={
+                !runtimeReady
+                  ? "本地运行时未就绪…"
+                  : sending
+                    ? "处理中，完成后可继续…"
+                    : workspaceOpen
+                      ? "输入指令，Enter 发送，Shift+Enter 换行"
+                      : "请先打开工作区"
+              }
+              value={draft}
+              disabled={!workspaceOpen || sending || !runtimeReady}
+              rows={2}
+              onChange={(e) => setDraft(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submit();
+                }
+              }}
+            />
+          </div>
           {sending ? (
             <button type="button" className="btn btn--ghost" onClick={() => onStop?.()}>
               停止
