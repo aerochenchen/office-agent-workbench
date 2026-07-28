@@ -75,6 +75,8 @@ Windows NSIS `文书通_*-setup.exe`、macOS 内测 DMG（未公证）均含 Run
 .\scripts\build-windows.ps1
 ```
 
+无 Windows 本机时：GitHub **Actions** → **Build Windows Installer** → **Run workflow**，完成后从 Artifacts 下载 `*-setup.exe`。
+
 ```bash
 # macOS — 仓库根目录
 ./scripts/build-macos.sh

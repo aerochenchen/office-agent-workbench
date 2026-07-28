@@ -57,6 +57,17 @@
 apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
 ```
 
+### 用 GitHub Actions 打安装包（无需本机 Windows）
+
+仓库提供手动触发流水线 [`.github/workflows/build-windows.yml`](../.github/workflows/build-windows.yml)：
+
+1. 将代码推到 GitHub。
+2. 打开仓库 **Actions** → **Build Windows Installer** → **Run workflow**（选分支后运行）。
+3. 等待 `windows-latest` 跑完 `.\scripts\build-windows.ps1`。
+4. 在该次 run 页面底部 **Artifacts** 下载 `wenshutong-windows-nsis`（内含 `*-setup.exe`；默认保留 14 天）。
+
+也可在本机用 GitHub CLI：`gh workflow run "Build Windows Installer"`，完成后 `gh run download`。
+
 验收步骤见 [VERIFY-windows.md](./VERIFY-windows.md)。
 
 ## macOS 内测 DMG
