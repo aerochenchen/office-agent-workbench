@@ -548,7 +548,6 @@ function App() {
           runtimeReady={runtimeReady}
           onSend={handleSend}
           onStop={() => void handleStop()}
-          onOpenWorkspace={handlePickFolder}
           onToggleSteps={handleToggleSteps}
         />
 
