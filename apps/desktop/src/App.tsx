@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
+import { MODEL_SETUP_REPLY } from "./lib/guide";
 import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
 import {
   deriveRuntimeStatus,
@@ -172,21 +173,28 @@ function App() {
       try {
         const res = await runtimeClient.openWorkspace(path);
         setWorkspacePath(res.path);
+        // 第一期取舍：入门对话非空时保留界面 messages，只把 sessionId 切到文件夹会话，
+        // 使后续发送走沙箱；入门轮次不写入该会话历史。无对话时再加载文件夹会话。
+        const retainUiMessages = messages.length > 0;
         const list = await refreshSessions(res.path);
         if (list.length > 0) {
           setSessionId(list[0].id);
-          await loadSessionMessages(list[0].id);
+          if (!retainUiMessages) {
+            await loadSessionMessages(list[0].id);
+          }
         } else {
           const created = await runtimeClient.createSession(res.path);
           setSessionId(created.session.id);
-          setMessages([]);
+          if (!retainUiMessages) {
+            setMessages([]);
+          }
           await refreshSessions(res.path);
         }
       } catch (err) {
         setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开文件夹失败");
       }
     },
-    [runtimeReady, loadSessionMessages, refreshSessions],
+    [runtimeReady, loadSessionMessages, refreshSessions, messages.length],
   );
 
   const handlePickFolder = useCallback(async () => {
@@ -269,16 +277,28 @@ function App() {
 
   const handleSend = useCallback(
     async (text: string, attachedPaths: string[] = []) => {
-      if (!workspacePath || !runtimeReady) return;
+      if (!runtimeReady) return;
+
+      const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
+      const assistantId = nextId();
+
+      // 无 Key：直接展示固定引导，避免 pending 闪烁，也不调用 chatStream。
+      if (!config.api_key_set) {
+        setMessages((prev) => [
+          ...prev,
+          userMsg,
+          { id: assistantId, role: "assistant", content: MODEL_SETUP_REPLY, phase: "done" },
+        ]);
+        return;
+      }
+
       let activeId = sessionIdRef.current;
       if (!activeId) {
-        const created = await runtimeClient.createSession(workspacePath);
+        const created = await runtimeClient.createSession(workspacePath ?? undefined);
         activeId = created.session.id;
         setSessionId(activeId);
       }
 
-      const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
-      const assistantId = nextId();
       const pendingMsg: ChatMessage = {
         id: assistantId,
         role: "assistant",
@@ -294,6 +314,9 @@ function App() {
       const patchAssistant = (updater: (m: ChatMessage) => ChatMessage) => {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? updater(m) : m)));
       };
+
+      const isModelSetupError = (message: string) =>
+        /API Key|未配置|api key|401|403|连接/i.test(message);
 
       try {
         const stream = runtimeClient.chatStream(
@@ -365,10 +388,19 @@ function App() {
                 stepsExpanded: false,
                 statusPhase: "finishing",
               }));
-              void refreshSessions(workspacePath);
+              if (workspacePath) void refreshSessions(workspacePath);
             },
             onError: (message) => {
               setPermissionRequest(null);
+              if (isModelSetupError(message)) {
+                patchAssistant(() => ({
+                  id: assistantId,
+                  role: "assistant",
+                  content: MODEL_SETUP_REPLY,
+                  phase: "done",
+                }));
+                return;
+              }
               patchAssistant(() => ({
                 id: assistantId,
                 role: "error",
@@ -384,7 +416,7 @@ function App() {
         setSending(false);
       }
     },
-    [workspacePath, runtimeReady, refreshSessions],
+    [workspacePath, runtimeReady, refreshSessions, config.api_key_set],
   );
 
   const handleStop = useCallback(async () => {
