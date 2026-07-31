@@ -253,8 +253,6 @@ fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
             log_line(&format!(
                 "[office-agent] auto-started packaged runtime from {sidecar:?}"
             ));
-            // Give uvicorn a moment before the UI's first health check.
-            std::thread::sleep(Duration::from_millis(800));
             Some(c)
         }
         Err(e) => {
@@ -345,8 +343,16 @@ pub fn run() {
         .setup(|app| {
             let api_token = generate_runtime_token();
             app.manage(RuntimeAuthToken(Mutex::new(api_token.clone())));
-            let child = try_spawn_runtime(app.handle(), &api_token);
-            app.manage(RuntimeProcess(Mutex::new(child)));
+            app.manage(RuntimeProcess(Mutex::new(None)));
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let child = try_spawn_runtime(&handle, &api_token);
+                if let Some(state) = handle.try_state::<RuntimeProcess>() {
+                    if let Ok(mut guard) = state.0.lock() {
+                        *guard = child;
+                    }
+                }
+            });
             Ok(())
         });
 
@@ -359,6 +365,8 @@ pub fn run() {
                     if let Ok(mut guard) = state.0.lock() {
                         if let Some(mut child) = guard.take() {
                             stop_child(&mut child);
+                        } else {
+                            request_runtime_shutdown();
                         }
                     }
                 }
