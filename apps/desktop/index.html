@@ -5,10 +5,127 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/logo-mark.png" />
     <title>文书通</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #f3f4f1;
+        color: #1a1a1a;
+        text-align: center;
+        padding: 2rem;
+      }
+
+      .boot-splash__brand {
+        font-size: 2rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        margin: 0 0 1rem;
+      }
+
+      .boot-splash__status {
+        font-size: 1rem;
+        color: #4b5563;
+        margin: 0 0 2.5rem;
+      }
+
+      .boot-splash__carousel {
+        width: min(22rem, 90vw);
+        min-height: 4.5rem;
+        position: relative;
+      }
+
+      .boot-splash__slide {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transition: opacity 400ms ease;
+      }
+
+      .boot-splash__slide.is-active {
+        opacity: 1;
+      }
+
+      .boot-splash__title {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.35rem;
+      }
+
+      .boot-splash__summary {
+        font-size: 0.95rem;
+        color: #6b7280;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      .boot-splash--done {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 200ms ease-out;
+      }
+    </style>
   </head>
 
   <body>
+    <div id="boot-splash" class="boot-splash">
+      <h1 class="boot-splash__brand">文书通</h1>
+      <p class="boot-splash__status">正在启动本地运行组件…</p>
+      <div class="boot-splash__carousel" id="boot-splash-carousel"></div>
+    </div>
     <div id="root"></div>
+    <script>
+      (function () {
+        var PILLARS = [
+          { title: "本地可控", summary: "材料在文件夹里办，用什么模型自己定。" },
+          { title: "轻量可跑", summary: "标准包轻，老旧机也能用。" },
+          { title: "方法沉淀", summary: "好流程变成可复用技能。" },
+          { title: "能力插拔", summary: "专项技能可安装、可分享。" }
+        ];
+        var carousel = document.getElementById("boot-splash-carousel");
+        if (!carousel) return;
+
+        var slides = PILLARS.map(function (p) {
+          var slide = document.createElement("div");
+          slide.className = "boot-splash__slide";
+          slide.innerHTML =
+            '<p class="boot-splash__title">' +
+            p.title +
+            '</p><p class="boot-splash__summary">' +
+            p.summary +
+            "</p>";
+          carousel.appendChild(slide);
+          return slide;
+        });
+
+        var index = 0;
+        function showSlide(i) {
+          slides.forEach(function (s, j) {
+            s.classList.toggle("is-active", j === i);
+          });
+        }
+        showSlide(0);
+        setInterval(function () {
+          index = (index + 1) % slides.length;
+          showSlide(index);
+        }, 2800);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   FORBIDDEN_USER_TERMS,
@@ -6,6 +9,8 @@ import {
   isModelSetupError,
   MODEL_SETUP_REPLY,
 } from "./guide";
+
+const here = fileURLToPath(new URL(".", import.meta.url));
 
 function collectUserCopy(): string[] {
   return [
@@ -32,6 +37,15 @@ describe("guide copy", () => {
   it("emptyChat invites chatting first", () => {
     expect(GUIDE_HINTS.emptyChat.length).toBeGreaterThan(8);
     expect(GUIDE_HINTS.emptyChat).toMatch(/问|聊|试/);
+  });
+
+  it("index.html boot splash mirrors GUIDE_PILLARS title+summary", () => {
+    const html = readFileSync(resolve(here, "../../index.html"), "utf8");
+    for (const p of GUIDE_PILLARS) {
+      expect(html, p.title).toContain(p.title);
+      expect(html, p.summary).toContain(p.summary);
+    }
+    expect(html).toContain("正在启动本地运行组件");
   });
 });
 
