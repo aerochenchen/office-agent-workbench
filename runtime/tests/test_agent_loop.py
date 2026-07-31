@@ -8,7 +8,12 @@ from typing import Any
 
 import pytest
 
-from office_agent.agent_loop import TOOL_SCHEMAS, run_agent
+from office_agent.agent_loop import (
+    TOOL_SCHEMAS,
+    _build_onboarding_system_prompt,
+    _build_system_prompt,
+    run_agent,
+)
 from office_agent.skills import SkillRegistry
 from office_agent.tools import ToolExecutor
 from office_agent.workspace import Workspace
@@ -96,6 +101,25 @@ def test_tool_schema_names_match_executor():
         "finish",
     }
     assert names == expected
+
+
+def test_onboarding_prompt_local_colleague_tone_and_boundaries():
+    text = _build_onboarding_system_prompt()
+    assert "本地使用" in text
+    assert "不联网" in text
+    assert "打开文件夹" in text
+    assert "机关同事" in text or "当面交代" in text
+    assert "内网使用" not in text
+    assert "自然口语" not in text
+    assert "禁止" in text and "贴肉" in text  # ban-list example, not endorsement
+    assert "不是外网搜索" in text
+
+
+def test_work_prompt_includes_local_use_and_colleague_tone():
+    text = _build_system_prompt([])
+    assert "本地使用" in text
+    assert "不联网" in text
+    assert "内网使用" not in text
 
 
 def test_system_prompt_requires_reading_skill_body(tmp_path: Path, monkeypatch):
