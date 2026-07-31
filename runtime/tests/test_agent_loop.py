@@ -309,3 +309,90 @@ def test_on_event_emits_tool_and_status(tmp_path: Path, monkeypatch):
     assert start["id"] == "c1"
     done = next(e for e in events if e["type"] == "tool_done")
     assert done["ok"] is True
+
+
+def test_onboarding_passes_tools_none_to_gateway(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    gateway = FakeGateway(responses=[_completion(content="我是入门助手")])
+    result = run_agent(
+        user_message="你能做什么？",
+        attached_paths=[],
+        gateway=gateway,
+        tools=None,
+        catalog=[],
+        max_steps=3,
+        onboarding=True,
+    )
+    assert result.final_text == "我是入门助手"
+    assert result.tool_events == []
+    assert len(gateway.chat_calls) == 1
+    assert gateway.chat_calls[0]["tools"] is None
+
+
+def test_onboarding_ignores_tool_calls_without_orphans_or_side_effects(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    marker = ws / "should-not-exist.txt"
+
+    class SpyExecutor(ToolExecutor):
+        def __init__(self) -> None:
+            super().__init__(Workspace(ws), SkillRegistry(), permission_mode="trust")
+            self.execute_calls: list[tuple[str, dict[str, Any]]] = []
+
+        def execute(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
+            self.execute_calls.append((name, args))
+            if name == "workspace_write":
+                marker.write_text("leaked", encoding="utf-8")
+            return super().execute(name, args)
+
+    spy = SpyExecutor()
+    gateway = FakeGateway(
+        responses=[
+            _completion(
+                content="先打开文件夹吧",
+                tool_calls=[
+                    _tool_call(
+                        "c1",
+                        "workspace_write",
+                        {"path": "should-not-exist.txt", "content": "leaked"},
+                    )
+                ],
+            )
+        ]
+    )
+    result = run_agent(
+        user_message="写入文件",
+        attached_paths=[],
+        gateway=gateway,
+        tools=spy,
+        catalog=[],
+        max_steps=5,
+        onboarding=True,
+    )
+
+    assert gateway.chat_calls[0]["tools"] is None
+    assert result.tool_events == []
+    assert spy.execute_calls == []
+    assert not marker.exists()
+    assert "打开文件夹" in result.final_text or result.final_text == "先打开文件夹吧"
+
+    # No orphan tool_calls: every assistant tool_call id has a tool result.
+    pending: set[str] = set()
+    answered: set[str] = set()
+    for msg in result.messages:
+        if msg.get("role") == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                if isinstance(tc, dict) and tc.get("id"):
+                    pending.add(str(tc["id"]))
+        elif msg.get("role") == "tool":
+            tc_id = msg.get("tool_call_id")
+            if tc_id:
+                answered.add(str(tc_id))
+    assert pending <= answered
+    tool_msgs = [m for m in result.messages if m.get("role") == "tool"]
+    assert any("onboarding" in str(m.get("content", "")) for m in tool_msgs)

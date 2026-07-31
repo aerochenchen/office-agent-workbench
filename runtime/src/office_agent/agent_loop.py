@@ -469,6 +469,11 @@ def run_agent(
 
             if message.tool_calls:
                 if onboarding or tools is None:
+                    # Keep history well-formed: never leave assistant tool_calls
+                    # without matching tool results (same pattern as cancel path).
+                    _complete_orphan_tool_calls(
+                        messages, content="onboarding: tools unavailable"
+                    )
                     final_text = (message.content or "").strip() or (
                         "请先在界面打开文件夹后再继续。"
                     )
