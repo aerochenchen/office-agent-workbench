@@ -97,7 +97,7 @@ packaging/dist/mac/*.dmg          # 脚本额外拷贝的便捷路径
 ### 安装与运行（终端用户）
 
 1. 双击 `*-setup.exe`（默认当前用户安装）。  
-2. 若本机无 WebView2，安装器会走 **嵌入式 bootstrapper**（不依赖安装时访问公网下载页；仍建议机关镜像预装 WebView2）。  
+2. 安装包使用 **WebView2 Fixed Runtime**（随应用捆绑，内网无需再装系统 WebView2，也不依赖安装时访问微软 CDN）。  
 3. 启动「文书通」：壳自动拉起 sidecar（`127.0.0.1:8765`）。  
 4. 用户数据与会话在 `%USERPROFILE%\.office-agent\`；**卸载安装包不会删除**该目录。  
 5. 额外 Skill 通过 Tauri 桌面端 UI「导入技能」（文件夹 / zip / md）安装，不影响标准包体积。
@@ -105,7 +105,8 @@ packaging/dist/mac/*.dmg          # 脚本额外拷贝的便捷路径
 ### 体积与基线
 
 - **最低**：Windows 10+，约 **4GB** 内存 — 底座对话 + 轻量 Skill。  
-- 安装包体积主要来自 PyInstaller Runtime + WebView2 bootstrapper；发版前在构建机记录实际 MB 数。  
+- 安装包体积主要来自 PyInstaller Runtime + **WebView2 Fixed Runtime（约 +180MB）**；发版前在构建机 / CI 记录实际 MB 数。  
+- 远端构建：GitHub Actions → **Build Windows Installer**（`workflow_dispatch`），产物 Artifact 名 `wenshutong-windows-nsis-fixed-runtime`。  
 - 启用重量级写作 RAG 请改用 [写作 RAG 可选包](./README-writing-rag-optional.md)（建议 **8GB** 内存）。
 
 ## 开发态（非安装包）

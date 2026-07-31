@@ -11,13 +11,15 @@
   4. npm + tauri build (NSIS only)
 
 .NOTES
-  Requires: Python 3.11+, Node.js/npm, Rust toolchain, WebView2 SDK bits via Tauri.
+  Requires: Python 3.11+, Node.js/npm, Rust toolchain.
+  Fetches WebView2 Fixed Version Runtime into src-tauri/webview2-fixed (Tauri fixedRuntime).
   Run from anywhere; script resolves the repo root from its own path.
 #>
 [CmdletBinding()]
 param(
     [switch]$SkipSidecar,
     [switch]$SkipTauri,
+    [switch]$SkipWebView2Fixed,
     [switch]$Clean
 )
 
@@ -162,6 +164,23 @@ function Build-Tauri {
     }
 }
 
+function Ensure-WebView2Fixed {
+    Write-Step "WebView2 Fixed Runtime (for Tauri fixedRuntime)"
+    $fetch = Join-Path $PSScriptRoot "fetch-webview2-fixed-runtime.ps1"
+    if (-not (Test-Path $fetch)) {
+        throw "Missing $fetch"
+    }
+    & $fetch
+    if ($LASTEXITCODE -ne 0) {
+        throw "fetch-webview2-fixed-runtime.ps1 failed with exit $LASTEXITCODE"
+    }
+    $fixedExe = Get-ChildItem -Path (Join-Path $SrcTauri "webview2-fixed") -Filter "msedgewebview2.exe" -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $fixedExe) {
+        throw "webview2-fixed missing msedgewebview2.exe under $SrcTauri"
+    }
+}
+
 Ensure-Python
 if (-not $SkipSidecar) {
     Ensure-Venv
@@ -170,6 +189,13 @@ if (-not $SkipSidecar) {
 }
 elseif (-not (Test-Path (Join-Path $StagedRuntime "office-agent-runtime.exe"))) {
     throw "SkipSidecar set but staged runtime missing. Run without -SkipSidecar first."
+}
+
+if (-not $SkipWebView2Fixed) {
+    Ensure-WebView2Fixed
+}
+elseif (-not (Get-ChildItem -Path (Join-Path $SrcTauri "webview2-fixed") -Filter "msedgewebview2.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+    throw "SkipWebView2Fixed set but webview2-fixed is incomplete. Run without -SkipWebView2Fixed first."
 }
 
 if (-not $SkipTauri) {

@@ -45,7 +45,7 @@ tauri build (targets: nsis) ──► 文书通_*_x64-setup.exe
 
 包内组件与 `packaging/README-standard.md` 一致：桌面壳、Runtime sidecar、预置轻量 Skill；**不含** `optional-skills/gongwen-rag-writing` 与 Torch 等重依赖。
 
-安装行为保持现状：`installMode: currentUser`；WebView2 使用 `embedBootstrapper`；用户数据在 `%USERPROFILE%\.office-agent\`，卸载不删该目录。
+安装行为保持现状：`installMode: currentUser`；WebView2 使用 `fixedRuntime`（随包捆绑 Fixed Version，内网可离线安装）；用户数据在 `%USERPROFILE%\.office-agent\`，卸载不删该目录。
 
 ---
 

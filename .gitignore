@@ -31,6 +31,10 @@ apps/desktop/src-tauri/icons/android/
 packaging/.venv/
 packaging/build/
 packaging/dist/
+packaging/webview2-fixed-download/
+
+# WebView2 Fixed Version Runtime (fetched by scripts/fetch-webview2-fixed-runtime.ps1)
+apps/desktop/src-tauri/webview2-fixed/
 
 
 # Heavy optional model weights (keep skill code)

@@ -1,6 +1,6 @@
-# Manual Windows NSIS installer build (文书通_*-setup.exe).
+# Manual Windows NSIS installer build (文书通_*-setup.exe) with WebView2 fixedRuntime.
 # Trigger: Actions → Build Windows Installer → Run workflow
-# Download: run summary → Artifacts → wenshutong-windows-nsis
+# Download: run summary → Artifacts → wenshutong-windows-nsis-fixed-runtime
 name: Build Windows Installer
 
 on:
@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
@@ -40,6 +40,12 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
 
+      - name: Cache WebView2 Fixed Runtime cab
+        uses: actions/cache@v4
+        with:
+          path: packaging/webview2-fixed-download/*.cab
+          key: webview2-fixed-150.0.4078.105-x64
+
       - name: Ensure Git Bash on PATH
         shell: pwsh
         run: |
@@ -49,14 +55,22 @@ jobs:
           }
           Add-Content -Path $env:GITHUB_PATH -Value $gitBin
 
-      - name: Build Windows NSIS installer
+      - name: Build Windows NSIS installer (fixedRuntime)
         shell: pwsh
         run: .\scripts\build-windows.ps1
+
+      - name: Report installer size
+        shell: pwsh
+        run: |
+          Get-ChildItem "apps\desktop\src-tauri\target\release\bundle\nsis\*-setup.exe" |
+            ForEach-Object {
+              "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB)
+            }
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wenshutong-windows-nsis
+          name: wenshutong-windows-nsis-fixed-runtime
           path: apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 14
