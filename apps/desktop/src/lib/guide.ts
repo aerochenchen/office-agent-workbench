@@ -57,4 +57,9 @@ export const GUIDE_HINTS = {
 
 export const MODEL_SETUP_REPLY =
   "要开始对话，需要先连上大模型。请打开右上角「设置」，填写 API 地址、API Key（密钥）和模型名。" +
-  "材料仍在你的本机；配置的是你自己的接口。配好后，直接在下方再发一句即可。";
+    "材料仍在你的本机；配置的是你自己的接口。配好后，直接在下方再发一句即可。";
+
+/** Model/auth setup failures → show MODEL_SETUP_REPLY; not runtime connectivity. */
+export function isModelSetupError(message: string): boolean {
+  return /API Key|未配置|api key|401|403/i.test(message);
+}

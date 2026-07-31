@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
-import { MODEL_SETUP_REPLY } from "./lib/guide";
+import { isModelSetupError, MODEL_SETUP_REPLY } from "./lib/guide";
 import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
 import {
   deriveRuntimeStatus,
@@ -173,22 +173,24 @@ function App() {
       try {
         const res = await runtimeClient.openWorkspace(path);
         setWorkspacePath(res.path);
-        // 第一期取舍：入门对话非空时保留界面 messages，只把 sessionId 切到文件夹会话，
-        // 使后续发送走沙箱；入门轮次不写入该会话历史。无对话时再加载文件夹会话。
+        // 第一期取舍：入门对话非空时保留界面 messages，并新建文件夹会话（勿复用 list[0]，
+        // 否则 UI 消息与磁盘会话错配）；入门轮次不写入该会话历史。无对话时再加载/创建。
         const retainUiMessages = messages.length > 0;
-        const list = await refreshSessions(res.path);
-        if (list.length > 0) {
-          setSessionId(list[0].id);
-          if (!retainUiMessages) {
-            await loadSessionMessages(list[0].id);
-          }
-        } else {
+        if (retainUiMessages) {
           const created = await runtimeClient.createSession(res.path);
           setSessionId(created.session.id);
-          if (!retainUiMessages) {
-            setMessages([]);
-          }
           await refreshSessions(res.path);
+        } else {
+          const list = await refreshSessions(res.path);
+          if (list.length > 0) {
+            setSessionId(list[0].id);
+            await loadSessionMessages(list[0].id);
+          } else {
+            const created = await runtimeClient.createSession(res.path);
+            setSessionId(created.session.id);
+            setMessages([]);
+            await refreshSessions(res.path);
+          }
         }
       } catch (err) {
         setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开文件夹失败");
@@ -292,9 +294,11 @@ function App() {
         return;
       }
 
+      // 无文件夹时勿 POST /sessions（仍 require_workspace）；省略 session_id，
+      // 由 Runtime _prepare_chat → create_session("")，再在 onStarted/onFinal 写入。
       let activeId = sessionIdRef.current;
-      if (!activeId) {
-        const created = await runtimeClient.createSession(workspacePath ?? undefined);
+      if (!activeId && workspacePath) {
+        const created = await runtimeClient.createSession(workspacePath);
         activeId = created.session.id;
         setSessionId(activeId);
       }
@@ -314,9 +318,6 @@ function App() {
       const patchAssistant = (updater: (m: ChatMessage) => ChatMessage) => {
         setMessages((prev) => prev.map((m) => (m.id === assistantId ? updater(m) : m)));
       };
-
-      const isModelSetupError = (message: string) =>
-        /API Key|未配置|api key|401|403|连接/i.test(message);
 
       try {
         const stream = runtimeClient.chatStream(
