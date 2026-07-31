@@ -3,9 +3,6 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse
 
-from openai import OpenAI
-from httpx import Timeout
-
 from office_agent.config import AppConfig
 
 
@@ -15,6 +12,9 @@ class GatewayError(ValueError):
 
 class ModelGateway:
     def __init__(self, cfg: AppConfig) -> None:
+        from httpx import Timeout
+        from openai import OpenAI
+
         self._cfg = cfg
         self.assert_allowed()
         api_key = (cfg.api_key or "").strip()
