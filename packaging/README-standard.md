@@ -8,7 +8,7 @@
 |------|------|
 | `apps/desktop/` | Tauri 2 + React 工作台（工作区、对话、Skill 面板） |
 | `runtime/` | 本地 Python Runtime（FastAPI，127.0.0.1），轻量 `requirements.txt` |
-| `bundled/skills/` | 预置轻量 Skill（`tier: light`）：`government-document-format` 公文排版、`multidoc-digest` 批量文档整理、`skill-builder` 创建技能 |
+| `bundled/skills/` | 预置轻量 Skill（`tier: light`）：`government-document-format` 公文排版、`multidoc-digest` 批量文档整理、`office-visual-design` 办公视觉设计、`skill-builder` 创建技能 |
 | `bundled/shared-scripts/` | 与轻量 Skill 配套的共享脚本（如排版占位/实现） |
 
 标准包**不包含** `optional-skills/gongwen-rag-writing/`、离线 embedding 模型或 Torch 运行时。
