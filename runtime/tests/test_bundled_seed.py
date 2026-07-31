@@ -16,14 +16,18 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     ids = {s["id"] for s in skills}
     assert "government-document-format" in ids
     assert "multidoc-digest" in ids
+    assert "office-visual-design" in ids
     gongwen = next(s for s in skills if s["id"] == "government-document-format")
     assert gongwen["name"] == "公文格式排版"
     assert gongwen.get("display_name") == "公文格式排版"
     digest = next(s for s in skills if s["id"] == "multidoc-digest")
     assert digest.get("display_name") == "批量文档整理"
+    visual = next(s for s in skills if s["id"] == "office-visual-design")
+    assert visual.get("display_name") == "办公视觉设计"
     assert (tmp_path / "shared-scripts" / "format_gongwen.py").is_file()
     assert (tmp_path / "skills" / "government-document-format" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "multidoc-digest" / "scripts" / "ingest.py").is_file()
+    assert (tmp_path / "skills" / "office-visual-design" / "palettes" / "zhengwu-navy.md").is_file()
 
 
 def test_seed_does_not_clobber_user_skill(tmp_path: Path, monkeypatch):

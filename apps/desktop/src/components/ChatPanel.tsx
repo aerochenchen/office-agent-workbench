@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChatMessage, LiveStep } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
-import { GUIDE_HINTS, GUIDE_PILLARS, GUIDE_WELCOME_TITLE } from "../lib/guide";
+import { GUIDE_HINTS } from "../lib/guide";
 import {
   filterPathsUnderWorkspace,
   isTauriRuntime,
@@ -19,7 +19,6 @@ interface Props {
   runtimeReady: boolean;
   onSend: (text: string, attachedPaths: string[]) => void | Promise<void>;
   onStop?: () => void;
-  onOpenWorkspace?: () => void;
   onToggleSteps?: (messageId: string) => void;
 }
 
@@ -28,7 +27,7 @@ function basename(path: string): string {
   return parts.filter(Boolean).pop() || path;
 }
 
-const PHASE_HINTS = ["理解指令…", "查看工作区…", "读写或运行脚本…", "整理结果…"] as const;
+const PHASE_HINTS = ["理解指令…", "查看文件夹…", "读写或运行脚本…", "整理结果…"] as const;
 
 function formatElapsed(startedAt?: number, now = Date.now()): string {
   if (!startedAt) return "0:00";
@@ -195,7 +194,6 @@ export default function ChatPanel({
   runtimeReady,
   onSend,
   onStop,
-  onOpenWorkspace,
   onToggleSteps,
 }: Props) {
   const [draft, setDraft] = useState("");
@@ -227,7 +225,8 @@ export default function ChatPanel({
     setPasteDraft("");
   }, [workspacePath]);
 
-  const disabled = !workspaceOpen || sending || !runtimeReady;
+  const disabled = sending || !runtimeReady;
+  const attachDisabled = disabled || !workspaceOpen;
 
   function mergeAccepted(paths: string[]) {
     if (!workspacePath) return;
@@ -235,8 +234,8 @@ export default function ChatPanel({
     if (rejected.length > 0) {
       setAttachHint(
         accepted.length > 0
-          ? `已忽略 ${rejected.length} 个文件：只能附加当前工作区内的文件`
-          : "无法附加：所选文件不在当前工作区内，请只选择工作区文件夹内的文件",
+          ? `已忽略 ${rejected.length} 个文件：只能附加当前文件夹内的文件`
+          : "无法附加：所选文件不在当前文件夹内，请只选择已打开文件夹内的文件",
       );
     } else {
       setAttachHint(null);
@@ -256,7 +255,7 @@ export default function ChatPanel({
   }
 
   async function handleAttachClick() {
-    if (disabled || !workspacePath) return;
+    if (attachDisabled || !workspacePath) return;
     setAttachHint(null);
     if (!isTauriRuntime()) {
       setPasteOpen(true);
@@ -264,7 +263,7 @@ export default function ChatPanel({
     }
     const picked = await pickFiles({
       defaultPath: workspacePath,
-      title: "选择工作区内的文件（工作区外无法附加）",
+      title: "选择文件夹内的文件（文件夹外无法附加）",
     });
     if (picked === null) return;
     mergeAccepted(picked);
@@ -274,7 +273,7 @@ export default function ChatPanel({
     if (!workspacePath) return;
     const paths = parsePastedPaths(pasteDraft);
     if (paths.length === 0) {
-      setAttachHint("请粘贴工作区内绝对路径（一行一个）");
+      setAttachHint("请粘贴文件夹内绝对路径（一行一个）");
       return;
     }
     mergeAccepted(paths);
@@ -313,7 +312,7 @@ export default function ChatPanel({
 
       <div className="pane-body chat-scroll">
         {messages.length === 0 && !workspaceOpen && (
-          <div className="guide-welcome">
+          <div className="chat-empty">
             <img
               className="chat-empty-logo"
               src="/logo-mark.png"
@@ -326,28 +325,7 @@ export default function ChatPanel({
               <div className="chat-empty-name">{APP_NAME}</div>
               <div className="chat-empty-tagline">{APP_TAGLINE}</div>
             </div>
-            <h2 className="guide-welcome-title">{GUIDE_WELCOME_TITLE}</h2>
-            <ul className="guide-pillars">
-              {GUIDE_PILLARS.map((p) => (
-                <li key={p.id} className="guide-pillar">
-                  <div className="guide-pillar-title">{p.title}</div>
-                  <p className="guide-pillar-body">{p.summary}</p>
-                </li>
-              ))}
-            </ul>
-            {onOpenWorkspace ? (
-              <button
-                type="button"
-                className="btn btn--primary guide-welcome-cta"
-                disabled={!runtimeReady}
-                title={!runtimeReady ? "本地运行时未就绪" : undefined}
-                onClick={onOpenWorkspace}
-              >
-                打开文件夹
-              </button>
-            ) : (
-              <p className="empty-hint chat-empty-hint">{GUIDE_HINTS.noWorkspace}</p>
-            )}
+            <p className="empty-hint chat-empty-hint">{GUIDE_HINTS.emptyChat}</p>
           </div>
         )}
         {messages.length === 0 && workspaceOpen && (
@@ -401,22 +379,22 @@ export default function ChatPanel({
         {pasteOpen && (
           <div className="attach-paste">
             <label className="attach-paste-label" htmlFor="attach-paste-input">
-              浏览器模式：粘贴工作区内绝对路径（一行一个；工作区外无法附加）
+              浏览器模式：粘贴文件夹内绝对路径（一行一个；文件夹外无法附加）
             </label>
             <textarea
               id="attach-paste-input"
               className="attach-paste-input"
               rows={3}
               value={pasteDraft}
-              disabled={disabled}
-              placeholder="/path/to/workspace/file.md"
+              disabled={attachDisabled}
+              placeholder="/path/to/folder/file.md"
               onChange={(e) => setPasteDraft(e.currentTarget.value)}
             />
             <div className="attach-paste-actions">
               <button
                 type="button"
                 className="btn btn--ghost"
-                disabled={disabled}
+                disabled={attachDisabled}
                 onClick={() => {
                   setPasteOpen(false);
                   setPasteDraft("");
@@ -427,7 +405,7 @@ export default function ChatPanel({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={disabled || !pasteDraft.trim()}
+                disabled={attachDisabled || !pasteDraft.trim()}
                 onClick={applyPastePaths}
               >
                 添加
@@ -446,16 +424,16 @@ export default function ChatPanel({
             <button
               type="button"
               className="chat-attach-plus"
-              disabled={disabled}
-              aria-label="添加工作区内文件"
+              disabled={attachDisabled}
+              aria-label="添加文件夹内文件"
               title={
                 !runtimeReady
                   ? "本地运行时未就绪"
                   : !workspaceOpen
-                    ? "请先打开工作区"
+                    ? "请先打开文件夹"
                     : isTauriRuntime()
-                      ? "添加工作区内文件"
-                      : "粘贴工作区内绝对路径"
+                      ? "添加文件夹内文件"
+                      : "粘贴文件夹内绝对路径"
               }
               onClick={() => void handleAttachClick()}
             >
@@ -469,11 +447,11 @@ export default function ChatPanel({
                   : sending
                     ? "处理中，完成后可继续…"
                     : workspaceOpen
-                      ? "输入指令，Enter 发送，Shift+Enter 换行"
-                      : "请先打开工作区"
+                      ? "描述要办的事…"
+                      : "试着问：文书通能帮我做什么？"
               }
               value={draft}
-              disabled={!workspaceOpen || sending || !runtimeReady}
+              disabled={disabled}
               rows={2}
               onChange={(e) => setDraft(e.currentTarget.value)}
               onKeyDown={(e) => {
@@ -491,7 +469,7 @@ export default function ChatPanel({
           ) : (
             <button
               type="submit"
-              className={`btn${workspaceOpen && runtimeReady ? " btn--primary" : " btn--ghost"}`}
+              className={`btn${runtimeReady && !sending ? " btn--primary" : " btn--ghost"}`}
               disabled={disabled || !draft.trim()}
             >
               发送

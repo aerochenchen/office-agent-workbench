@@ -52,7 +52,7 @@ export default function WorkspaceTree({
   return (
     <section className="pane workspace-pane">
       <div className="pane-header">
-        <span className="pane-title">工作区</span>
+        <span className="pane-title">文件夹</span>
         {workspacePath && (
           <button type="button" className="btn btn--ghost btn--xs" onClick={onRefresh}>
             刷新
@@ -69,7 +69,7 @@ export default function WorkspaceTree({
 
         {!workspacePath && (
           <div className="empty-hint">
-            尚未打开工作区。选择一个文件夹作为对话与工具操作的沙箱根目录。
+            尚未打开文件夹。选择一个文件夹作为对话与工具操作的沙箱根目录。
           </div>
         )}
 
@@ -88,7 +88,7 @@ export default function WorkspaceTree({
         )}
 
         {workspacePath && entries.length > 0 && (
-          <div className="tree-footnote">仅显示工作区根目录内容</div>
+          <div className="tree-footnote">仅显示文件夹根目录内容</div>
         )}
       </div>
 

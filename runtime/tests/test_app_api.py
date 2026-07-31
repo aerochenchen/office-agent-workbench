@@ -36,7 +36,11 @@ def _tool_call(call_id: str, name: str, arguments: dict[str, Any]):
 class FakeGateway:
     responses: list[Any]
 
+    def __post_init__(self) -> None:
+        self.chat_calls: list[dict[str, Any]] = []
+
     def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None):
+        self.chat_calls.append({"messages": [dict(m) for m in messages], "tools": tools})
         if self.responses:
             return self.responses.pop(0)
         # Default: echo last user content so multi-turn API tests keep working
@@ -330,6 +334,76 @@ def test_chat_returns_reply_and_session(client: TestClient, tmp_path: Path, app_
     assert body["session_id"]
     msgs = app_state.sessions.get_messages(body["session_id"])
     assert any(m.get("role") == "user" for m in msgs)
+
+
+def test_chat_without_workspace_onboarding(client: TestClient, app_state: ProcessState):
+    assert app_state.workspace is None
+    gateway = FakeGateway(responses=[_completion(content="你好，我是入门助手。")])
+    app_state.gateway_factory = lambda _cfg: gateway
+    r = client.post("/chat", json={"message": "你好，你能做什么？"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["reply"]
+    assert body["session_id"]
+    assert body["tool_events"] == []
+    meta = app_state.sessions.get_session(body["session_id"])
+    assert meta["workspace_path"] in ("", None) or meta["workspace_path"] == ""
+    assert gateway.chat_calls
+    assert gateway.chat_calls[0]["tools"] is None
+
+
+def test_chat_without_workspace_rejects_attachments(client: TestClient, tmp_path: Path):
+    f = tmp_path / "a.txt"
+    f.write_text("x", encoding="utf-8")
+    r = client.post(
+        "/chat",
+        json={"message": "看这个", "attached_paths": [str(f)]},
+    )
+    assert r.status_code == 400
+    assert "请先打开文件夹" in r.json()["detail"]
+
+
+def test_chat_without_workspace_ignores_model_tool_calls(
+    client: TestClient, app_state: ProcessState, tmp_path: Path
+):
+    """Onboarding must not execute tools even if the model returns tool_calls."""
+    assert app_state.workspace is None
+    marker = tmp_path / "leaked-by-tool.txt"
+    gateway = FakeGateway(
+        responses=[
+            _completion(
+                content="请先打开文件夹",
+                tool_calls=[
+                    _tool_call(
+                        "t1",
+                        "workspace_write",
+                        {"path": str(marker), "content": "nope"},
+                    )
+                ],
+            )
+        ]
+    )
+    app_state.gateway_factory = lambda _cfg: gateway
+    r = client.post("/chat", json={"message": "帮我写个文件"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tool_events"] == []
+    assert gateway.chat_calls
+    assert gateway.chat_calls[0]["tools"] is None
+    assert not marker.exists()
+    msgs = app_state.sessions.get_messages(body["session_id"])
+    pending: set[str] = set()
+    answered: set[str] = set()
+    for msg in msgs:
+        if msg.get("role") == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                if isinstance(tc, dict) and tc.get("id"):
+                    pending.add(str(tc["id"]))
+        elif msg.get("role") == "tool":
+            tc_id = msg.get("tool_call_id")
+            if tc_id:
+                answered.add(str(tc_id))
+    assert pending <= answered
 
 
 def _parse_sse_events(text: str) -> list[tuple[str, dict[str, Any]]]:

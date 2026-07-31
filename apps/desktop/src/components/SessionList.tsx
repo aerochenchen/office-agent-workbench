@@ -73,7 +73,7 @@ export default function SessionList({
             !runtimeReady
               ? "本地运行时未就绪"
               : !workspacePath
-                ? "请先打开工作区"
+                ? GUIDE_HINTS.newSessionNeedsFolder
                 : sending
                   ? "请等待当前回复结束"
                   : undefined
@@ -141,7 +141,7 @@ export default function SessionList({
       </div>
 
       <div className="session-workspace-bar">
-        <div className="session-workspace-label">项目文件夹</div>
+        <div className="session-workspace-label">当前文件夹</div>
         {workspacePath ? (
           <div className="session-workspace-path" title={workspacePath}>
             {basename(workspacePath)}
@@ -152,7 +152,7 @@ export default function SessionList({
         {workspaceError && <div className="session-workspace-error">{workspaceError}</div>}
         <button
           type="button"
-          className={`btn btn--full${workspacePath ? " btn--ghost" : " btn--primary"}`}
+          className="btn btn--full btn--ghost"
           disabled={!runtimeReady}
           title={!runtimeReady ? "本地运行时未就绪" : undefined}
           onClick={onPickWorkspace}
@@ -169,7 +169,7 @@ export default function SessionList({
           >
             <input
               className="session-manual-input"
-              placeholder="或粘贴工作区绝对路径"
+              placeholder="或粘贴文件夹绝对路径"
               value={manualPath}
               disabled={!runtimeReady}
               onChange={(e) => setManualPath(e.currentTarget.value)}

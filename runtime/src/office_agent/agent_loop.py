@@ -235,11 +235,39 @@ class AgentResult:
     tool_events: list[dict[str, Any]]
 
 
+def _build_onboarding_system_prompt() -> str:
+    return (
+        "你是「文书通」助手，服务对象是机关企事业单位办事人员，可能刚打开软件。"
+        "说话像当面交代工作的机关同事：清楚、好懂、句子短，一次只推进一件事；"
+        "可用「你／咱们」，不要官腔堆砌，也不要网络亲昵。"
+        "禁止使用网络俚语或过分亲昵说法（如贴肉、瞅瞅、操办、小助手～、整一波），"
+        "禁止波浪号卖萌、夸大能力、假装已读文件、暗示能上网查资料。"
+        "能力边界（必须诚实，对用户也按此表述）："
+        "本产品为本地使用，不联网检索外网资料；"
+        "当前用户还没有选择本机文件夹，你不能读写任何本地文件，也不要假装已经处理了文件；"
+        "用户可以把文字贴到对话里，你可帮忙理要点、改措辞、搭框架、起草草稿；"
+        "要处理本机材料时，请用户在界面点「打开文件夹」，你只在该文件夹内读写；"
+        "技能是本机可安装的办事能力（如排版、汇总），不是外网搜索。"
+        "目标：接住用户这句话，并在大约 3～5 轮内让用户明白："
+        "（1）能做什么、不能做什么（按上面的边界说）；"
+        "（2）大概怎么用（先说清任务；动本机文件再开文件夹）；"
+        "（3）设置、技能可再探索，点到为止。"
+        "先回应用户原话，再带出能力；篇幅宜短，不要一上来大段自我介绍。"
+        "若用户明确要处理本地文件/Word/材料，立刻请他「打开文件夹」，不要硬凑满 5 轮。"
+        "对用户统一说「文件夹」，不要说「工作区」「项目文件夹」。"
+        "不要让用户去终端执行命令。"
+    )
+
+
 def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
     catalog_json = json.dumps(catalog, ensure_ascii=False, indent=2)
     return (
-        "你是内网办公智能助手，帮助用户在当前工作区内处理文书与文件任务。"
-        "请优先使用已启用的 Skill 与内置工具；不得尝试访问工作区外路径或执行 shell。\n"
+        "你是「文书通」助手，帮助用户在其选定的本机文件夹内处理文书与文件任务。"
+        "说话像当面交代工作的机关同事：清楚、好懂、句子短；"
+        "禁止网络俚语与过分亲昵（如贴肉、瞅瞅、操办），禁止夸大能力。"
+        "本产品为本地使用，不联网检索外网资料；技能是本机可安装的办事能力，不是外网搜索。"
+        "只在用户打开的文件夹内读写，不得访问文件夹外路径或执行 shell。"
+        "请优先使用已启用的 Skill 与内置工具。\n"
         "目录约定（必须遵守）：\n"
         "- 工作区根目录：只保留用户自己的源材料（纪要、模板、附件等），不要往根目录堆 Agent 产出；\n"
         "- `output/`：最终交付成果（如 `output/AI.docx`、排版后的公文）；\n"
@@ -410,13 +438,15 @@ def run_agent(
     user_message: str,
     attached_paths: list[str],
     gateway: Any,
-    tools: ToolExecutor,
+    tools: ToolExecutor | None,
     catalog: list[dict[str, Any]],
     max_steps: int,
     history: list[dict[str, Any]] | None = None,
     on_event: EventCallback | None = None,
     cancel: CancelToken | None = None,
     turn_id: str | None = None,
+    *,
+    onboarding: bool = False,
 ) -> AgentResult:
     """Run one user turn. ``history`` is prior session turns (no system message)."""
 
@@ -425,8 +455,13 @@ def run_agent(
             on_event(payload)
 
     prior = _history_without_system(history)
+    system = (
+        _build_onboarding_system_prompt()
+        if onboarding
+        else _build_system_prompt(catalog)
+    )
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _build_system_prompt(catalog)},
+        {"role": "system", "content": system},
         *prior,
         {"role": "user", "content": _build_user_content(user_message, attached_paths)},
     ]
@@ -434,17 +469,33 @@ def run_agent(
     new_from = 1 + len(prior)
     tool_events: list[dict[str, Any]] = []
     final_text = ""
+    tool_arg = None if onboarding else TOOL_SCHEMAS
 
     try:
         for _ in range(max_steps):
             if cancel is not None:
                 cancel.check()
             emit({"type": "status", "phase": "planning"})
-            response = gateway.chat(messages, tools=TOOL_SCHEMAS)
+            response = gateway.chat(messages, tools=tool_arg)
             message = response.choices[0].message
             messages.append(_assistant_message_from_response(message))
 
             if message.tool_calls:
+                if onboarding or tools is None:
+                    # Keep history well-formed: never leave assistant tool_calls
+                    # without matching tool results (same pattern as cancel path).
+                    _complete_orphan_tool_calls(
+                        messages, content="onboarding: tools unavailable"
+                    )
+                    final_text = (message.content or "").strip() or (
+                        "请先在界面打开文件夹后再继续。"
+                    )
+                    emit({"type": "status", "phase": "finishing"})
+                    return AgentResult(
+                        messages=messages[new_from:],
+                        final_text=final_text,
+                        tool_events=tool_events,
+                    )
                 emit({"type": "status", "phase": "tools"})
                 stop_for_user = False
                 for tc in message.tool_calls:

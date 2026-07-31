@@ -9,6 +9,7 @@ describe("BUNDLED_SKILL_IDS", () => {
   it("includes known bundled skill ids", () => {
     expect(BUNDLED_SKILL_IDS.has("government-document-format")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("multidoc-digest")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("office-visual-design")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("skill-builder")).toBe(true);
   });
 });
@@ -17,6 +18,7 @@ describe("isBundledSkillId", () => {
   it("returns true for bundled ids", () => {
     expect(isBundledSkillId("government-document-format")).toBe(true);
     expect(isBundledSkillId("multidoc-digest")).toBe(true);
+    expect(isBundledSkillId("office-visual-design")).toBe(true);
     expect(isBundledSkillId("skill-builder")).toBe(true);
   });
 

@@ -9,6 +9,8 @@ export interface GuidePillar {
   body: string;
 }
 
+export const FORBIDDEN_USER_TERMS = ["工作区", "项目文件夹"] as const;
+
 /** Core advantages: brief on welcome, full text in settings. */
 export const GUIDE_PILLARS: readonly GuidePillar[] = [
   {
@@ -16,7 +18,7 @@ export const GUIDE_PILLARS: readonly GuidePillar[] = [
     title: "本地可控",
     summary: "材料在文件夹里办，用什么模型自己定。",
     body:
-      "选定工作区后，材料在本机文件夹内读取与生成，不越界到文件夹外。大模型接口由你在设置中自行配置（地址、密钥、模型名），不绑定某一家公网云服务。",
+      "选定文件夹后，材料在本机该文件夹内读取与生成，不越界到文件夹外。大模型接口由你在设置中自行配置（地址、密钥、模型名），不绑定某一家公网云服务。",
   },
   {
     id: "light",
@@ -44,9 +46,20 @@ export const GUIDE_PILLARS: readonly GuidePillar[] = [
 export const GUIDE_WELCOME_TITLE = "认识文书通";
 
 export const GUIDE_HINTS = {
-  noWorkspace: "请选择本次工作的项目文件夹；文书通只在该文件夹内读写。",
-  workspaceReady: "在本项目文件夹内描述任务即可；对话与成果会留在本地。",
-  noSessions: "暂无对话。点击上方「新建对话」开始本项目工作。",
+  noWorkspace: "打开文件夹后，对话与成果会保存在本地；办事时文书通只在该文件夹内读写。",
+  emptyChat: "先随便问一句，我再告诉你文书通能帮你做什么。",
+  workspaceReady: "描述要办的事即可；对话与成果会留在本地文件夹内。",
+  noSessions: "暂无对话。点击上方「新建对话」开始。",
   noSkills: "可导入本地技能包增强能力；安装与运行均在本机。",
   noEnabledSkills: "暂无启用中的技能；可在技能管理中启用或导入。",
+  newSessionNeedsFolder: "打开文件夹后可新建并保存对话",
 } as const;
+
+export const MODEL_SETUP_REPLY =
+  "要开始对话，需要先连上大模型。请打开右上角「设置」，填写 API 地址、API Key（密钥）和模型名。" +
+    "材料仍在你的本机；配置的是你自己的接口。配好后，直接在下方再发一句即可。";
+
+/** Model/auth setup failures → show MODEL_SETUP_REPLY; not runtime connectivity. */
+export function isModelSetupError(message: string): boolean {
+  return /API Key|未配置|api key|401|403/i.test(message);
+}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
+import { isModelSetupError, MODEL_SETUP_REPLY } from "./lib/guide";
 import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
 import {
   deriveRuntimeStatus,
@@ -172,21 +173,30 @@ function App() {
       try {
         const res = await runtimeClient.openWorkspace(path);
         setWorkspacePath(res.path);
-        const list = await refreshSessions(res.path);
-        if (list.length > 0) {
-          setSessionId(list[0].id);
-          await loadSessionMessages(list[0].id);
-        } else {
+        // 第一期取舍：入门对话非空时保留界面 messages，并新建文件夹会话（勿复用 list[0]，
+        // 否则 UI 消息与磁盘会话错配）；入门轮次不写入该会话历史。无对话时再加载/创建。
+        const retainUiMessages = messages.length > 0;
+        if (retainUiMessages) {
           const created = await runtimeClient.createSession(res.path);
           setSessionId(created.session.id);
-          setMessages([]);
           await refreshSessions(res.path);
+        } else {
+          const list = await refreshSessions(res.path);
+          if (list.length > 0) {
+            setSessionId(list[0].id);
+            await loadSessionMessages(list[0].id);
+          } else {
+            const created = await runtimeClient.createSession(res.path);
+            setSessionId(created.session.id);
+            setMessages([]);
+            await refreshSessions(res.path);
+          }
         }
       } catch (err) {
-        setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开工作区失败");
+        setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开文件夹失败");
       }
     },
-    [runtimeReady, loadSessionMessages, refreshSessions],
+    [runtimeReady, loadSessionMessages, refreshSessions, messages.length],
   );
 
   const handlePickFolder = useCallback(async () => {
@@ -269,16 +279,30 @@ function App() {
 
   const handleSend = useCallback(
     async (text: string, attachedPaths: string[] = []) => {
-      if (!workspacePath || !runtimeReady) return;
+      if (!runtimeReady) return;
+
+      const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
+      const assistantId = nextId();
+
+      // 无 Key：直接展示固定引导，避免 pending 闪烁，也不调用 chatStream。
+      if (!config.api_key_set) {
+        setMessages((prev) => [
+          ...prev,
+          userMsg,
+          { id: assistantId, role: "assistant", content: MODEL_SETUP_REPLY, phase: "done" },
+        ]);
+        return;
+      }
+
+      // 无文件夹时勿 POST /sessions（仍 require_workspace）；省略 session_id，
+      // 由 Runtime _prepare_chat → create_session("")，再在 onStarted/onFinal 写入。
       let activeId = sessionIdRef.current;
-      if (!activeId) {
+      if (!activeId && workspacePath) {
         const created = await runtimeClient.createSession(workspacePath);
         activeId = created.session.id;
         setSessionId(activeId);
       }
 
-      const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
-      const assistantId = nextId();
       const pendingMsg: ChatMessage = {
         id: assistantId,
         role: "assistant",
@@ -365,10 +389,19 @@ function App() {
                 stepsExpanded: false,
                 statusPhase: "finishing",
               }));
-              void refreshSessions(workspacePath);
+              if (workspacePath) void refreshSessions(workspacePath);
             },
             onError: (message) => {
               setPermissionRequest(null);
+              if (isModelSetupError(message)) {
+                patchAssistant(() => ({
+                  id: assistantId,
+                  role: "assistant",
+                  content: MODEL_SETUP_REPLY,
+                  phase: "done",
+                }));
+                return;
+              }
               patchAssistant(() => ({
                 id: assistantId,
                 role: "error",
@@ -384,7 +417,7 @@ function App() {
         setSending(false);
       }
     },
-    [workspacePath, runtimeReady, refreshSessions],
+    [workspacePath, runtimeReady, refreshSessions, config.api_key_set],
   );
 
   const handleStop = useCallback(async () => {
@@ -548,7 +581,6 @@ function App() {
           runtimeReady={runtimeReady}
           onSend={handleSend}
           onStop={() => void handleStop()}
-          onOpenWorkspace={handlePickFolder}
           onToggleSteps={handleToggleSteps}
         />
 
