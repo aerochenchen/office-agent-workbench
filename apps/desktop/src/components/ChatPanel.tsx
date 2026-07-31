@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { ChatMessage, LiveStep } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
 import { GUIDE_HINTS } from "../lib/guide";
+import { runtimeLogHint } from "../lib/runtimeClient";
+import type { HealthState } from "../lib/runtimeStatus";
 import {
   filterPathsUnderWorkspace,
   isTauriRuntime,
@@ -17,6 +19,7 @@ interface Props {
   messages: ChatMessage[];
   sending: boolean;
   runtimeReady: boolean;
+  health?: HealthState;
   onSend: (text: string, attachedPaths: string[]) => void | Promise<void>;
   onStop?: () => void;
   onToggleSteps?: (messageId: string) => void;
@@ -192,6 +195,7 @@ export default function ChatPanel({
   messages,
   sending,
   runtimeReady,
+  health = "ok",
   onSend,
   onStop,
   onToggleSteps,
@@ -206,6 +210,15 @@ export default function ChatPanel({
     () => messages.some((m) => m.phase === "pending" || m.phase === "live"),
     [messages],
   );
+
+  const emptyHint =
+    health === "down"
+      ? `本地服务未就绪，请关闭后重新打开本应用；若仍失败，查看 ${runtimeLogHint()}`
+      : health === "checking"
+        ? GUIDE_HINTS.bootWaiting
+        : workspaceOpen
+          ? GUIDE_HINTS.workspaceReady
+          : GUIDE_HINTS.emptyChat;
 
   useEffect(() => {
     const el = document.querySelector(".chat-scroll");
@@ -325,7 +338,7 @@ export default function ChatPanel({
               <div className="chat-empty-name">{APP_NAME}</div>
               <div className="chat-empty-tagline">{APP_TAGLINE}</div>
             </div>
-            <p className="empty-hint chat-empty-hint">{GUIDE_HINTS.emptyChat}</p>
+            <p className="empty-hint chat-empty-hint">{emptyHint}</p>
           </div>
         )}
         {messages.length === 0 && workspaceOpen && (
@@ -342,7 +355,7 @@ export default function ChatPanel({
               <div className="chat-empty-name">{APP_NAME}</div>
               <div className="chat-empty-tagline">{APP_TAGLINE}</div>
             </div>
-            <div className="empty-hint chat-empty-hint">{GUIDE_HINTS.workspaceReady}</div>
+            <div className="empty-hint chat-empty-hint">{emptyHint}</div>
           </div>
         )}
         {messages.map((m) => (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
+import { bootPollInterval, shouldMarkDownDuringBoot } from "./lib/bootHealth";
 import { isModelSetupError, MODEL_SETUP_REPLY } from "./lib/guide";
 import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
 import {
@@ -61,19 +62,38 @@ function App() {
   sessionIdRef.current = sessionId;
   sendingRef.current = sending;
 
-  const checkHealth = useCallback(async () => {
-    if (sendingRef.current) return;
-    try {
-      await runtimeClient.health();
-      healthFailCount.current = 0;
-      setHealth("ok");
-    } catch {
-      healthFailCount.current += 1;
-      if (healthFailCount.current >= 2) setHealth("down");
-    }
-  }, []);
-
   useEffect(() => {
+    const bootStartedAt = Date.now();
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleNext = () => {
+      const delay = bootPollInterval(Date.now() - bootStartedAt);
+      timer = setTimeout(() => void runCheck(), delay);
+    };
+
+    const runCheck = async () => {
+      if (cancelled) return;
+      if (!sendingRef.current) {
+        try {
+          await runtimeClient.health();
+          healthFailCount.current = 0;
+          setHealth("ok");
+        } catch {
+          healthFailCount.current += 1;
+          const elapsed = Date.now() - bootStartedAt;
+          // Boot window: stay "checking". After timeout: down on consecutive failures (≥2).
+          if (
+            shouldMarkDownDuringBoot(elapsed, false) &&
+            healthFailCount.current >= 2
+          ) {
+            setHealth("down");
+          }
+        }
+      }
+      if (!cancelled) scheduleNext();
+    };
+
     void (async () => {
       if (isTauriRuntime()) {
         try {
@@ -83,11 +103,14 @@ function App() {
           // keep unset — dev runtime may run without token
         }
       }
-      await checkHealth();
+      await runCheck();
     })();
-    const timer = window.setInterval(() => void checkHealth(), 8_000);
-    return () => window.clearInterval(timer);
-  }, [checkHealth]);
+
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     if (health !== "ok") {
@@ -579,6 +602,7 @@ function App() {
           messages={messages}
           sending={sending}
           runtimeReady={runtimeReady}
+          health={health}
           onSend={handleSend}
           onStop={() => void handleStop()}
           onToggleSteps={handleToggleSteps}

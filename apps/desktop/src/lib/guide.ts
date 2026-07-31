@@ -49,6 +49,7 @@ export const GUIDE_HINTS = {
   noWorkspace: "打开文件夹后，对话与成果会保存在本地；办事时文书通只在该文件夹内读写。",
   emptyChat: "先随便问一句，我再告诉你文书通能帮你做什么。",
   workspaceReady: "描述要办的事即可；对话与成果会留在本地文件夹内。",
+  bootWaiting: "首次启动约需数秒，请稍候。",
   noSessions: "暂无对话。点击上方「新建对话」开始。",
   noSkills: "可导入本地技能包增强能力；安装与运行均在本机。",
   noEnabledSkills: "暂无启用中的技能；可在技能管理中启用或导入。",
