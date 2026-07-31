@@ -14,7 +14,7 @@ interface Props {
 const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; hint: string }[] = [
   { value: "cautious", label: "谨慎", hint: "每次写入/跑脚本都需确认" },
   { value: "standard", label: "标准（默认）", hint: "首次确认后，同会话同操作可记住" },
-  { value: "trust_workspace", label: "信任工作区", hint: "本会话内自动允许写入与跑脚本" },
+  { value: "trust_workspace", label: "信任此文件夹", hint: "本会话内自动允许写入与跑脚本" },
 ];
 
 export default function SettingsModal({ open, initial, onClose, onSave }: Props) {

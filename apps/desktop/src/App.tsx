@@ -183,7 +183,7 @@ function App() {
           await refreshSessions(res.path);
         }
       } catch (err) {
-        setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开工作区失败");
+        setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开文件夹失败");
       }
     },
     [runtimeReady, loadSessionMessages, refreshSessions],
