@@ -5,7 +5,7 @@ import { dismissBootSplash } from "./bootSplash";
 describe("dismissBootSplash", () => {
   beforeEach(() => {
     document.body.innerHTML =
-      '<div id="boot-splash" class="boot-splash"><span>x</span></div>';
+      '<div id="boot-splash" class="boot-splash"><div id="boot-splash-carousel"></div></div>';
     vi.useFakeTimers();
   });
   afterEach(() => {
@@ -19,6 +19,17 @@ describe("dismissBootSplash", () => {
     expect(el?.classList.contains("boot-splash--done")).toBe(true);
     vi.advanceTimersByTime(250);
     expect(document.getElementById("boot-splash")).toBeNull();
+  });
+
+  it("clears the carousel interval stored on the carousel dataset", () => {
+    const clearSpy = vi.spyOn(window, "clearInterval");
+    const carousel = document.getElementById("boot-splash-carousel");
+    expect(carousel).toBeTruthy();
+    carousel!.dataset.carouselIntervalId = "42";
+    dismissBootSplash();
+    expect(clearSpy).toHaveBeenCalledWith(42);
+    expect(carousel!.dataset.carouselIntervalId).toBeUndefined();
+    clearSpy.mockRestore();
   });
 
   it("is a no-op when splash missing", () => {

@@ -120,10 +120,11 @@
           });
         }
         showSlide(0);
-        setInterval(function () {
+        var carouselTimer = setInterval(function () {
           index = (index + 1) % slides.length;
           showSlide(index);
         }, 2800);
+        carousel.dataset.carouselIntervalId = String(carouselTimer);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

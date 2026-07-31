@@ -10,6 +10,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -27,6 +28,11 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Holds the handle to the auto-spawned runtime process (if any) so it can
 /// be terminated when the app exits.
 struct RuntimeProcess(Mutex<Option<Child>>);
+
+/// True only when this launch attempted to spawn a runtime child (not when
+/// skipping because 8765 was already up). Used on Exit as a race fallback
+/// when the Child handle is not yet stored in `RuntimeProcess`.
+static ATTEMPTED_RUNTIME_SPAWN: AtomicBool = AtomicBool::new(false);
 
 /// Per-launch API token shared with the spawned runtime and the webview.
 struct RuntimeAuthToken(Mutex<String>);
@@ -319,6 +325,10 @@ fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
         return None;
     }
 
+    // Mark ownership before spawn so Exit can shut down even if the Child
+    // handle has not been stored yet (setup thread race).
+    ATTEMPTED_RUNTIME_SPAWN.store(true, Ordering::SeqCst);
+
     // Release builds prefer the packaged sidecar; debug keeps the fast venv loop.
     if !cfg!(debug_assertions) {
         if let Some(child) = try_spawn_sidecar(app, api_token) {
@@ -365,9 +375,11 @@ pub fn run() {
                     if let Ok(mut guard) = state.0.lock() {
                         if let Some(mut child) = guard.take() {
                             stop_child(&mut child);
-                        } else {
+                        } else if ATTEMPTED_RUNTIME_SPAWN.load(Ordering::SeqCst) {
+                            // Spawn raced ahead of Mutex store — shut down our child.
                             request_runtime_shutdown();
                         }
+                        // Else: skipped spawn (runtime already up) — leave 8765 alone.
                     }
                 }
             }

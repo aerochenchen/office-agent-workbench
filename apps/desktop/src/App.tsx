@@ -10,6 +10,10 @@ import {
   runtimeStatusLabel,
   type HealthState,
 } from "./lib/runtimeStatus";
+import {
+  SKILLS_REFRESH_INTERVAL_MS,
+  shouldRetrySkillsRefresh,
+} from "./lib/skillsRefresh";
 import { getRuntimeToken, isTauriRuntime, pickFolder } from "./lib/tauri";
 import type {
   ChatMessage,
@@ -137,19 +141,35 @@ function App() {
     })();
   }, [health]);
 
-  const refreshSkills = useCallback(async () => {
+  const refreshSkills = useCallback(async (): Promise<number> => {
     try {
       const { skills: list } = await runtimeClient.listSkills();
       setSkills(list);
+      return list.length;
     } catch {
-      // ignore
+      return 0;
     }
   }, []);
 
-  // Wait until runtime is healthy (token already applied in the health bootstrap).
+  // Health can precede async bundled skill seed — retry briefly until skills appear.
   useEffect(() => {
     if (health !== "ok") return;
-    void refreshSkills();
+    let cancelled = false;
+    const started = Date.now();
+
+    void (async () => {
+      while (!cancelled) {
+        const count = await refreshSkills();
+        if (cancelled) return;
+        const elapsed = Date.now() - started;
+        if (!shouldRetrySkillsRefresh(elapsed, count)) return;
+        await new Promise((r) => setTimeout(r, SKILLS_REFRESH_INTERVAL_MS));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [health, refreshSkills]);
 
   const refreshSessions = useCallback(async (wsPath?: string | null) => {
