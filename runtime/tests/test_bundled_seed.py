@@ -1,3 +1,5 @@
+import threading
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -6,13 +8,49 @@ from office_agent.app import create_app
 from office_agent.bundled_seed import seed_bundled_assets
 
 
+def test_health_available_before_slow_seed_finishes(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    repo_bundled = Path(__file__).resolve().parents[2] / "bundled"
+    monkeypatch.setenv("OFFICE_AGENT_BUNDLED", str(repo_bundled.resolve()))
+
+    release = threading.Event()
+    real_seed = seed_bundled_assets
+
+    def slow_seed(*args, **kwargs):
+        release.wait(timeout=5)
+        return real_seed(*args, **kwargs)
+
+    monkeypatch.setattr("office_agent.app.seed_bundled_assets", slow_seed)
+
+    with TestClient(create_app()) as client:
+        r = client.get("/health")
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+        release.set()
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            skills = client.get("/skills").json()["skills"]
+            if any(s["id"] == "government-document-format" for s in skills):
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("seed did not finish")
+
+
 def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     repo_bundled = Path(__file__).resolve().parents[2] / "bundled"
     monkeypatch.setenv("OFFICE_AGENT_BUNDLED", str(repo_bundled.resolve()))
 
     with TestClient(create_app()) as client:
-        skills = client.get("/skills").json()["skills"]
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            skills = client.get("/skills").json()["skills"]
+            if any(s["id"] == "government-document-format" for s in skills):
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("seed did not finish before deadline")
     ids = {s["id"] for s in skills}
     assert "government-document-format" in ids
     assert "multidoc-digest" in ids

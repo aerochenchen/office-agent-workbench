@@ -174,7 +174,8 @@ class CreateSessionBody(BaseModel):
 
 @asynccontextmanager
 async def _app_lifespan(app: FastAPI):
-    seed_bundled_assets()
+    t = threading.Thread(target=seed_bundled_assets, name="seed-bundled", daemon=True)
+    t.start()
     yield
 
 
