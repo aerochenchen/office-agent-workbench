@@ -235,6 +235,21 @@ class AgentResult:
     tool_events: list[dict[str, Any]]
 
 
+def _build_onboarding_system_prompt() -> str:
+    return (
+        "你是「文书通」助手，用户是机关办公人员，可能刚打开软件。"
+        "当前用户还没有选择本机文件夹，你不能读写任何本地文件，也不要假装已经处理了文件。"
+        "目标：用自然口语接住用户这句话，并在大约 3～5 轮对话内让用户明白："
+        "（1）文书通能帮他做什么（本地材料、对话办事、可安装技能等）；"
+        "（2）大概怎么用（先说清任务；要处理本机材料时再让他「打开文件夹」，你只在该文件夹内读写）；"
+        "（3）还有设置、技能等可探索，点到为止。"
+        "先回应用户原话，再带出能力，不要像强制教程。"
+        "若用户明确要处理本地文件/Word/材料，立刻请他使用界面「打开文件夹」，不要硬凑满 5 轮。"
+        "不要使用或提及「工作区」「项目文件夹」等词，统一说「文件夹」。"
+        "不要让用户去终端执行命令。"
+    )
+
+
 def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
     catalog_json = json.dumps(catalog, ensure_ascii=False, indent=2)
     return (
@@ -410,13 +425,15 @@ def run_agent(
     user_message: str,
     attached_paths: list[str],
     gateway: Any,
-    tools: ToolExecutor,
+    tools: ToolExecutor | None,
     catalog: list[dict[str, Any]],
     max_steps: int,
     history: list[dict[str, Any]] | None = None,
     on_event: EventCallback | None = None,
     cancel: CancelToken | None = None,
     turn_id: str | None = None,
+    *,
+    onboarding: bool = False,
 ) -> AgentResult:
     """Run one user turn. ``history`` is prior session turns (no system message)."""
 
@@ -425,8 +442,13 @@ def run_agent(
             on_event(payload)
 
     prior = _history_without_system(history)
+    system = (
+        _build_onboarding_system_prompt()
+        if onboarding
+        else _build_system_prompt(catalog)
+    )
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _build_system_prompt(catalog)},
+        {"role": "system", "content": system},
         *prior,
         {"role": "user", "content": _build_user_content(user_message, attached_paths)},
     ]
@@ -434,17 +456,28 @@ def run_agent(
     new_from = 1 + len(prior)
     tool_events: list[dict[str, Any]] = []
     final_text = ""
+    tool_arg = None if onboarding else TOOL_SCHEMAS
 
     try:
         for _ in range(max_steps):
             if cancel is not None:
                 cancel.check()
             emit({"type": "status", "phase": "planning"})
-            response = gateway.chat(messages, tools=TOOL_SCHEMAS)
+            response = gateway.chat(messages, tools=tool_arg)
             message = response.choices[0].message
             messages.append(_assistant_message_from_response(message))
 
             if message.tool_calls:
+                if onboarding or tools is None:
+                    final_text = (message.content or "").strip() or (
+                        "请先在界面打开文件夹后再继续。"
+                    )
+                    emit({"type": "status", "phase": "finishing"})
+                    return AgentResult(
+                        messages=messages[new_from:],
+                        final_text=final_text,
+                        tool_events=tool_events,
+                    )
                 emit({"type": "status", "phase": "tools"})
                 stop_for_user = False
                 for tc in message.tool_calls:

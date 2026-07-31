@@ -450,7 +450,15 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         *,
         interactive: bool = False,
         turn_id: str | None = None,
-    ) -> tuple[str, Any, ToolExecutor, list[dict[str, Any]], list[str], int, list[dict[str, Any]]]:
+    ) -> tuple[
+        str,
+        Any,
+        ToolExecutor | None,
+        list[dict[str, Any]],
+        list[str],
+        int,
+        list[dict[str, Any]],
+    ]:
         # Sidecar restarts drop in-memory workspace; recover from session path.
         if office.workspace is None and body.session_id:
             meta = office.sessions.get_session(body.session_id)
@@ -461,6 +469,33 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     office.workspace.ensure_layout()
                 except SandboxError as e:
                     raise HTTPException(status_code=400, detail=str(e)) from e
+
+        onboarding = office.workspace is None
+        if onboarding:
+            if body.attached_paths:
+                raise HTTPException(
+                    status_code=400, detail="请先打开文件夹后再附加文件"
+                )
+            session_id = body.session_id
+            if session_id:
+                if not office.sessions.session_exists(session_id):
+                    raise HTTPException(status_code=404, detail="session not found")
+            else:
+                session_id = office.sessions.create_session("")
+            try:
+                gateway = office.gateway_factory(office.config)
+            except GatewayError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            history = office.sessions.get_messages(session_id)
+            return (
+                session_id,
+                gateway,
+                None,
+                [],
+                [],
+                office.config.max_tool_steps,
+                history,
+            )
 
         ws = office.require_workspace()
         session_id = body.session_id
@@ -516,6 +551,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 catalog,
                 max_steps,
                 history=history,
+                onboarding=tools is None,
             )
 
         try:
@@ -533,11 +569,12 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     @app.post("/chat/stream")
     async def chat_stream(body: ChatBody) -> StreamingResponse:
         """SSE progress for one chat turn: started/status/tool_*/permission_request/final/error."""
+        prepared_turn_id = str(uuid4())
         session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(
-            body, interactive=True, turn_id=str(uuid4())
+            body, interactive=True, turn_id=prepared_turn_id
         )
         message = body.message
-        turn_id = tools.turn_id
+        turn_id = tools.turn_id if tools is not None else prepared_turn_id
         event_q: queue.Queue[tuple[str, dict[str, Any]] | None] = queue.Queue()
 
         def emit(event: str, data: dict[str, Any]) -> None:
@@ -548,26 +585,29 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             data = {k: v for k, v in payload.items() if k != "type"}
             emit(event_type, data)
 
-        gate = tools.gate
+        gate = tools.gate if tools is not None else None
 
-        def on_permission_request(req: PermissionRequest) -> None:
-            office.gates[req.id] = gate
-            emit(
-                "permission_request",
-                {
-                    "id": req.id,
-                    "tool": req.tool,
-                    "summary": req.summary,
-                    "session_id": session_id,
-                },
-            )
+        if gate is not None:
 
-        gate.on_request = on_permission_request
-        gate.on_timeout = lambda request_id: office.gates.pop(request_id, None)
+            def on_permission_request(req: PermissionRequest) -> None:
+                office.gates[req.id] = gate
+                emit(
+                    "permission_request",
+                    {
+                        "id": req.id,
+                        "tool": req.tool,
+                        "summary": req.summary,
+                        "session_id": session_id,
+                    },
+                )
+
+            gate.on_request = on_permission_request
+            gate.on_timeout = lambda request_id: office.gates.pop(request_id, None)
 
         cancel_token = CancelToken()
         office.active_cancel[session_id] = cancel_token
-        office.active_gates[session_id] = gate
+        if gate is not None:
+            office.active_gates[session_id] = gate
 
         def worker() -> None:
             try:
@@ -583,6 +623,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     on_event=on_event,
                     cancel=cancel_token,
                     turn_id=turn_id,
+                    onboarding=tools is None,
                 )
                 # Best-effort: persist whatever the turn produced (incl. cancel truncation).
                 try:

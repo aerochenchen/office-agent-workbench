@@ -332,6 +332,27 @@ def test_chat_returns_reply_and_session(client: TestClient, tmp_path: Path, app_
     assert any(m.get("role") == "user" for m in msgs)
 
 
+def test_chat_without_workspace_onboarding(client: TestClient, app_state: ProcessState):
+    assert app_state.workspace is None
+    r = client.post("/chat", json={"message": "你好，你能做什么？"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["reply"]
+    assert body["session_id"]
+    meta = app_state.sessions.get_session(body["session_id"])
+    assert meta["workspace_path"] in ("", None) or meta["workspace_path"] == ""
+
+
+def test_chat_without_workspace_rejects_attachments(client: TestClient, tmp_path: Path):
+    f = tmp_path / "a.txt"
+    f.write_text("x", encoding="utf-8")
+    r = client.post(
+        "/chat",
+        json={"message": "看这个", "attached_paths": [str(f)]},
+    )
+    assert r.status_code == 400
+
+
 def _parse_sse_events(text: str) -> list[tuple[str, dict[str, Any]]]:
     events: list[tuple[str, dict[str, Any]]] = []
     for block in text.split("\n\n"):
