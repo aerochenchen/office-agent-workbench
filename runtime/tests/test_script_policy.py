@@ -39,6 +39,34 @@ def test_build_script_env_defaults_from_os_environ(monkeypatch: pytest.MonkeyPat
     assert "HTTP_PROXY" not in env
 
 
+def test_build_script_env_strips_sensitive_credentials() -> None:
+    """敏感凭据 env（token/key/secret/password 等）不得透传给脚本子进程。"""
+    env = build_script_env(
+        {
+            "OFFICE_AGENT_API_TOKEN": "SECRET_TOKEN_POC",
+            "SOME_API_KEY": "leak_me",
+            "MY_DATABASE_PASSWORD": "p@ss",
+            "AUTH_HEADER": "bearer xxx",
+            "CREDENTIALS_BLOB": "xxx",
+            "PATH": "/usr/bin:/bin",
+            "HOME": "/tmp/home",
+            "OTHER": "keep",
+        }
+    )
+    # 敏感凭据必须被剥离
+    assert "OFFICE_AGENT_API_TOKEN" not in env
+    assert "SOME_API_KEY" not in env
+    assert "MY_DATABASE_PASSWORD" not in env
+    assert "AUTH_HEADER" not in env
+    assert "CREDENTIALS_BLOB" not in env
+    # 非敏感系统 env 必须保留
+    assert env["PATH"] == "/usr/bin:/bin"
+    assert env["HOME"] == "/tmp/home"
+    assert env["OTHER"] == "keep"
+    # 业务白名单 env 保留
+    assert env["HF_HUB_OFFLINE"] == "1"
+
+
 def test_assert_argv_rejects_absolute_outside_roots(tmp_path: Path) -> None:
     root = tmp_path / "ws"
     root.mkdir()

@@ -535,6 +535,33 @@ def test_audit_log_migrates_old_db_without_turn_id(tmp_path: Path):
     assert rows[1] == ("new_tool", "turn-abc")
 
 
+def test_audit_log_redacts_sensitive_args(tmp_path: Path):
+    """workspace_write 的 content 等敏感字段不得以明文落库。"""
+    import sqlite3
+
+    audit = AuditLog(tmp_path / "a.sqlite")
+    audit.record(
+        "workspace_write",
+        {"path": "output/draft.docx", "content": "绝密公文内容全文" * 100},
+        True,
+    )
+    audit.record("run_shared_script", {"name": "fmt", "api_key": "sk-xxx"}, True)
+
+    with sqlite3.connect(tmp_path / "a.sqlite") as conn:
+        rows = conn.execute("SELECT tool, args_json FROM audit ORDER BY ts").fetchall()
+
+    import json as _json
+    write_args = _json.loads(rows[0][1])
+    assert write_args["path"] == "output/draft.docx"
+    assert "绝密公文内容全文" not in write_args["content"]
+    assert "redacted" in write_args["content"]
+    assert "len=" in write_args["content"]
+
+    script_args = _json.loads(rows[1][1])
+    assert script_args["name"] == "fmt"
+    assert script_args["api_key"] == "<redacted>"
+
+
 def test_chat_stream_emits_started_and_final(client: TestClient, tmp_path: Path, app_state: ProcessState):
     ws = tmp_path / "ws"
     ws.mkdir()

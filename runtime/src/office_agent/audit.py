@@ -6,6 +6,27 @@ import time
 from pathlib import Path
 
 
+# 工具参数中的这些字段视为敏感内容：审计落库时只保留长度，不存明文，
+# 避免审计库本身成为敏感数据池（如 workspace_write 的 content 含公文全文）。
+_SENSITIVE_ARG_FIELDS = frozenset({"content", "api_key", "key", "token", "password", "passwd"})
+
+
+def _redact_args(args: dict) -> dict:
+    """对敏感字段脱敏：content 类只记长度；凭据类完全遮罩。"""
+    if not isinstance(args, dict):
+        return args
+    safe: dict = {}
+    for k, v in args.items():
+        if k not in _SENSITIVE_ARG_FIELDS:
+            safe[k] = v
+            continue
+        if k == "content" and isinstance(v, str):
+            safe[k] = f"<redacted len={len(v)}>"
+        else:
+            safe[k] = "<redacted>"
+    return safe
+
+
 class AuditLog:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -50,7 +71,7 @@ class AuditLog:
                 (
                     time.time(),
                     tool,
-                    json.dumps(args, ensure_ascii=False),
+                    json.dumps(_redact_args(args), ensure_ascii=False),
                     1 if ok else 0,
                     detail,
                     turn_id,
