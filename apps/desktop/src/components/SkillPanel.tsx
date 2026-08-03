@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { SkillInspectResult, SkillMeta } from "../lib/types";
-import { GUIDE_HINTS } from "../lib/guide";
-import { filterEnabledSkills } from "../lib/skillUtils";
+import { CAPABILITY_TREE, GUIDE_HINTS } from "../lib/guide";
 import SkillManager from "./SkillManager";
 import "./SkillPanel.css";
 
 interface Props {
   skills: SkillMeta[];
   collapsed: boolean;
+  /** True when the active chat has no messages — hide the full tree to avoid duplicating the empty-chat chips. */
+  chatEmpty?: boolean;
+  pickDisabled?: boolean;
+  onPickSaying: (saying: string) => void;
   onToggle: (id: string, enabled: boolean) => void;
   onInspect: (path: string) => Promise<SkillInspectResult>;
   onConfirmInstall: (path: string, enabled: boolean, applyFixes?: boolean) => Promise<void>;
@@ -18,6 +21,9 @@ interface Props {
 export default function SkillPanel({
   skills,
   collapsed,
+  chatEmpty = false,
+  pickDisabled = false,
+  onPickSaying,
   onToggle,
   onInspect,
   onConfirmInstall,
@@ -25,7 +31,20 @@ export default function SkillPanel({
   onRefresh,
 }: Props) {
   const [managerOpen, setManagerOpen] = useState(false);
-  const enabled = filterEnabledSkills(skills);
+  const defaultOpen = useMemo(
+    () => new Set(CAPABILITY_TREE.map((b) => b.id)),
+    [],
+  );
+  const [openBranches, setOpenBranches] = useState<Set<string>>(defaultOpen);
+
+  function toggleBranch(id: string) {
+    setOpenBranches((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   if (collapsed) {
     return <section className="pane skill-pane skill-pane--collapsed" aria-hidden="true" />;
@@ -35,39 +54,54 @@ export default function SkillPanel({
     <>
       <section className="pane skill-pane">
         <div className="pane-header">
-          <span className="pane-title">技能</span>
+          <span className="pane-title">办事能力</span>
         </div>
 
-        <div className="pane-body">
-          {enabled.length === 0 ? (
-            <div className="skill-empty">
-              <p className="empty-hint">{GUIDE_HINTS.noEnabledSkills}</p>
-            </div>
+        <div className="pane-body capability-tree-scroll">
+          {chatEmpty ? (
+            <p className="capability-tree-idle">{GUIDE_HINTS.capabilityTreeIdle}</p>
           ) : (
-            <ul className="skill-list">
-              {enabled.map((s) => {
-                const title = s.display_name || s.name;
-                return (
-                  <li
-                    key={s.id}
-                    className="skill-card skill-card--display"
-                    title={s.description || undefined}
-                  >
-                    <div className="skill-card-head">
-                      <h3 className="skill-card-title">{title}</h3>
-                      {s.tier === "heavy" ? (
-                        <span
-                          className="skill-card-meta"
-                          title={s.min_ram_gb ? `建议内存 ≥ ${s.min_ram_gb}GB` : undefined}
-                        >
-                          增强
+            <>
+              <ul className="capability-tree" aria-label="办事能力">
+                {CAPABILITY_TREE.map((branch) => {
+                  const open = openBranches.has(branch.id);
+                  return (
+                    <li key={branch.id} className="capability-branch">
+                      <button
+                        type="button"
+                        className="capability-branch-toggle"
+                        aria-expanded={open}
+                        onClick={() => toggleBranch(branch.id)}
+                      >
+                        <span className="capability-branch-mark" aria-hidden="true">
+                          {open ? "▾" : "▸"}
                         </span>
+                        <span className="capability-branch-label">{branch.label}</span>
+                        <span className="capability-branch-count">{branch.children.length}</span>
+                      </button>
+                      {open ? (
+                        <ul className="capability-leaves">
+                          {branch.children.map((leaf) => (
+                            <li key={leaf.id}>
+                              <button
+                                type="button"
+                                className="capability-leaf"
+                                title={leaf.saying}
+                                disabled={pickDisabled}
+                                onClick={() => onPickSaying(leaf.saying)}
+                              >
+                                {leaf.label}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="capability-tree-hint">{GUIDE_HINTS.capabilityTree}</p>
+            </>
           )}
         </div>
 

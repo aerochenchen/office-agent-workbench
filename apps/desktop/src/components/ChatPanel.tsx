@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, LiveStep } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
-import { GUIDE_HINTS } from "../lib/guide";
+import {
+  GUIDE_HINTS,
+  GUIDE_TRY_HEADLINE,
+  GUIDE_TRY_SAYINGS,
+} from "../lib/guide";
 import { runtimeLogHint } from "../lib/runtimeClient";
 import type { HealthState } from "../lib/runtimeStatus";
 import {
@@ -20,6 +24,8 @@ interface Props {
   sending: boolean;
   runtimeReady: boolean;
   health?: HealthState;
+  draftPrefill?: string | null;
+  onDraftPrefillConsumed?: () => void;
   onSend: (text: string, attachedPaths: string[]) => void | Promise<void>;
   onStop?: () => void;
   onToggleSteps?: (messageId: string) => void;
@@ -196,6 +202,8 @@ export default function ChatPanel({
   sending,
   runtimeReady,
   health = "ok",
+  draftPrefill,
+  onDraftPrefillConsumed,
   onSend,
   onStop,
   onToggleSteps,
@@ -206,10 +214,13 @@ export default function ChatPanel({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteDraft, setPasteDraft] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const hasPending = useMemo(
     () => messages.some((m) => m.phase === "pending" || m.phase === "live"),
     [messages],
   );
+  const disabled = sending || !runtimeReady;
+  const attachDisabled = disabled || !workspaceOpen;
 
   const emptyHint =
     health === "down"
@@ -219,6 +230,25 @@ export default function ChatPanel({
         : workspaceOpen
           ? GUIDE_HINTS.workspaceReady
           : GUIDE_HINTS.emptyChat;
+
+  function applyTrySaying(saying: string) {
+    setDraft(saying);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el || el.disabled) return;
+      el.focus();
+      const end = saying.length;
+      el.setSelectionRange(end, end);
+    });
+  }
+
+  useEffect(() => {
+    if (!draftPrefill) return;
+    applyTrySaying(draftPrefill);
+    onDraftPrefillConsumed?.();
+    // Only react to new prefill tokens from the capability tree / empty-chat chips.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- consume once per prefill value
+  }, [draftPrefill]);
 
   useEffect(() => {
     const el = document.querySelector(".chat-scroll");
@@ -237,9 +267,6 @@ export default function ChatPanel({
     setPasteOpen(false);
     setPasteDraft("");
   }, [workspacePath]);
-
-  const disabled = sending || !runtimeReady;
-  const attachDisabled = disabled || !workspaceOpen;
 
   function mergeAccepted(paths: string[]) {
     if (!workspacePath) return;
@@ -324,13 +351,13 @@ export default function ChatPanel({
       </div>
 
       <div className="pane-body chat-scroll">
-        {messages.length === 0 && !workspaceOpen && (
+        {messages.length === 0 && (
           <div className="chat-empty">
             <img
               className="chat-empty-logo"
               src="/logo-mark.png"
-              width={48}
-              height={48}
+              width={36}
+              height={36}
               alt=""
               aria-hidden="true"
             />
@@ -338,24 +365,28 @@ export default function ChatPanel({
               <div className="chat-empty-name">{APP_NAME}</div>
               <div className="chat-empty-tagline">{APP_TAGLINE}</div>
             </div>
-            <p className="empty-hint chat-empty-hint">{emptyHint}</p>
-          </div>
-        )}
-        {messages.length === 0 && workspaceOpen && (
-          <div className="chat-empty">
-            <img
-              className="chat-empty-logo"
-              src="/logo-mark.png"
-              width={48}
-              height={48}
-              alt=""
-              aria-hidden="true"
-            />
-            <div className="chat-empty-brand">
-              <div className="chat-empty-name">{APP_NAME}</div>
-              <div className="chat-empty-tagline">{APP_TAGLINE}</div>
-            </div>
-            <div className="empty-hint chat-empty-hint">{emptyHint}</div>
+            {health !== "down" && health !== "checking" ? (
+              <div className="chat-try">
+                <div className="chat-try-headline">{GUIDE_TRY_HEADLINE}</div>
+                <ul className="chat-try-list" aria-label="可尝试的说法">
+                  {GUIDE_TRY_SAYINGS.map((saying) => (
+                    <li key={saying}>
+                      <button
+                        type="button"
+                        className="chat-try-item"
+                        disabled={disabled}
+                        onClick={() => applyTrySaying(saying)}
+                      >
+                        {saying}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="empty-hint chat-empty-hint">{emptyHint}</p>
+              </div>
+            ) : (
+              <p className="empty-hint chat-empty-hint">{emptyHint}</p>
+            )}
           </div>
         )}
         {messages.map((m) => (
@@ -453,6 +484,7 @@ export default function ChatPanel({
               +
             </button>
             <textarea
+              ref={inputRef}
               className="chat-input"
               placeholder={
                 !runtimeReady
@@ -461,7 +493,7 @@ export default function ChatPanel({
                     ? "处理中，完成后可继续…"
                     : workspaceOpen
                       ? "描述要办的事…"
-                      : "试着问：文书通能帮我做什么？"
+                      : "描述要办的事，或点上方一句…"
               }
               value={draft}
               disabled={disabled}

@@ -9,6 +9,22 @@ export interface GuidePillar {
   body: string;
 }
 
+/** One clickable office task under a capability branch. */
+export interface CapabilityLeaf {
+  id: string;
+  /** Short name in the capability tree. */
+  label: string;
+  /** Full phrasing filled into the composer. */
+  saying: string;
+}
+
+/** Top-level branch in the official 办事能力 tree (shell catalog, not skills). */
+export interface CapabilityBranch {
+  id: string;
+  label: string;
+  children: readonly CapabilityLeaf[];
+}
+
 export const FORBIDDEN_USER_TERMS = ["工作区", "项目文件夹"] as const;
 
 /** Core advantages: brief on welcome, full text in settings. */
@@ -45,10 +61,190 @@ export const GUIDE_PILLARS: readonly GuidePillar[] = [
 
 export const GUIDE_WELCOME_TITLE = "认识文书通";
 
+/** Empty-chat headline: one visual that signals breadth of capability. */
+export const GUIDE_TRY_HEADLINE = "一句话开始办事";
+/** @deprecated Kept for copy audits; UI no longer shows a separate subline. */
+export const GUIDE_TRY_SUBLINE = "点一句填入下方，再按发送";
+
+/**
+ * Official 办事能力 tree — grounded in agent primitives (folder read/write,
+ * Office extract, draft/rewrite, scripted methods), shown as office scenarios.
+ * Not derived from installed skills; skills remain a management-layer concept.
+ */
+export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
+  {
+    id: "drafting",
+    label: "文章写作",
+    children: [
+      {
+        id: "format-gongwen",
+        label: "公文格式排版",
+        saying: "把这份稿按公文格式排好",
+      },
+      {
+        id: "proofread",
+        label: "通篇校对",
+        saying: "通篇校对术语、数字和称谓",
+      },
+      {
+        id: "draft-rewrite",
+        label: "起草与改写",
+        saying: "按这个提纲起草一稿，语气正式一些",
+      },
+      {
+        id: "template-fill-doc",
+        label: "按模板补全",
+        saying: "按这个模板，用文件夹里的材料把内容补全",
+      },
+    ],
+  },
+  {
+    id: "review",
+    label: "对照审校",
+    children: [
+      {
+        id: "revision-diff",
+        label: "两版对比",
+        saying: "两版对比，列出主要改动",
+      },
+      {
+        id: "clause-compare",
+        label: "条款对照",
+        saying: "对照范本看条款改了哪些",
+      },
+      {
+        id: "term-unify",
+        label: "术语统一",
+        saying: "把文中的单位名称和术语统一一遍",
+      },
+    ],
+  },
+  {
+    id: "materials",
+    label: "材料汇总",
+    children: [
+      {
+        id: "multidoc-digest",
+        label: "多份汇总",
+        saying: "多份材料汇总成带出处的报告",
+      },
+      {
+        id: "extract-points",
+        label: "抽取要点",
+        saying: "把这份材料里的要点摘出来备用",
+      },
+      {
+        id: "folder-survey",
+        label: "文件夹摸底",
+        saying: "看看当前文件夹里有哪些材料，按类型列个清单",
+      },
+    ],
+  },
+  {
+    id: "meeting",
+    label: "会议督办",
+    children: [
+      {
+        id: "minutes",
+        label: "整理纪要",
+        saying: "根据这份记录整理成会议纪要",
+      },
+      {
+        id: "action-items",
+        label: "待办分人",
+        saying: "根据纪要整理待办并分给人",
+      },
+      {
+        id: "follow-up",
+        label: "催办说明",
+        saying: "根据待办台账写一份本周催办说明",
+      },
+    ],
+  },
+  {
+    id: "data",
+    label: "表格成文",
+    children: [
+      {
+        id: "excel-brief",
+        label: "表写情况说明",
+        saying: "用这张表写一段情况说明",
+      },
+      {
+        id: "data-insights",
+        label: "数据结论",
+        saying: "解读这张表，写出几条主要结论",
+      },
+      {
+        id: "form-fill",
+        label: "按表填报",
+        saying: "按这个空白表，用文件夹里的材料填好",
+      },
+    ],
+  },
+  {
+    id: "present",
+    label: "汇报演示",
+    children: [
+      {
+        id: "ppt-palette",
+        label: "正式配色",
+        saying: "给 PPT 选一套正式汇报配色",
+      },
+      {
+        id: "ppt-outline",
+        label: "汇报提纲",
+        saying: "按这份材料整理成汇报提纲，适合做成幻灯片",
+      },
+      {
+        id: "ppt-deck-and-script",
+        label: "演示文稿",
+        saying: "根据这份材料生成一套 PPT，并写一份对应的汇报稿",
+      },
+    ],
+  },
+] as const;
+
+/** Featured leaf ids for the empty-chat grid (one main visual, not the full tree). */
+const FEATURED_SAYING_IDS: readonly string[] = [
+  "format-gongwen",
+  "revision-diff",
+  "multidoc-digest",
+  "action-items",
+  "excel-brief",
+  "proofread",
+  "ppt-palette",
+  "clause-compare",
+] as const;
+
+function leafById(id: string): CapabilityLeaf | undefined {
+  for (const branch of CAPABILITY_TREE) {
+    const found = branch.children.find((c) => c.id === id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** Flat featured sayings for the empty-chat main visual. */
+export const GUIDE_TRY_SAYINGS: readonly string[] = FEATURED_SAYING_IDS.map((id) => {
+  const leaf = leafById(id);
+  if (!leaf) throw new Error(`FEATURED_SAYING_IDS missing leaf: ${id}`);
+  return leaf.saying;
+});
+
+export function listCapabilityLeaves(): CapabilityLeaf[] {
+  return CAPABILITY_TREE.flatMap((b) => [...b.children]);
+}
+
 export const GUIDE_HINTS = {
   noWorkspace: "打开文件夹后，对话与成果会保存在本地；办事时文书通只在该文件夹内读写。",
-  emptyChat: "先随便问一句，我再告诉你文书通能帮你做什么。",
-  workspaceReady: "描述要办的事即可；对话与成果会留在本地文件夹内。",
+  /** Under empty-chat featured sayings: hand off to the right rail after first turn. */
+  emptyChat: "开聊后可在右侧浏览全部分类",
+  workspaceReady: "开聊后可在右侧浏览全部分类",
+  /** Right rail when chat already has messages. */
+  capabilityTree: "点一项填入对话；也可直接描述要办的事",
+  /** Right rail while empty chat — avoid duplicating the middle featured list. */
+  capabilityTreeIdle: "先在中间选一句开始。开聊后，这里展示完整分类。",
   bootWaiting: "首次启动约需数秒，请稍候。",
   noSessions: "暂无对话。点击上方「新建对话」开始。",
   noSkills: "可导入本地技能包增强能力；安装与运行均在本机。",

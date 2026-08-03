@@ -56,6 +56,7 @@ function App() {
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [skillsCollapsed, setSkillsCollapsed] = useState(false);
+  const [draftPrefill, setDraftPrefill] = useState<string | null>(null);
   const [config, setConfig] = useState<RuntimeConfig>(DEFAULT_CONFIG);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestEvent | null>(null);
   const [permissionBusy, setPermissionBusy] = useState(false);
@@ -592,7 +593,7 @@ function App() {
             className="btn btn--ghost"
             onClick={() => setSkillsCollapsed((v) => !v)}
           >
-            {skillsCollapsed ? "展开技能" : "收起技能"}
+            {skillsCollapsed ? "展开办事能力" : "收起办事能力"}
           </button>
           <button type="button" className="btn btn--ghost" onClick={() => setSettingsOpen(true)}>
             设置
@@ -623,6 +624,8 @@ function App() {
           sending={sending}
           runtimeReady={runtimeReady}
           health={health}
+          draftPrefill={draftPrefill}
+          onDraftPrefillConsumed={() => setDraftPrefill(null)}
           onSend={handleSend}
           onStop={() => void handleStop()}
           onToggleSteps={handleToggleSteps}
@@ -631,6 +634,9 @@ function App() {
         <SkillPanel
           skills={skills}
           collapsed={skillsCollapsed}
+          chatEmpty={messages.length === 0}
+          pickDisabled={sending || !runtimeReady}
+          onPickSaying={setDraftPrefill}
           onToggle={handleToggleSkill}
           onInspect={handleInspectSkill}
           onConfirmInstall={handleConfirmInstallSkill}
