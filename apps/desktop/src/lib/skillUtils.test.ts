@@ -15,6 +15,9 @@ describe("BUNDLED_SKILL_IDS", () => {
     expect(BUNDLED_SKILL_IDS.has("office-visual-design")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("doc-proofread")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("doc-diff-review")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("meeting-followup")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("material-gap")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("sheet-to-brief")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("skill-builder")).toBe(true);
   });
 });

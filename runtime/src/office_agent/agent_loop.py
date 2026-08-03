@@ -68,6 +68,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "支持 .docx/.xlsx；.doc/.xls 会先规范化为 docx/xlsx 再抽取。"
                 "不要用 workspace_read 读这些二进制格式。"
                 "docx 可用 granularity=paragraph 按段抽取（校对/定位）；默认 section 按章节。"
+                "xlsx 可用 granularity=cells 按单元格抽取（表格成文）；默认按行块。"
             ),
             "parameters": {
                 "type": "object",
@@ -87,8 +88,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                     "granularity": {
                         "type": "string",
-                        "description": "docx 抽取粒度：section（默认，按章节）或 paragraph（每段一单元）",
-                        "enum": ["section", "paragraph"],
+                        "description": (
+                            "抽取粒度：docx 用 section|paragraph；"
+                            "xlsx 用 section|cells（cells=单元格级定位）"
+                        ),
+                        "enum": ["section", "paragraph", "cells"],
                     },
                 },
                 "required": ["path"],
@@ -293,6 +297,8 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "format_gongwen dump → 标注 roles → apply（禁止跳过结构标注）；\n"
         "- 两版 docx 对比须用共享脚本 docx_diff（run_shared_script），再按 doc-diff-review 解读；\n"
         "- 校对/术语/红笔优先按 doc-proofread；抽取定位用 workspace_extract 且 granularity=paragraph；\n"
+        "- 会议纪要/待办/催办优先按 meeting-followup；文件夹摸底与缺料按 material-gap；\n"
+        "- 表格写说明/结论/填报优先按 sheet-to-brief，xlsx 抽取用 granularity=cells；\n"
         "- 若工作区存在 `.office-agent/glossary.md`，校对、术语统一与起草前应先读取，口径与之对齐；\n"
         "- 读取 .docx/.doc/.xlsx/.xls 请用 workspace_extract（.doc/.xls 会先转为 docx/xlsx）；"
         "纯文本才用 workspace_read；\n"

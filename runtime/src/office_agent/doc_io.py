@@ -453,6 +453,16 @@ def extract_docx(
     return units, truncated, warnings
 
 
+def _col_letters(index_1based: int) -> str:
+    """1-based column index → Excel letters (1→A, 27→AA)."""
+    n = index_1based
+    letters: list[str] = []
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        letters.append(chr(65 + rem))
+    return "".join(reversed(letters)) or "A"
+
+
 def extract_xlsx(
     path: Path,
     doc_key: str,
@@ -460,8 +470,13 @@ def extract_xlsx(
     max_chars: int,
     max_units: int,
     max_rows_per_sheet: int = 500,
+    granularity: str = "section",
 ) -> tuple[list[ExtractUnit], bool, list[str]]:
     from openpyxl import load_workbook
+
+    gran = (granularity or "section").strip().lower()
+    if gran not in {"section", "cells"}:
+        gran = "section"
 
     warnings: list[str] = []
     wb = load_workbook(str(path), read_only=True, data_only=True)
@@ -471,6 +486,60 @@ def extract_xlsx(
     unit_i = 0
 
     for sheet in wb.worksheets:
+        if gran == "cells":
+            headers: dict[int, str] = {}
+            row_i = 0
+            for row in sheet.iter_rows(values_only=True):
+                row_i += 1
+                if row_i > max_rows_per_sheet:
+                    warnings.append(f"工作表 {sheet.title} 超过 {max_rows_per_sheet} 行，已截断")
+                    truncated = True
+                    break
+                for col_i, v in enumerate(row, start=1):
+                    if v is None:
+                        continue
+                    text = str(v).strip()
+                    if not text:
+                        continue
+                    if row_i == 1:
+                        headers[col_i] = text
+                    if len(units) >= max_units:
+                        truncated = True
+                        break
+                    cell_ref = f"{_col_letters(col_i)}{row_i}"
+                    locator = f"{sheet.title}!{cell_ref}"
+                    header = headers.get(col_i, "")
+                    line = f"{cell_ref}\t{text}"
+                    if header and row_i > 1:
+                        line = f"{cell_ref}\t{header}={text}"
+                    if total_chars + len(line) > max_chars:
+                        truncated = True
+                        break
+                    unit_i += 1
+                    units.append(
+                        ExtractUnit(
+                            unit_id=f"{doc_key}#u{unit_i:02d}",
+                            kind="cell",
+                            locator=locator,
+                            text=line,
+                            tags=_tags_for(text),
+                            meta={
+                                "sheet": sheet.title,
+                                "cell": cell_ref,
+                                "row": row_i,
+                                "col": col_i,
+                                "header": header,
+                                "granularity": "cells",
+                            },
+                        )
+                    )
+                    total_chars += len(line)
+                if truncated or len(units) >= max_units:
+                    break
+            if truncated or len(units) >= max_units:
+                break
+            continue
+
         rows_out: list[str] = []
         row_count = 0
         for row in sheet.iter_rows(values_only=True):
@@ -516,6 +585,7 @@ def extract_xlsx(
                     locator=f"{sheet.title}!rows {start + 1}-{end_row}",
                     text=text,
                     tags=_tags_for(text),
+                    meta={"granularity": "section", "sheet": sheet.title},
                 )
             )
             total_chars += len(text)
@@ -581,7 +651,11 @@ def extract_file(
             )
         elif fmt == "xlsx":
             units, truncated, w2 = extract_xlsx(
-                modern, doc_key, max_chars=max_chars, max_units=max_units
+                modern,
+                doc_key,
+                max_chars=max_chars,
+                max_units=max_units,
+                granularity=granularity,
             )
         else:
             raise DocIOError(f"unsupported extract format: {fmt}")

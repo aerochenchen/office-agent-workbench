@@ -57,7 +57,8 @@ workspace_extract
 
 ### Step 3 — 读取口径（可选，1 步）
 
-若存在 `.office-agent/glossary.md`，`workspace_read` 通读；术语/称谓/口径类问题**必须**对照该文件。不存在则跳过，并在报告首页注明「未提供 glossary」。
+若存在 `.office-agent/glossary.md`，`workspace_read` 通读；术语/称谓/口径类问题**必须**对照该文件。不存在则跳过，并在报告首页注明「未提供 glossary」。  
+单位可复制本技能 `references/glossary.example.md` 到工作区改名使用。
 
 ### Step 4 — 写校对报告（Agent，约 2～4 步）
 

@@ -42,6 +42,8 @@ output/<中文名>-<skill-id>.zip                # 仅在用户要分享时产�
 
 规范细则见 `references/skill-md-spec.md`（frontmatter 字段、命名、正文章节）与 `references/script-conventions.md`（脚本 CLI 约定、可用依赖、硬禁项）。**起草前必须先读这两份**。
 
+单位口径文件模板：`templates/glossary.md.tmpl`（复制到用户工作区 `.office-agent/glossary.md`）；完整示例见预置 `doc-proofread/references/glossary.example.md`。
+
 ---
 
 ## 七步纪律（必须按序）

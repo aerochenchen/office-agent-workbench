@@ -93,6 +93,19 @@ def test_extract_xlsx_units(tmp_path: Path):
     assert "95%" in blob
 
 
+def test_extract_xlsx_cells_granularity(tmp_path: Path):
+    src = tmp_path / "cells.xlsx"
+    _write_xlsx(src)
+    result = extract_file(src, tmp_path, granularity="cells")
+    assert result.ok is True
+    cells = [u for u in result.units if u.kind == "cell"]
+    assert len(cells) >= 6  # header 3 + data 3+
+    assert any(u.locator.endswith("!B2") or "B2" in u.locator for u in cells)
+    assert any("95%" in u.text for u in cells)
+    assert all(u.meta.get("granularity") == "cells" for u in cells)
+    assert any(u.meta.get("header") == "完成率" for u in cells if u.meta.get("row", 0) > 1)
+
+
 def test_normalize_xls_to_xlsx(tmp_path: Path):
     src = tmp_path / "legacy.xls"
     _write_xls(src)

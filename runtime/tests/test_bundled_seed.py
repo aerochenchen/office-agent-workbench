@@ -48,6 +48,9 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
         "office-visual-design",
         "doc-proofread",
         "doc-diff-review",
+        "meeting-followup",
+        "material-gap",
+        "sheet-to-brief",
         "skill-builder",
     }
     skills: list = []
@@ -76,6 +79,12 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert proof.get("display_name") == "通篇校对"
     diff_review = next(s for s in skills if s["id"] == "doc-diff-review")
     assert diff_review.get("display_name") == "文稿对照"
+    meeting = next(s for s in skills if s["id"] == "meeting-followup")
+    assert meeting.get("display_name") == "会议督办"
+    gap = next(s for s in skills if s["id"] == "material-gap")
+    assert gap.get("display_name") == "材料摸底"
+    sheet = next(s for s in skills if s["id"] == "sheet-to-brief")
+    assert sheet.get("display_name") == "表格成文"
     assert (tmp_path / "shared-scripts" / "format_gongwen.py").is_file()
     assert (tmp_path / "shared-scripts" / "docx_diff.py").is_file()
     assert (tmp_path / "skills" / "government-document-format" / "SKILL.md").is_file()
@@ -83,6 +92,9 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert (tmp_path / "skills" / "office-visual-design" / "palettes" / "zhengwu-navy.md").is_file()
     assert (tmp_path / "skills" / "doc-proofread" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "doc-diff-review" / "SKILL.md").is_file()
+    assert (tmp_path / "skills" / "meeting-followup" / "SKILL.md").is_file()
+    assert (tmp_path / "skills" / "material-gap" / "scripts" / "inventory.py").is_file()
+    assert (tmp_path / "skills" / "sheet-to-brief" / "SKILL.md").is_file()
 
 
 def test_seed_does_not_clobber_user_skill(tmp_path: Path, monkeypatch):
