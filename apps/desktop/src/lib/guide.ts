@@ -238,8 +238,9 @@ export function listCapabilityLeaves(): CapabilityLeaf[] {
 
 export const GUIDE_HINTS = {
   noWorkspace: "打开文件夹后，对话与成果会保存在本地；办事时文书通只在该文件夹内读写。",
-  /** Under empty-chat featured sayings: hand off to the right rail after first turn. */
-  emptyChat: "开聊后可在右侧浏览全部分类",
+  /** Under empty-chat featured sayings when no folder is open. */
+  emptyChat: "要排版、汇总等办事，请先打开文件夹",
+  /** Under empty-chat featured sayings when a folder is already open. */
   workspaceReady: "开聊后可在右侧浏览全部分类",
   /** Right rail when chat already has messages. */
   capabilityTree: "点一项填入对话；也可直接描述要办的事",

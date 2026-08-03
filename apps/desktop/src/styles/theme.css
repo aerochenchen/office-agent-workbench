@@ -54,6 +54,22 @@
   --motion-base: 180ms ease-out;
 }
 
+html[data-ui-scale="sm"] {
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 15px;
+  --font-size-xl: 17px;
+}
+
+html[data-ui-scale="lg"] {
+  --font-size-xs: 13px;
+  --font-size-sm: 15px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 22px;
+}
+
 * {
   box-sizing: border-box;
 }

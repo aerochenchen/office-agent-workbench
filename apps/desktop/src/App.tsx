@@ -15,6 +15,7 @@ import {
   shouldRetrySkillsRefresh,
 } from "./lib/skillsRefresh";
 import { getRuntimeToken, isTauriRuntime, pickFolder } from "./lib/tauri";
+import { initUiPreferences } from "./lib/uiPreferences";
 import type {
   ChatMessage,
   LiveStep,
@@ -66,6 +67,10 @@ function App() {
   const streamHandleRef = useRef<ChatStreamHandle | null>(null);
   sessionIdRef.current = sessionId;
   sendingRef.current = sending;
+
+  useEffect(() => {
+    initUiPreferences();
+  }, []);
 
   useEffect(() => {
     const bootStartedAt = Date.now();

@@ -48,7 +48,7 @@ describe("guide copy", () => {
 
   it("emptyChat invites chatting first", () => {
     expect(GUIDE_HINTS.emptyChat.length).toBeGreaterThan(8);
-    expect(GUIDE_HINTS.emptyChat).toMatch(/右侧|分类/);
+    expect(GUIDE_HINTS.emptyChat).toMatch(/打开文件夹|办事/);
   });
 
   it("try-sayings are the empty-chat capability signal", () => {
@@ -60,8 +60,8 @@ describe("guide copy", () => {
     }
   });
 
-  it("emptyChat and workspaceReady hand off to the right rail after first turn", () => {
-    expect(GUIDE_HINTS.emptyChat).toMatch(/右侧/);
+  it("emptyChat nudges folder-first for office work; workspaceReady points to the rail", () => {
+    expect(GUIDE_HINTS.emptyChat).toMatch(/打开文件夹/);
     expect(GUIDE_HINTS.workspaceReady).toMatch(/右侧/);
     expect(GUIDE_HINTS.capabilityTreeIdle).toMatch(/中间|开聊/);
   });

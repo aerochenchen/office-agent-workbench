@@ -18,6 +18,11 @@
   flex-direction: column;
 }
 
+.modal--settings {
+  width: 640px;
+  max-height: min(84vh, 640px);
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -42,6 +47,67 @@
   object-fit: contain;
 }
 
+.settings-layout {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.settings-nav {
+  flex: 0 0 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border-right: 1px solid var(--line-1);
+  background: var(--paper-1);
+  overflow-y: auto;
+}
+
+.settings-nav-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.settings-nav-item:hover {
+  background: var(--line-1);
+  color: var(--ink-0);
+}
+
+.settings-nav-item--active {
+  background: var(--accent-teal-soft);
+  color: var(--ink-0);
+  font-weight: 600;
+}
+
+.settings-nav-item:focus-visible {
+  outline: 2px solid var(--accent-teal);
+  outline-offset: 1px;
+}
+
+.settings-pane.modal-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+}
+
 .modal-body {
   padding: var(--space-4);
   display: flex;
@@ -64,6 +130,13 @@
   letter-spacing: 0.04em;
   color: var(--ink-1);
   text-transform: uppercase;
+}
+
+.settings-subsection-title {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--ink-1);
 }
 
 .field {
@@ -100,16 +173,12 @@
 }
 
 .settings-about {
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--line-1);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
 .settings-guide {
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--line-1);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -220,4 +289,26 @@
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--line-1);
+}
+
+@media (max-width: 560px) {
+  .modal--settings {
+    width: calc(100vw - 24px);
+  }
+
+  .settings-layout {
+    flex-direction: column;
+  }
+
+  .settings-nav {
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: none;
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .settings-nav-item {
+    width: auto;
+  }
 }

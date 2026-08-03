@@ -113,6 +113,19 @@ def test_onboarding_prompt_local_colleague_tone_and_boundaries():
     assert "自然口语" not in text
     assert "禁止" in text and "贴肉" in text  # ban-list example, not endorsement
     assert "不是外网搜索" in text
+    assert "在文件夹里办公" in text
+    assert "不会触及文件夹以外" in text or "不会动文件夹以外" in text
+    assert "精炼" in text or "相关" in text
+    assert "等价" in text  # paste-vs-folder must not be framed as equal paths
+    assert "贴进对话框" in text or "贴到对话" in text
+
+
+def test_onboarding_prompt_folder_first_for_office_tasks():
+    text = _build_onboarding_system_prompt()
+    assert "办事类" in text or "排版" in text
+    assert "必须先请用户「打开文件夹」" in text
+    # Pure chat remains allowed; do not require folder for every utterance.
+    assert "闲聊" in text or "纯对话" in text or "改措辞" in text
 
 
 def test_work_prompt_includes_local_use_and_colleague_tone():
