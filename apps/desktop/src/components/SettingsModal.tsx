@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { APP_NAME, APP_TAGLINE, APP_VERSION, OSS_CREDITS } from "../lib/brand";
 import { GUIDE_PILLARS } from "../lib/guide";
 import type { PermissionMode, RuntimeConfig } from "../lib/types";
+import { readOssNoticeText } from "../lib/tauri";
 import {
   applyUiFontScale,
   applyUiTheme,
@@ -67,6 +68,9 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   const [uiTheme, setUiTheme] = useState<UiTheme>(() => readUiTheme());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noticeBusy, setNoticeBusy] = useState(false);
+  const [noticeError, setNoticeError] = useState<string | null>(null);
+  const [noticeText, setNoticeText] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -79,10 +83,13 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setFontScale(readUiFontScale());
       setUiTheme(readUiTheme());
       setError(null);
+      setNoticeError(null);
+      setNoticeText(null);
     }
   }, [open, initial]);
 
   const editable = tab === "appearance" || tab === "model" || tab === "permission";
+  const viewingNotice = noticeText !== null;
 
   const permissionHint = useMemo(
     () => PERMISSION_MODE_OPTIONS.find((o) => o.value === permissionMode)?.hint,
@@ -105,6 +112,24 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   function handleThemeChange(next: UiTheme) {
     setUiTheme(next);
     applyUiTheme(next);
+  }
+
+  async function handleOpenNotice() {
+    setNoticeBusy(true);
+    setNoticeError(null);
+    try {
+      const text = await readOssNoticeText();
+      setNoticeText(text);
+    } catch (err) {
+      setNoticeError(err instanceof Error ? err.message : "无法打开开源许可文件");
+    } finally {
+      setNoticeBusy(false);
+    }
+  }
+
+  function handleCloseNotice() {
+    setNoticeText(null);
+    setNoticeError(null);
   }
 
   function handleModelPresetChange(value: string) {
@@ -154,14 +179,16 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
               alt=""
               aria-hidden="true"
             />
-            <span>设置</span>
+            <span>{viewingNotice ? "开源许可" : "设置"}</span>
           </div>
-          <button type="button" className="btn btn--ghost btn--xs" onClick={handleClose}>
-            关闭
+          <button type="button" className="btn btn--ghost btn--xs" onClick={viewingNotice ? handleCloseNotice : handleClose}>
+            {viewingNotice ? "返回" : "关闭"}
           </button>
         </div>
 
         <div className="settings-layout">
+          {!viewingNotice ? (
+            <>
           <nav className="settings-nav" aria-label="设置分类">
             {SETTINGS_TABS.map((item) => (
               <button
@@ -350,24 +377,49 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                     ))}
                   </ul>
                   <p className="settings-about-oss-note">
-                    完整第三方清单与许可文本见发版包根目录的 NOTICE 文件（由
-                    scripts/generate_notice.sh 生成）。
+                    本软件使用开源组件构建。上表为主要致谢；完整第三方清单与许可协议可点下方查看。
                   </p>
+                  <button
+                    type="button"
+                    className="btn btn--ghost settings-about-notice-btn"
+                    disabled={noticeBusy}
+                    onClick={() => void handleOpenNotice()}
+                  >
+                    {noticeBusy ? "加载中…" : "查看开源许可"}
+                  </button>
+                  {noticeError ? <p className="field-error">{noticeError}</p> : null}
                 </div>
               </section>
             )}
           </div>
+            </>
+          ) : (
+            <div className="settings-notice-pane" role="region" aria-label="开源许可">
+              {noticeError ? <p className="field-error">{noticeError}</p> : null}
+              <pre className="settings-notice-text" tabIndex={0}>
+                {noticeText}
+              </pre>
+            </div>
+          )}
         </div>
 
         <div className="modal-footer">
-          <button type="button" className="btn btn--ghost" onClick={handleClose}>
-            {editable ? "取消" : "关闭"}
-          </button>
-          {editable ? (
-            <button type="button" className="btn btn--primary" onClick={handleSave} disabled={saving}>
-              {saving ? "保存中…" : "保存"}
+          {viewingNotice ? (
+            <button type="button" className="btn btn--ghost" onClick={handleCloseNotice}>
+              返回关于
             </button>
-          ) : null}
+          ) : (
+            <>
+              <button type="button" className="btn btn--ghost" onClick={handleClose}>
+                {editable ? "取消" : "关闭"}
+              </button>
+              {editable ? (
+                <button type="button" className="btn btn--primary" onClick={handleSave} disabled={saving}>
+                  {saving ? "保存中…" : "保存"}
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
     </div>

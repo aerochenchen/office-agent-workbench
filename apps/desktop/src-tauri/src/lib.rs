@@ -66,6 +66,42 @@ async fn pick_skill_file(app: tauri::AppHandle) -> Result<Option<String>, String
     Ok(file.map(|f| f.to_string()))
 }
 
+/// Locate bundled `NOTICE` for the About → 查看开源许可 action.
+fn find_notice_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Ok(rd) = app.path().resource_dir() {
+        candidates.push(rd.join("NOTICE"));
+        candidates.push(rd.join("resources").join("NOTICE"));
+    }
+    for rel in ["NOTICE", "resources/NOTICE"] {
+        if let Ok(p) = app.path().resolve(rel, BaseDirectory::Resource) {
+            candidates.push(p);
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("resources").join("NOTICE"));
+            candidates.push(dir.join("NOTICE"));
+        }
+    }
+
+    for p in candidates {
+        if p.is_file() {
+            log_line(&format!("[office-agent] found NOTICE at {p:?}"));
+            return Some(p);
+        }
+        log_line(&format!("[office-agent] NOTICE miss {p:?}"));
+    }
+    None
+}
+
+#[tauri::command]
+fn read_notice_text(app: tauri::AppHandle) -> Result<String, String> {
+    let path = find_notice_path(&app).ok_or_else(|| "未找到开源许可文件 NOTICE".to_string())?;
+    std::fs::read_to_string(&path).map_err(|e| format!("无法读取开源许可文件：{e}"))
+}
+
 fn log_line(msg: &str) {
     eprintln!("{msg}");
     if let Ok(mut f) = OpenOptions::new()
@@ -349,6 +385,7 @@ pub fn run() {
             pick_folder,
             pick_skill_file,
             get_runtime_token,
+            read_notice_text,
         ])
         .setup(|app| {
             let api_token = generate_runtime_token();

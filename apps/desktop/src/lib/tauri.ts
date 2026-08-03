@@ -99,6 +99,15 @@ export async function openPath(path: string): Promise<void> {
   await openNativePath(path);
 }
 
+/** Load bundled NOTICE text for the in-app read-only license viewer. */
+export async function readOssNoticeText(): Promise<string> {
+  if (!isTauriRuntime()) {
+    throw new Error("请在文书通桌面应用中查看开源许可");
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<string>("read_notice_text");
+}
+
 /** Known deliverable suffixes for path linkification. */
 export const DELIVERABLE_SUFFIXES = [
   ".docx",

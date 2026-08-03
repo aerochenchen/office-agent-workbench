@@ -20,13 +20,15 @@
 
 .modal--settings {
   width: 640px;
-  max-height: min(84vh, 640px);
+  height: min(84vh, 560px);
+  max-height: min(84vh, 560px);
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto;
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--line-1);
   font-size: var(--font-size-sm);
@@ -100,11 +102,12 @@
 .settings-pane.modal-body {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  max-height: min(60vh, 480px);
+  max-height: none;
   overflow-y: auto;
 }
 
@@ -176,6 +179,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.settings-about-oss {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .settings-guide {
@@ -256,6 +265,41 @@
   line-height: 1.5;
 }
 
+.settings-about-notice-btn {
+  margin-top: var(--space-3);
+  align-self: flex-start;
+}
+
+.settings-notice-pane {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow: hidden;
+}
+
+.settings-notice-text {
+  margin: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-sm);
+  background: var(--paper-1);
+  color: var(--ink-1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: var(--font-size-xs);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .settings-about-oss-list {
   list-style: none;
   margin: var(--space-2) 0;
@@ -286,6 +330,7 @@
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  flex: 0 0 auto;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--line-1);
@@ -294,6 +339,7 @@
 @media (max-width: 560px) {
   .modal--settings {
     width: calc(100vw - 24px);
+    height: min(88vh, 640px);
   }
 
   .settings-layout {
