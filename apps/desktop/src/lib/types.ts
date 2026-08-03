@@ -5,6 +5,7 @@ export interface TreeEntry {
 }
 
 export type SkillTier = "light" | "heavy";
+export type SkillSource = "bundled" | "user";
 
 export interface SkillMeta {
   id: string;
@@ -16,6 +17,10 @@ export interface SkillMeta {
   min_ram_gb: number | null;
   permissions?: string[];
   enabled: boolean;
+  source?: SkillSource;
+  overridden?: boolean;
+  can_uninstall?: boolean;
+  can_export?: boolean;
 }
 
 export interface SkillInspect {
@@ -29,6 +34,20 @@ export interface SkillInspect {
   permissions: string[];
   shared_scripts?: string[];
   enabled?: boolean;
+  source?: SkillSource;
+  overridden?: boolean;
+  can_uninstall?: boolean;
+  can_export?: boolean;
+}
+
+export interface SkillReplaceInfo {
+  existing_id: string;
+  existing_version: string | null;
+  incoming_version: string;
+  is_bundled: boolean;
+  installed: boolean;
+  requires_force: boolean;
+  will_override_bundled: boolean;
 }
 
 export interface SkillValidation {
@@ -44,6 +63,7 @@ export interface SkillInspectResult {
   auto_fixes?: string[];
   /** True when applying auto_fixes would make the package installable. */
   can_install_with_fixes?: boolean;
+  replace?: SkillReplaceInfo | null;
 }
 
 export interface SkillInstallResult {

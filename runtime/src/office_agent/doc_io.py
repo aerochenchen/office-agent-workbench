@@ -42,15 +42,19 @@ class ExtractUnit:
     locator: str
     text: str
     tags: list[str] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "unit_id": self.unit_id,
             "kind": self.kind,
             "locator": self.locator,
             "text": self.text,
             "tags": self.tags,
         }
+        if self.meta:
+            out["meta"] = self.meta
+        return out
 
 
 @dataclass
@@ -309,8 +313,19 @@ def _normalize_doc_win32(src: Path, dest: Path) -> bool:
     return dest.is_file()
 
 
-def extract_docx(path: Path, doc_key: str, *, max_chars: int, max_units: int) -> tuple[list[ExtractUnit], bool, list[str]]:
+def extract_docx(
+    path: Path,
+    doc_key: str,
+    *,
+    max_chars: int,
+    max_units: int,
+    granularity: str = "section",
+) -> tuple[list[ExtractUnit], bool, list[str]]:
     from docx import Document
+
+    gran = (granularity or "section").strip().lower()
+    if gran not in {"section", "paragraph"}:
+        gran = "section"
 
     warnings: list[str] = []
     doc = Document(str(path))
@@ -332,31 +347,46 @@ def extract_docx(path: Path, doc_key: str, *, max_chars: int, max_units: int) ->
         )
 
     units_raw: list[dict[str, Any]] = []
-    current: dict[str, Any] | None = None
-    for para in structure:
-        if para["is_heading"]:
-            if current and current["paragraphs"]:
-                units_raw.append(current)
-            current = {
-                "title": para["text"],
-                "level": para["level"],
-                "paragraphs": [para["text"]],
-                "start": para["para_idx"],
-                "end": para["para_idx"],
-            }
-        else:
-            if current is None:
+
+    if gran == "paragraph":
+        for para in structure:
+            kind = "heading" if para["is_heading"] else "paragraph"
+            units_raw.append(
+                {
+                    "title": para["text"][:40],
+                    "level": para["level"],
+                    "paragraphs": [para["text"]],
+                    "start": para["para_idx"],
+                    "end": para["para_idx"],
+                    "kind": kind,
+                }
+            )
+    else:
+        current: dict[str, Any] | None = None
+        for para in structure:
+            if para["is_heading"]:
+                if current and current["paragraphs"]:
+                    units_raw.append(current)
                 current = {
-                    "title": "(前言)",
-                    "level": 0,
-                    "paragraphs": [],
+                    "title": para["text"],
+                    "level": para["level"],
+                    "paragraphs": [para["text"]],
                     "start": para["para_idx"],
                     "end": para["para_idx"],
                 }
-            current["paragraphs"].append(para["text"])
-            current["end"] = para["para_idx"]
-    if current and current["paragraphs"]:
-        units_raw.append(current)
+            else:
+                if current is None:
+                    current = {
+                        "title": "(前言)",
+                        "level": 0,
+                        "paragraphs": [],
+                        "start": para["para_idx"],
+                        "end": para["para_idx"],
+                    }
+                current["paragraphs"].append(para["text"])
+                current["end"] = para["para_idx"]
+        if current and current["paragraphs"]:
+            units_raw.append(current)
 
     # Also pull tables as separate units
     for ti, table in enumerate(doc.tables):
@@ -399,6 +429,12 @@ def extract_docx(path: Path, doc_key: str, *, max_chars: int, max_units: int) ->
         locator = raw["title"]
         if raw["start"] >= 0:
             locator = f"{raw['title']}@p{raw['start']}-{raw['end']}"
+        meta: dict[str, Any] = {
+            "level": int(raw.get("level") or 0),
+            "para_start": int(raw["start"]),
+            "para_end": int(raw["end"]),
+            "granularity": gran,
+        }
         units.append(
             ExtractUnit(
                 unit_id=f"{doc_key}#u{idx:02d}",
@@ -406,6 +442,7 @@ def extract_docx(path: Path, doc_key: str, *, max_chars: int, max_units: int) ->
                 locator=locator,
                 text=text,
                 tags=_tags_for(text),
+                meta=meta,
             )
         )
         total_chars += len(text)
@@ -500,6 +537,7 @@ def extract_file(
     max_chars: int = 80_000,
     max_units: int = 200,
     force_normalize: bool = False,
+    granularity: str = "section",
 ) -> ExtractResult:
     """Normalize if needed, then extract units from docx/xlsx."""
     path = path.resolve()
@@ -535,7 +573,11 @@ def extract_file(
 
         if fmt == "docx":
             units, truncated, w2 = extract_docx(
-                modern, doc_key, max_chars=max_chars, max_units=max_units
+                modern,
+                doc_key,
+                max_chars=max_chars,
+                max_units=max_units,
+                granularity=granularity,
             )
         elif fmt == "xlsx":
             units, truncated, w2 = extract_xlsx(

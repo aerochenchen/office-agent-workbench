@@ -140,6 +140,7 @@ class InstallSkillBody(BaseModel):
     path: str
     enabled: bool = True
     apply_fixes: bool = False
+    force_overwrite: bool = False
 
 
 class SetEnabledBody(BaseModel):
@@ -296,19 +297,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         skills = []
         for m in office.registry.scan():
             m = office.maybe_localize_skill(m)
-            skills.append(
-                {
-                    "id": m.id,
-                    "name": m.ui_name,
-                    "display_name": m.display_name or m.ui_name,
-                    "description": m.description,
-                    "version": m.version,
-                    "tier": m.tier,
-                    "min_ram_gb": m.min_ram_gb,
-                    "permissions": m.permissions,
-                    "enabled": m.enabled,
-                }
-            )
+            skills.append(office.registry.meta_payload(m))
         return {"skills": skills}
 
     def _skill_error_detail(exc: SkillError) -> dict[str, Any] | str:
@@ -346,6 +335,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 if "can_install_with_fixes" in validation
                 else validation.get("ok")
             ),
+            "replace": office.registry.replace_info(meta),
         }
 
     @app.post("/skills/install")
@@ -353,7 +343,10 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         src = Path(body.path).expanduser()
         try:
             meta = office.registry.install_path(
-                src, enabled=body.enabled, apply_fixes=body.apply_fixes
+                src,
+                enabled=body.enabled,
+                apply_fixes=body.apply_fixes,
+                force_overwrite=body.force_overwrite,
             )
         except SkillError as e:
             raise HTTPException(status_code=400, detail=_skill_error_detail(e)) from e
@@ -385,12 +378,23 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         office.registry.set_enabled(skill_id, body.enabled)
         return {"ok": True, "id": skill_id, "enabled": body.enabled}
 
+    @app.post("/skills/{skill_id}/restore-bundled")
+    def restore_bundled_skill(skill_id: str) -> dict[str, Any]:
+        try:
+            meta = office.registry.restore_bundled(skill_id)
+        except SkillError as e:
+            raise HTTPException(status_code=400, detail=_skill_error_detail(e)) from e
+        office.zh_locale_tried.discard(meta.id)
+        meta = office.maybe_localize_skill(meta)
+        return {"ok": True, "skill": office.registry.meta_payload(meta)}
+
     @app.delete("/skills/{skill_id}")
     def uninstall_skill(skill_id: str) -> dict[str, Any]:
         try:
             office.registry.uninstall(skill_id)
         except SkillError as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
+            # Bundled policy / not found → 400 so UI can show the message
+            raise HTTPException(status_code=400, detail=_skill_error_detail(e)) from e
         office.zh_locale_tried.discard(skill_id)
         return {"ok": True, "id": skill_id}
 

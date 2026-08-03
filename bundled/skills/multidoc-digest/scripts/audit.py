@@ -83,6 +83,84 @@ def single_source_data_risks(cards: list[dict]) -> list[dict]:
     return risks
 
 
+_DATA_HINT = re.compile(
+    r"\d+(?:\.\d+)?\s*%|"
+    r"\d+(?:\.\d+)?\s*[万亿千百个项人次名]|"
+    r"同比|环比|占比|人均|增长|下降"
+)
+
+
+def uncited_quantitative_sentences(text: str) -> list[str]:
+    """Sentences that look quantitative but carry no citation anchor.
+
+    A trailing fragment that is only citation anchors (common after 。) is
+    treated as belonging to the previous sentence.
+    """
+    parts = re.split(r"(?<=[。！？；\n])", text)
+    # Merge citation-only tails into the previous part
+    merged: list[str] = []
+    for part in parts:
+        s = part.strip()
+        if not s:
+            continue
+        only_cites = CITATION_RE.sub("", s).strip() == ""
+        if only_cites and merged:
+            merged[-1] = merged[-1] + s
+            continue
+        merged.append(s)
+
+    out: list[str] = []
+    for s in merged:
+        if len(s) < 8:
+            continue
+        if CITATION_RE.search(s):
+            continue
+        if _DATA_HINT.search(s):
+            out.append(s[:160])
+    return out
+
+
+def card_points_missing_citations(cards: list[dict]) -> list[dict]:
+    """Data/quantitative card points with empty citations — hard failure candidates."""
+    missing: list[dict] = []
+    for card in cards:
+        for pt in card.get("points") or []:
+            claim = str(pt.get("claim") or "")
+            citations = [str(c) for c in (pt.get("citations") or []) if str(c).strip()]
+            kind = str(pt.get("kind") or "")
+            has_data = bool(pt.get("has_data")) or kind == "data"
+            if not has_data and not _DATA_HINT.search(claim):
+                continue
+            if not citations:
+                missing.append(
+                    {
+                        "doc_id": card.get("doc_id"),
+                        "claim": claim,
+                        "reason": "定量/数据要点缺少 citations",
+                    }
+                )
+    return missing
+
+
+def pending_risks_leaked_as_facts(cards: list[dict], report_text: str) -> list[dict]:
+    """If card risks appear verbatim in the report as confirmed prose, flag them."""
+    leaked: list[dict] = []
+    for card in cards:
+        for risk in card.get("risks") or []:
+            text = str(risk).strip()
+            if len(text) < 6:
+                continue
+            if text in report_text:
+                leaked.append(
+                    {
+                        "doc_id": card.get("doc_id"),
+                        "risk": text,
+                        "reason": "卡片 risks 原文出现在汇总报告中（不得写成已确认事实）",
+                    }
+                )
+    return leaked
+
+
 def render_report(
     *,
     report_path: Path,
@@ -96,17 +174,34 @@ def render_report(
     risks: list[dict],
     samples: list[dict],
     coverage_ratio: float,
+    uncited_data: list[str],
+    missing_card_cites: list[dict],
+    leaked_risks: list[dict],
+    failed: bool,
 ) -> str:
     ok_docs = [m for m in manifest if m.get("status") == "ok"]
     err_docs = [m for m in manifest if m.get("status") != "ok"]
+    fail_banner = (
+        "> **审计结论：FAIL** — 存在无效引用、无出处定量表述、或缺引用的数据卡片要点；须修订后重跑审计。"
+        if failed
+        else "> **审计结论：PASS** — 未发现阻断级引用问题（仍请人工抽检）。"
+    )
     lines = [
         "# 批量文档整理 · 审计报告",
+        "",
+        fail_banner,
         "",
         f"- 被审计文件：`{report_path}`",
         f"- 入库成功：{len(ok_docs)} 份；失败：{len(err_docs)} 份",
         f"- 正文引用锚点数：{len(cited_ids)}（去重 {len(set(cited_ids))}）",
         f"- **文档覆盖率**：{coverage_ratio:.1%}（{len(used_docs)}/{len(ok_docs)}）",
-        f"- **无效引用**：{len(invalid)}",
+        f"- **无效引用**：{len(invalid)}" + (" **【FAIL】**" if invalid else ""),
+        f"- **报告中无出处定量句**：{len(uncited_data)}"
+        + (" **【FAIL】**" if uncited_data else ""),
+        f"- **卡片定量要点缺 citations**：{len(missing_card_cites)}"
+        + (" **【FAIL】**" if missing_card_cites else ""),
+        f"- **risks 泄漏为正文**：{len(leaked_risks)}"
+        + (" **【FAIL】**" if leaked_risks else ""),
         f"- **单一来源数据风险**：{len(risks)}",
         "",
         "## 1. 覆盖率",
@@ -143,6 +238,32 @@ def render_report(
             lines.append(f"- …另有 {len(risks) - 50} 条省略")
     else:
         lines.append("（未发现）")
+
+    lines.extend(["", "## 3b. 阻断项明细", ""])
+    if invalid:
+        lines.append("### 无效引用（FAIL）")
+        for c in invalid:
+            lines.append(f"- `{c}`")
+        lines.append("")
+    if uncited_data:
+        lines.append("### 报告中无出处定量句（FAIL）")
+        for s in uncited_data[:40]:
+            lines.append(f"- {s}")
+        if len(uncited_data) > 40:
+            lines.append(f"- …另有 {len(uncited_data) - 40} 条省略")
+        lines.append("")
+    if missing_card_cites:
+        lines.append("### 卡片定量要点缺 citations（FAIL）")
+        for r in missing_card_cites[:40]:
+            lines.append(f"- [{r.get('doc_id')}] {r.get('claim')} — {r.get('reason')}")
+        lines.append("")
+    if leaked_risks:
+        lines.append("### risks 泄漏为正文（FAIL）")
+        for r in leaked_risks[:40]:
+            lines.append(f"- [{r.get('doc_id')}] {r.get('risk')}")
+        lines.append("")
+    if not (invalid or uncited_data or missing_card_cites or leaked_risks):
+        lines.append("（无阻断项）")
 
     lines.extend(["", "## 4. 抽检对照（报告论断 ↔ 源 chunk）", ""])
     if samples:
@@ -228,6 +349,10 @@ def main(argv: list[str] | None = None) -> int:
 
     cards = load_cards(cards_dir)
     risks = single_source_data_risks(cards)
+    uncited_data = uncited_quantitative_sentences(report_text)
+    missing_card_cites = card_points_missing_citations(cards)
+    leaked_risks = pending_risks_leaked_as_facts(cards, report_text)
+    failed = bool(invalid or uncited_data or missing_card_cites or leaked_risks)
 
     sent_cites = sentences_with_citations(report_text)
     rng = random.Random(args.seed)
@@ -258,12 +383,17 @@ def main(argv: list[str] | None = None) -> int:
         risks=risks,
         samples=samples,
         coverage_ratio=coverage_ratio,
+        uncited_data=uncited_data,
+        missing_card_cites=missing_card_cites,
+        leaked_risks=leaked_risks,
+        failed=failed,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(md, encoding="utf-8")
 
     summary = {
-        "ok": True,
+        "ok": not failed,
+        "failed": failed,
         "report": str(report_path),
         "audit_output": str(out_path),
         "coverage_ratio": round(coverage_ratio, 4),
@@ -273,11 +403,14 @@ def main(argv: list[str] | None = None) -> int:
         "citations_total": len(cited_ids),
         "citations_unique": len(set(cited_ids)),
         "invalid_citations": invalid,
+        "uncited_quantitative": len(uncited_data),
+        "missing_card_citations": len(missing_card_cites),
+        "leaked_risks": len(leaked_risks),
         "single_source_risks": len(risks),
         "samples": len(samples),
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

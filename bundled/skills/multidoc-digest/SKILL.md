@@ -2,7 +2,7 @@
 name: multidoc-digest
 display_name: 批量文档整理
 description: 把几十份 Word 材料汇总成一份带出处的报告。
-version: 1.0.0
+version: 1.1.0
 tier: light
 permissions:
   - workspace_read
@@ -81,13 +81,16 @@ run_skill_script
       "has_data": true
     }
   ],
-  "summary": "80～150 字摘要"
+  "summary": "80～150 字摘要",
+  "risks": ["待核实：某数据仅口头传达，未见文件"]
 }
 ```
 
 规则：
 
 - 每个 `claim` **至少**一个本篇 `citations`（必须来自该 pack 中出现的 `doc_id#sec`）
+- **定量 / `has_data` / `kind=data` 的要点若无 citations → 审计 FAIL**
+- 可选 `risks`：待核实项、存疑表述；**reduce 成文时不得把 risks 写成已确认事实**（原文泄漏进报告会审计 FAIL）
 - 不得编造不存在的锚点
 - 50 份时务必分批；若接近工具步数上限，`finish` 并提示用户开新对话继续 map（cards 已落盘可续跑）
 
@@ -120,7 +123,9 @@ run_skill_script
   args: [output/汇总报告.md]
 ```
 
-产出 `output/审计报告.md`。向用户摘要：覆盖率、未用文件数、无效引用数、单一来源数据告警数。
+产出 `output/审计报告.md`。向用户摘要：覆盖率、未用文件数、无效引用数、单一来源数据告警数、**审计 PASS/FAIL**。
+
+硬规则：`invalid_citations`、报告中无出处定量句、卡片定量缺 citations、`risks` 泄漏为正文 → **FAIL**（脚本退出码 1）。FAIL 时须修订报告或卡片后重跑本步，不得宣称汇总完成。
 
 ### Step 6 — 可选排版
 
@@ -146,4 +151,9 @@ run_skill_script
 1. `output/汇总报告.md` — 分主题正文 + 内联引用 + 参考文献
 2. `output/审计报告.md` — 覆盖率、未用清单、无效引用、风险清单、抽检对照
 
-评估时优先看审计报告：金标事实是否出现、无效引用是否为 0、未用文件是否合理。
+评估时优先看审计报告：金标事实是否出现、无效引用是否为 0、未用文件是否合理、审计结论是否 PASS。
+
+## 变更记录
+
+- 1.1.0 — Wave1：审计阻断无效引用/无出处定量/缺 cite 数据卡/`risks` 泄漏；卡片 schema 增加 `risks`
+- 1.0.0 — 首版六步流水线

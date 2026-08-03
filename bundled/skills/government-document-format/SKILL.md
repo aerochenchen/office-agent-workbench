@@ -2,7 +2,7 @@
 name: government-document-format
 display_name: 公文格式排版
 description: 对工作区内 .docx 按 GB/T 9704-2012 做党政机关公文排版（结构角色需先判定）。
-version: 2.1.0
+version: 2.1.1
 tier: light
 permissions:
   - workspace_read
@@ -81,9 +81,19 @@ run_shared_script
 
 产出：`<原名>_formatted.docx`。检查 stdout 的 `numbering_fixed`（西式→国标次数）、`warnings`、`applied_roles`。
 
-### Step 4 — 复核（Agent，1 步）
+### Step 4 — 复核与收口自检（Agent，1 步）
 
-对照 `hierarchy.md` 抽查：一级是否黑体、二级是否楷体、西式编号是否已改、主送是否顶格。向用户报告输出路径、`notes`、以及脚本 warnings；印章/页码/垂直精确定位标为人工项。
+对照 `hierarchy.md` 抽查：一级是否黑体、二级是否楷体、西式编号是否已改、主送是否顶格。
+
+**收口自检清单（全部勾选后再 finish）：**
+
+- [ ] 每个非空段在 `roles.json` 中有对应 `index`（无遗漏段落）
+- [ ] 无空 `role`；拿不准的已标 `skip`/`body` 并在 `notes` 说明
+- [ ] 西式二级（`1.1` 等）已标 `h2` 或已由 apply 转换（查 stdout `numbering_fixed`）
+- [ ] 产出文件在 `output/`（或用户明确指定的交付路径），而非工作区根目录乱堆
+- [ ] 向用户报告：输出路径、`notes`、脚本 `warnings`；印章/页码/垂直精确定位标为人工项
+
+写作/汇总最终交付 `.docx` 时：**默认走本 skill 四步**；禁止跳过结构标注直接 `format_gongwen apply`。
 
 ## 角色 → 样式（速查）
 
@@ -120,6 +130,7 @@ run_shared_script
 
 ## 变更记录
 
+- **2.1.1**：Wave1 收口自检清单（角色覆盖 / 空 role / 西式标号 / output 路径）。
 - **2.1.0**：apply 自动将 `1.1`/`2.1` 等西式二级及半角 `(一)` 转为「（一）（二）」；dump 增加 `hint_text` / `needs_numbering_fix`。
 - **2.0.0**：改为 Agent 结构分析 + 脚本按角色施加；`dump`/`apply` 双命令；废弃纯启发式一键排版。
 - **1.1.0**：固定行距/缩进与部分标题启发式。

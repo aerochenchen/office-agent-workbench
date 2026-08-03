@@ -200,12 +200,14 @@ class ToolExecutor:
         max_chars = int(args.get("max_chars") or 80_000)
         max_units = int(args.get("max_units") or 200)
         force = bool(args.get("force_normalize") or False)
+        granularity = str(args.get("granularity") or "section")
         result = extract_file(
             path,
             self.workspace.root,
             max_chars=max_chars,
             max_units=max_units,
             force_normalize=force,
+            granularity=granularity,
         )
         payload = result.to_dict()
         # Prefer workspace-relative path in response

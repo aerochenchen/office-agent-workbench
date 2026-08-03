@@ -40,33 +40,29 @@
 
 .skill-manager-header-actions {
   display: flex;
-  align-items: center;
   gap: var(--space-2);
 }
 
 .skill-manager-body {
   flex: 1 1 auto;
-  overflow-y: auto;
-  padding: var(--space-3);
-}
-
-.skill-manager-section + .skill-manager-section {
-  margin-top: var(--space-4);
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .skill-manager-section-title {
   margin: 0 0 var(--space-2);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink-2);
-  text-transform: uppercase;
+  color: var(--ink-1);
 }
 
 .skill-manager-section-empty {
   margin: 0;
   padding: var(--space-3);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--ink-2);
   border: 1px dashed var(--line-1);
   border-radius: var(--radius-md);
@@ -88,9 +84,23 @@
   background: var(--paper-1);
 }
 
+.skill-card-meta--overridden {
+  color: var(--color-warn, #8a5a00);
+  border-color: color-mix(in srgb, var(--color-warn, #8a5a00) 35%, transparent);
+}
+
 .skill-card-version {
   flex: 0 0 auto;
   font-size: 10px;
   color: var(--ink-2);
   letter-spacing: 0.02em;
+}
+
+.skill-preview-force {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
 }

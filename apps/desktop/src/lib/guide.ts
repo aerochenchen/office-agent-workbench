@@ -48,7 +48,9 @@ export const GUIDE_PILLARS: readonly GuidePillar[] = [
     title: "方法沉淀",
     summary: "好流程变成可复用技能。",
     body:
-      "把反复验证过的工作方法与流程固化成技能：规则写清、重活脚本化，安装后可反复调用。经验留在单位里，而不是每次从零写提示词。",
+      "把反复验证过的工作方法与流程固化成技能：规则写清、重活脚本化，安装后可反复调用。"
+      + "单位称谓与术语可写入文件夹内 `.office-agent/glossary.md`，校对与起草时对照使用。"
+      + "经验留在单位里，而不是每次从零写提示词。",
   },
   {
     id: "skills",
@@ -203,6 +205,27 @@ export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
       },
     ],
   },
+  {
+    id: "beyond",
+    label: "举一反三",
+    children: [
+      {
+        id: "one-to-three",
+        label: "一文三用",
+        saying: "同一批材料，分别整理成报告正文、汇报提纲和答问口径",
+      },
+      {
+        id: "red-pen-review",
+        label: "红笔找茬",
+        saying: "站在审稿领导的角度，把这篇里站不住、易被追问的地方标出来",
+      },
+      {
+        id: "gap-checklist",
+        label: "缺啥补啥",
+        saying: "对照要写的题目，列出文件夹里还缺哪些关键材料",
+      },
+    ],
+  },
 ] as const;
 
 /** Featured leaf ids for the empty-chat grid (one main visual, not the full tree). */
@@ -242,8 +265,6 @@ export const GUIDE_HINTS = {
   emptyChat: "要排版、汇总等办事，请先打开文件夹",
   /** Under empty-chat featured sayings when a folder is already open. */
   workspaceReady: "开聊后可在右侧浏览全部分类",
-  /** Right rail when chat already has messages. */
-  capabilityTree: "点一项填入对话；也可直接描述要办的事",
   /** Right rail while empty chat — avoid duplicating the middle featured list. */
   capabilityTreeIdle: "先在中间选一句开始。开聊后，这里展示完整分类。",
   bootWaiting: "首次启动约需数秒，请稍候。",

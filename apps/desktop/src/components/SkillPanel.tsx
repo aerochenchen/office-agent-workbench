@@ -13,8 +13,14 @@ interface Props {
   onPickSaying: (saying: string) => void;
   onToggle: (id: string, enabled: boolean) => void;
   onInspect: (path: string) => Promise<SkillInspectResult>;
-  onConfirmInstall: (path: string, enabled: boolean, applyFixes?: boolean) => Promise<void>;
+  onConfirmInstall: (
+    path: string,
+    enabled: boolean,
+    applyFixes?: boolean,
+    forceOverwrite?: boolean,
+  ) => Promise<void>;
   onUninstall: (id: string) => Promise<void>;
+  onRestoreBundled: (id: string) => Promise<void>;
   onRefresh: () => void;
 }
 
@@ -28,6 +34,7 @@ export default function SkillPanel({
   onInspect,
   onConfirmInstall,
   onUninstall,
+  onRestoreBundled,
   onRefresh,
 }: Props) {
   const [managerOpen, setManagerOpen] = useState(false);
@@ -65,19 +72,23 @@ export default function SkillPanel({
               <ul className="capability-tree" aria-label="办事能力">
                 {CAPABILITY_TREE.map((branch) => {
                   const open = openBranches.has(branch.id);
+                  const beyond = branch.id === "beyond";
                   return (
-                    <li key={branch.id} className="capability-branch">
+                    <li
+                      key={branch.id}
+                      className={`capability-branch${beyond ? " capability-branch--beyond" : ""}`}
+                    >
                       <button
                         type="button"
                         className="capability-branch-toggle"
                         aria-expanded={open}
                         onClick={() => toggleBranch(branch.id)}
                       >
-                        <span className="capability-branch-mark" aria-hidden="true">
-                          {open ? "▾" : "▸"}
-                        </span>
+                        <span
+                          className={`capability-branch-seal${open ? " capability-branch-seal--open" : ""}`}
+                          aria-hidden="true"
+                        />
                         <span className="capability-branch-label">{branch.label}</span>
-                        <span className="capability-branch-count">{branch.children.length}</span>
                       </button>
                       {open ? (
                         <ul className="capability-leaves">
@@ -90,7 +101,8 @@ export default function SkillPanel({
                                 disabled={pickDisabled}
                                 onClick={() => onPickSaying(leaf.saying)}
                               >
-                                {leaf.label}
+                                <span className="capability-leaf-dot" aria-hidden="true" />
+                                <span className="capability-leaf-label">{leaf.label}</span>
                               </button>
                             </li>
                           ))}
@@ -100,7 +112,6 @@ export default function SkillPanel({
                   );
                 })}
               </ul>
-              <p className="capability-tree-hint">{GUIDE_HINTS.capabilityTree}</p>
             </>
           )}
         </div>
@@ -124,6 +135,7 @@ export default function SkillPanel({
         onInspect={onInspect}
         onConfirmInstall={onConfirmInstall}
         onUninstall={onUninstall}
+        onRestoreBundled={onRestoreBundled}
         onRefresh={onRefresh}
       />
     </>

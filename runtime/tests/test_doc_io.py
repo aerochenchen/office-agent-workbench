@@ -61,6 +61,25 @@ def test_extract_docx_units(tmp_path: Path):
     blob = "\n".join(u.text for u in result.units)
     assert "128" in blob
     assert result.units[0].unit_id.startswith(result.doc_key + "#u")
+    assert result.units[0].meta.get("granularity") == "section"
+    assert "para_start" in result.units[0].meta
+    d = result.units[0].to_dict()
+    assert "meta" in d
+
+
+def test_extract_docx_paragraph_granularity(tmp_path: Path):
+    src = tmp_path / "para.docx"
+    _write_docx(src)
+    section = extract_file(src, tmp_path, granularity="section")
+    paragraph = extract_file(src, tmp_path, granularity="paragraph")
+    assert paragraph.ok is True
+    # _write_docx: heading + 4 body paras = 5 non-empty paragraphs
+    para_units = [u for u in paragraph.units if u.kind in {"paragraph", "heading"}]
+    assert len(para_units) == 5
+    assert len(para_units) >= len(section.units)
+    assert all(u.meta.get("granularity") == "paragraph" for u in para_units)
+    assert all(u.meta.get("para_start") == u.meta.get("para_end") for u in para_units)
+    assert any(u.kind == "heading" for u in para_units)
 
 
 def test_extract_xlsx_units(tmp_path: Path):
@@ -157,3 +176,18 @@ def test_workspace_extract_xls_via_tool(tmp_path: Path, monkeypatch):
     assert r["format"] == "xlsx"
     assert r.get("normalized_path")
     assert any("数字化" in u["text"] for u in r["units"])
+
+
+def test_workspace_extract_passes_granularity(tmp_path: Path):
+    (tmp_path / "data" / "skills").mkdir(parents=True)
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    _write_docx(ws / "稿.docx")
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    r = ex.execute(
+        "workspace_extract",
+        {"path": "稿.docx", "granularity": "paragraph"},
+    )
+    assert r["ok"] is True
+    assert len([u for u in r["units"] if u["kind"] in {"paragraph", "heading"}]) == 5
+    assert r["units"][0]["meta"]["granularity"] == "paragraph"

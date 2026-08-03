@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import type { SkillInspectResult, SkillMeta } from "../lib/types";
-import { isBundledSkillId } from "../lib/skillUtils";
+import {
+  canUninstallSkill,
+  isBundledSkill,
+} from "../lib/skillUtils";
 import { isTauriRuntime, pickFolder, pickSkillFile } from "../lib/tauri";
 import "./SkillPanel.css";
 import "./SkillManager.css";
@@ -11,8 +14,14 @@ export interface SkillManagerProps {
   onClose: () => void;
   onToggle: (id: string, enabled: boolean) => void;
   onInspect: (path: string) => Promise<SkillInspectResult>;
-  onConfirmInstall: (path: string, enabled: boolean, applyFixes?: boolean) => Promise<void>;
+  onConfirmInstall: (
+    path: string,
+    enabled: boolean,
+    applyFixes?: boolean,
+    forceOverwrite?: boolean,
+  ) => Promise<void>;
   onUninstall: (id: string) => Promise<void>;
+  onRestoreBundled: (id: string) => Promise<void>;
   onRefresh: () => void;
 }
 
@@ -24,17 +33,20 @@ function shortDesc(text: string, max = 72): string {
 
 function SkillManagerRow({
   skill,
-  uninstalling,
+  busy,
   onToggle,
   onUninstall,
+  onRestore,
 }: {
   skill: SkillMeta;
-  uninstalling: boolean;
+  busy: boolean;
   onToggle: (id: string, enabled: boolean) => void;
   onUninstall: (skill: SkillMeta) => void;
+  onRestore: (skill: SkillMeta) => void;
 }) {
   const title = skill.display_name || skill.name;
-  const bundled = isBundledSkillId(skill.id);
+  const bundled = isBundledSkill(skill);
+  const uninstallable = canUninstallSkill(skill);
 
   return (
     <li className={`skill-card${skill.enabled ? "" : " skill-card--off"}`}>
@@ -43,8 +55,13 @@ function SkillManagerRow({
           <h3 className="skill-card-title">{title}</h3>
           {skill.version ? <span className="skill-card-version">v{skill.version}</span> : null}
           {bundled ? (
-            <span className="skill-card-meta skill-card-meta--bundled" title="应用预置技能">
+            <span className="skill-card-meta skill-card-meta--bundled" title="应用预置技能，不可卸载或导出">
               预置
+            </span>
+          ) : null}
+          {bundled && skill.overridden ? (
+            <span className="skill-card-meta skill-card-meta--overridden" title="已用本地包覆盖出厂版本">
+              已本地更新
             </span>
           ) : null}
           {skill.tier === "heavy" ? (
@@ -65,15 +82,28 @@ function SkillManagerRow({
         )}
       </div>
       <div className="skill-card-actions">
-        <button
-          type="button"
-          className="btn btn--ghost btn--xs skill-uninstall-btn"
-          title={`卸载 ${title}`}
-          disabled={uninstalling}
-          onClick={() => onUninstall(skill)}
-        >
-          卸载
-        </button>
+        {bundled ? (
+          <button
+            type="button"
+            className="btn btn--ghost btn--xs"
+            title={`恢复预置版本：${title}`}
+            disabled={busy}
+            onClick={() => onRestore(skill)}
+          >
+            恢复预置
+          </button>
+        ) : null}
+        {uninstallable ? (
+          <button
+            type="button"
+            className="btn btn--ghost btn--xs skill-uninstall-btn"
+            title={`卸载 ${title}`}
+            disabled={busy}
+            onClick={() => onUninstall(skill)}
+          >
+            卸载
+          </button>
+        ) : null}
         <label className="skill-switch" title={skill.enabled ? "已启用" : "已停用"}>
           <input
             type="checkbox"
@@ -97,6 +127,7 @@ export default function SkillManager({
   onInspect,
   onConfirmInstall,
   onUninstall,
+  onRestoreBundled,
   onRefresh,
 }: SkillManagerProps) {
   const [pickMenuOpen, setPickMenuOpen] = useState(false);
@@ -104,12 +135,14 @@ export default function SkillManager({
   const [installError, setInstallError] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [preview, setPreview] = useState<SkillInspectResult | null>(null);
+  const [forceOverwrite, setForceOverwrite] = useState(false);
   const [uninstallTarget, setUninstallTarget] = useState<SkillMeta | null>(null);
-  const [uninstalling, setUninstalling] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<SkillMeta | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   const enabledSkills = skills.filter((s) => s.enabled);
   const disabledSkills = skills.filter((s) => !s.enabled);
-  const subDialogOpen = Boolean(preview || uninstallTarget);
+  const subDialogOpen = Boolean(preview || uninstallTarget || restoreTarget);
 
   useEffect(() => {
     if (!open) return;
@@ -118,17 +151,22 @@ export default function SkillManager({
       if (preview) {
         setPreview(null);
         setPreviewPath(null);
+        setForceOverwrite(false);
         return;
       }
       if (uninstallTarget) {
         setUninstallTarget(null);
         return;
       }
+      if (restoreTarget) {
+        setRestoreTarget(null);
+        return;
+      }
       onClose();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, preview, uninstallTarget, onClose]);
+  }, [open, preview, uninstallTarget, restoreTarget, onClose]);
 
   useEffect(() => {
     if (!open) {
@@ -136,7 +174,9 @@ export default function SkillManager({
       setInstallError(null);
       setPreview(null);
       setPreviewPath(null);
+      setForceOverwrite(false);
       setUninstallTarget(null);
+      setRestoreTarget(null);
     }
   }, [open]);
 
@@ -148,10 +188,13 @@ export default function SkillManager({
     setInstallError(null);
     setPreview(null);
     setPreviewPath(null);
+    setForceOverwrite(false);
     try {
       const result = await onInspect(trimmed);
       setPreview(result);
       setPreviewPath(trimmed);
+      // Lower version over bundled requires explicit force; pre-check the box off.
+      setForceOverwrite(false);
     } catch (err) {
       setInstallError(err instanceof Error ? err.message : "无法读取技能包");
     } finally {
@@ -171,12 +214,18 @@ export default function SkillManager({
 
   async function confirmInstall(enable: boolean, applyFixes = false) {
     if (!previewPath) return;
+    const replace = preview?.replace;
+    if (replace?.requires_force && !forceOverwrite) {
+      setInstallError("新包版本低于已安装的预置技能，请勾选「强制覆盖」后再安装");
+      return;
+    }
     setInstalling(true);
     setInstallError(null);
     try {
-      await onConfirmInstall(previewPath, enable, applyFixes);
+      await onConfirmInstall(previewPath, enable, applyFixes, forceOverwrite);
       setPreview(null);
       setPreviewPath(null);
+      setForceOverwrite(false);
     } catch (err) {
       setInstallError(err instanceof Error ? err.message : "安装失败");
     } finally {
@@ -186,7 +235,7 @@ export default function SkillManager({
 
   async function confirmUninstall() {
     if (!uninstallTarget) return;
-    setUninstalling(true);
+    setActionBusy(true);
     setInstallError(null);
     try {
       await onUninstall(uninstallTarget.id);
@@ -194,7 +243,21 @@ export default function SkillManager({
     } catch (err) {
       setInstallError(err instanceof Error ? err.message : "卸载失败");
     } finally {
-      setUninstalling(false);
+      setActionBusy(false);
+    }
+  }
+
+  async function confirmRestore() {
+    if (!restoreTarget) return;
+    setActionBusy(true);
+    setInstallError(null);
+    try {
+      await onRestoreBundled(restoreTarget.id);
+      setRestoreTarget(null);
+    } catch (err) {
+      setInstallError(err instanceof Error ? err.message : "恢复失败");
+    } finally {
+      setActionBusy(false);
     }
   }
 
@@ -246,9 +309,10 @@ export default function SkillManager({
                     <SkillManagerRow
                       key={s.id}
                       skill={s}
-                      uninstalling={uninstalling}
+                      busy={actionBusy}
                       onToggle={onToggle}
                       onUninstall={setUninstallTarget}
+                      onRestore={setRestoreTarget}
                     />
                   ))}
                 </ul>
@@ -267,9 +331,10 @@ export default function SkillManager({
                     <SkillManagerRow
                       key={s.id}
                       skill={s}
-                      uninstalling={uninstalling}
+                      busy={actionBusy}
                       onToggle={onToggle}
                       onUninstall={setUninstallTarget}
+                      onRestore={setRestoreTarget}
                     />
                   ))}
                 </ul>
@@ -393,6 +458,25 @@ export default function SkillManager({
                 该技能依赖较重，可能占用更多内存与磁盘，请确认本机配置后再启用。
               </p>
             )}
+            {preview.replace?.will_override_bundled ? (
+              <p className="skill-preview-warn">
+                将覆盖预置技能「{preview.replace.existing_id}」
+                {preview.replace.existing_version
+                  ? `（当前 v${preview.replace.existing_version} → 新包 v${preview.replace.incoming_version}）`
+                  : `（新包 v${preview.replace.incoming_version}）`}
+                。覆盖后可在列表中「恢复预置」。预置技能本身不可卸载、不可导出。
+              </p>
+            ) : null}
+            {preview.replace?.requires_force ? (
+              <label className="skill-preview-force">
+                <input
+                  type="checkbox"
+                  checked={forceOverwrite}
+                  onChange={(e) => setForceOverwrite(e.currentTarget.checked)}
+                />
+                强制覆盖（新包版本低于已安装版本）
+              </label>
+            ) : null}
             <p className="skill-preview-note">
               {preview.validation.errors.length > 0
                 ? preview.can_install_with_fixes
@@ -419,7 +503,10 @@ export default function SkillManager({
                   <button
                     type="button"
                     className="btn btn--ghost"
-                    disabled={installing}
+                    disabled={
+                      installing ||
+                      (Boolean(preview.replace?.requires_force) && !forceOverwrite)
+                    }
                     onClick={() => void confirmInstall(false, true)}
                   >
                     修补并仅安装
@@ -427,7 +514,10 @@ export default function SkillManager({
                   <button
                     type="button"
                     className="btn btn--primary"
-                    disabled={installing}
+                    disabled={
+                      installing ||
+                      (Boolean(preview.replace?.requires_force) && !forceOverwrite)
+                    }
                     onClick={() => void confirmInstall(true, true)}
                   >
                     {installing ? "安装中…" : "修补并启用"}
@@ -438,7 +528,11 @@ export default function SkillManager({
                   <button
                     type="button"
                     className="btn btn--ghost"
-                    disabled={installing || preview.validation.errors.length > 0}
+                    disabled={
+                      installing ||
+                      preview.validation.errors.length > 0 ||
+                      (Boolean(preview.replace?.requires_force) && !forceOverwrite)
+                    }
                     onClick={() => void confirmInstall(false)}
                   >
                     仅安装
@@ -446,7 +540,11 @@ export default function SkillManager({
                   <button
                     type="button"
                     className="btn btn--primary"
-                    disabled={installing || preview.validation.errors.length > 0}
+                    disabled={
+                      installing ||
+                      preview.validation.errors.length > 0 ||
+                      (Boolean(preview.replace?.requires_force) && !forceOverwrite)
+                    }
                     onClick={() => void confirmInstall(true)}
                   >
                     {installing ? "安装中…" : "安装并启用"}
@@ -463,7 +561,7 @@ export default function SkillManager({
           className="skill-preview-backdrop"
           role="presentation"
           onClick={() => {
-            if (!uninstalling) setUninstallTarget(null);
+            if (!actionBusy) setUninstallTarget(null);
           }}
         >
           <div
@@ -476,15 +574,12 @@ export default function SkillManager({
             <p className="skill-preview-note">
               将永久删除「{uninstallTarget.display_name || uninstallTarget.name}
               」及其本地文件，此操作不可恢复。
-              {isBundledSkillId(uninstallTarget.id)
-                ? " 预置技能卸载后可经重新 seed 或重装应用包恢复。"
-                : null}
             </p>
             <div className="skill-preview-actions">
               <button
                 type="button"
                 className="btn btn--ghost"
-                disabled={uninstalling}
+                disabled={actionBusy}
                 onClick={() => setUninstallTarget(null)}
               >
                 取消
@@ -492,10 +587,51 @@ export default function SkillManager({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={uninstalling}
+                disabled={actionBusy}
                 onClick={() => void confirmUninstall()}
               >
-                {uninstalling ? "卸载中…" : "确认卸载"}
+                {actionBusy ? "卸载中…" : "确认卸载"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restoreTarget && (
+        <div
+          className="skill-preview-backdrop"
+          role="presentation"
+          onClick={() => {
+            if (!actionBusy) setRestoreTarget(null);
+          }}
+        >
+          <div
+            className="skill-preview"
+            role="dialog"
+            aria-labelledby="skill-restore-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="skill-restore-title">恢复预置版本</h3>
+            <p className="skill-preview-note">
+              将用出厂预置包覆盖「{restoreTarget.display_name || restoreTarget.name}
+              」的本机副本，本地更新会丢失。启用状态会保留。
+            </p>
+            <div className="skill-preview-actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={actionBusy}
+                onClick={() => setRestoreTarget(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={actionBusy}
+                onClick={() => void confirmRestore()}
+              >
+                {actionBusy ? "恢复中…" : "确认恢复"}
               </button>
             </div>
           </div>

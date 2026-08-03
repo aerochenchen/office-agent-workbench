@@ -494,10 +494,16 @@ export const runtimeClient = {
     path: string,
     enabled: boolean,
     applyFixes = false,
+    forceOverwrite = false,
   ): Promise<SkillInstallResult> {
     return request("/skills/install", {
       method: "POST",
-      body: JSON.stringify({ path, enabled, apply_fixes: applyFixes }),
+      body: JSON.stringify({
+        path,
+        enabled,
+        apply_fixes: applyFixes,
+        force_overwrite: forceOverwrite,
+      }),
     });
   },
 
@@ -505,6 +511,13 @@ export const runtimeClient = {
     return request(`/skills/${encodeURIComponent(id)}/enabled`, {
       method: "POST",
       body: JSON.stringify({ enabled }),
+    });
+  },
+
+  restoreBundledSkill(id: string): Promise<{ ok: boolean; skill: SkillMeta }> {
+    return request(`/skills/${encodeURIComponent(id)}/restore-bundled`, {
+      method: "POST",
+      body: "{}",
     });
   },
 

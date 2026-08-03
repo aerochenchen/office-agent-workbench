@@ -499,8 +499,8 @@ function App() {
   }, []);
 
   const handleConfirmInstallSkill = useCallback(
-    async (path: string, enabled: boolean, applyFixes = false) => {
-      await runtimeClient.installSkillWithOptions(path, enabled, applyFixes);
+    async (path: string, enabled: boolean, applyFixes = false, forceOverwrite = false) => {
+      await runtimeClient.installSkillWithOptions(path, enabled, applyFixes, forceOverwrite);
       await refreshSkills();
     },
     [refreshSkills],
@@ -509,6 +509,14 @@ function App() {
   const handleUninstallSkill = useCallback(
     async (id: string) => {
       await runtimeClient.uninstallSkill(id);
+      await refreshSkills();
+    },
+    [refreshSkills],
+  );
+
+  const handleRestoreBundledSkill = useCallback(
+    async (id: string) => {
+      await runtimeClient.restoreBundledSkill(id);
       await refreshSkills();
     },
     [refreshSkills],
@@ -646,6 +654,7 @@ function App() {
           onInspect={handleInspectSkill}
           onConfirmInstall={handleConfirmInstallSkill}
           onUninstall={handleUninstallSkill}
+          onRestoreBundled={handleRestoreBundledSkill}
           onRefresh={refreshSkills}
         />
       </div>

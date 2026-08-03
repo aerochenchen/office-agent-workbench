@@ -67,6 +67,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "从工作区 Office 文件抽取可引用文本单元（含 unit_id）。"
                 "支持 .docx/.xlsx；.doc/.xls 会先规范化为 docx/xlsx 再抽取。"
                 "不要用 workspace_read 读这些二进制格式。"
+                "docx 可用 granularity=paragraph 按段抽取（校对/定位）；默认 section 按章节。"
             ),
             "parameters": {
                 "type": "object",
@@ -83,6 +84,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "force_normalize": {
                         "type": "boolean",
                         "description": "为 true 时强制重新做 .doc/.xls 转换",
+                    },
+                    "granularity": {
+                        "type": "string",
+                        "description": "docx 抽取粒度：section（默认，按章节）或 paragraph（每段一单元）",
+                        "enum": ["section", "paragraph"],
                     },
                 },
                 "required": ["path"],
@@ -184,6 +190,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "运行共享脚本。公文排版 format_gongwen："
                 "先 args=[dump, docx]，Agent 写 roles.json 后 "
                 "args=[apply, docx, roles.json]；结果宜落到 output/。"
+                "两版对比 docx_diff：args=[旧.docx, 新.docx, --out, 报告.json]。"
             ),
             "parameters": {
                 "type": "object",
@@ -284,6 +291,9 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "- Skill 的 scripts/ 不在工作区内，必须用 run_skill_script 或 run_shared_script；\n"
         "- 公文排版须先 read_skill(government-document-format)，再 "
         "format_gongwen dump → 标注 roles → apply（禁止跳过结构标注）；\n"
+        "- 两版 docx 对比须用共享脚本 docx_diff（run_shared_script），再按 doc-diff-review 解读；\n"
+        "- 校对/术语/红笔优先按 doc-proofread；抽取定位用 workspace_extract 且 granularity=paragraph；\n"
+        "- 若工作区存在 `.office-agent/glossary.md`，校对、术语统一与起草前应先读取，口径与之对齐；\n"
         "- 读取 .docx/.doc/.xlsx/.xls 请用 workspace_extract（.doc/.xls 会先转为 docx/xlsx）；"
         "纯文本才用 workspace_read；\n"
         "- 不要对「scripts」调用 workspace_list，除非工作区里真有该目录。\n"

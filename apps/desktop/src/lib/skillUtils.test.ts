@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BUNDLED_SKILL_IDS,
+  canExportSkill,
+  canUninstallSkill,
   filterEnabledSkills,
+  isBundledSkill,
   isBundledSkillId,
 } from "./skillUtils";
 
@@ -10,6 +13,8 @@ describe("BUNDLED_SKILL_IDS", () => {
     expect(BUNDLED_SKILL_IDS.has("government-document-format")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("multidoc-digest")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("office-visual-design")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("doc-proofread")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("doc-diff-review")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("skill-builder")).toBe(true);
   });
 });
@@ -17,14 +22,28 @@ describe("BUNDLED_SKILL_IDS", () => {
 describe("isBundledSkillId", () => {
   it("returns true for bundled ids", () => {
     expect(isBundledSkillId("government-document-format")).toBe(true);
-    expect(isBundledSkillId("multidoc-digest")).toBe(true);
-    expect(isBundledSkillId("office-visual-design")).toBe(true);
-    expect(isBundledSkillId("skill-builder")).toBe(true);
+    expect(isBundledSkillId("doc-proofread")).toBe(true);
   });
 
   it("returns false for unknown ids", () => {
     expect(isBundledSkillId("custom-skill")).toBe(false);
     expect(isBundledSkillId("")).toBe(false);
+  });
+});
+
+describe("isBundledSkill / canUninstall / canExport", () => {
+  it("prefers Runtime source field", () => {
+    expect(isBundledSkill({ id: "custom", source: "bundled" })).toBe(true);
+    expect(isBundledSkill({ id: "government-document-format", source: "user" })).toBe(false);
+    expect(canUninstallSkill({ id: "x", source: "bundled" })).toBe(false);
+    expect(canExportSkill({ id: "x", source: "bundled" })).toBe(false);
+    expect(canUninstallSkill({ id: "x", source: "user" })).toBe(true);
+  });
+
+  it("falls back to known id list when source absent", () => {
+    expect(isBundledSkill({ id: "doc-diff-review" })).toBe(true);
+    expect(canUninstallSkill({ id: "doc-diff-review" })).toBe(false);
+    expect(canUninstallSkill({ id: "custom-skill" })).toBe(true);
   });
 });
 

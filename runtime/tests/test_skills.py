@@ -234,3 +234,104 @@ def test_inspect_returns_validation(tmp_path: Path, monkeypatch):
     assert meta.name == "peek-ok"
     assert validation["ok"] is True
     assert validation["errors"] == []
+
+
+def test_compare_versions():
+    from office_agent.skills import compare_versions
+
+    assert compare_versions("1.0.0", "1.0.0") == 0
+    assert compare_versions("1.1.0", "1.0.9") == 1
+    assert compare_versions("2.0.0", "10.0.0") == -1
+    assert compare_versions("1.2.0", "1.10.0") == -1
+
+
+def _fake_bundled(tmp_path: Path, skill_id: str, version: str) -> Path:
+    root = tmp_path / "bundled"
+    skill = root / "skills" / skill_id
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        f"---\nname: {skill_id}\ndisplay_name: 预置{skill_id}\n"
+        f"description: factory\nversion: {version}\ntier: light\n"
+        f"permissions:\n  - workspace_read\n---\n\n# Factory\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_bundled_uninstall_forbidden(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    bundled = _fake_bundled(tmp_path, "preset-a", "1.0.0")
+    monkeypatch.setenv("OFFICE_AGENT_BUNDLED", str(bundled))
+    dest = tmp_path / "skills" / "preset-a"
+    dest.mkdir(parents=True)
+    shutil_copy = (bundled / "skills" / "preset-a" / "SKILL.md").read_text(encoding="utf-8")
+    (dest / "SKILL.md").write_text(shutil_copy, encoding="utf-8")
+    reg = SkillRegistry()
+    meta = reg.scan()[0]
+    assert meta.source == "bundled"
+    assert meta.can_uninstall is False
+    with pytest.raises(SkillError, match="不可卸载"):
+        reg.uninstall("preset-a")
+    assert dest.is_dir()
+
+
+def test_bundled_version_gate_and_force(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    bundled = _fake_bundled(tmp_path, "preset-b", "2.0.0")
+    monkeypatch.setenv("OFFICE_AGENT_BUNDLED", str(bundled))
+    # Install factory first via restore
+    reg = SkillRegistry()
+    reg.restore_bundled("preset-b")
+    assert (tmp_path / "skills" / "preset-b" / "SKILL.md").is_file()
+
+    older = tmp_path / "pkg" / "preset-b"
+    older.mkdir(parents=True)
+    (older / "SKILL.md").write_text(
+        "---\nname: preset-b\ndescription: older\nversion: 1.5.0\ntier: light\n"
+        "permissions:\n  - workspace_read\n---\n\n# Older\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SkillError, match="低于已安装"):
+        reg.install_dir(older)
+    reg.install_dir(older, force_overwrite=True)
+    meta = reg.scan()[0]
+    assert meta.version == "1.5.0"
+    assert meta.overridden is True
+    assert meta.source == "bundled"
+
+
+def test_restore_bundled_clears_override(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    bundled = _fake_bundled(tmp_path, "preset-c", "1.0.0")
+    monkeypatch.setenv("OFFICE_AGENT_BUNDLED", str(bundled))
+    reg = SkillRegistry()
+    reg.restore_bundled("preset-c")
+    newer = tmp_path / "pkg" / "preset-c"
+    newer.mkdir(parents=True)
+    (newer / "SKILL.md").write_text(
+        "---\nname: preset-c\ndescription: patch\nversion: 1.1.0\ntier: light\n"
+        "permissions:\n  - workspace_read\n---\n\n# Patch\n",
+        encoding="utf-8",
+    )
+    reg.install_dir(newer)
+    assert reg.scan()[0].overridden is True
+    restored = reg.restore_bundled("preset-c")
+    assert restored.version == "1.0.0"
+    assert restored.overridden is False
+    assert "preset-c" not in (reg._state.get("overridden") or {})
+
+
+def test_user_skill_still_uninstallable(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    bundled = _fake_bundled(tmp_path, "only-preset", "1.0.0")
+    monkeypatch.setenv("OFFICE_AGENT_BUNDLED", str(bundled))
+    skill = tmp_path / "skills" / "custom-x"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(
+        "---\nname: custom-x\ndescription: d\nversion: 0.1.0\ntier: light\n---\n\n#\n",
+        encoding="utf-8",
+    )
+    reg = SkillRegistry()
+    assert reg.scan()[0].source == "user"
+    reg.uninstall("custom-x")
+    assert reg.scan() == []

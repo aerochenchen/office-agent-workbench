@@ -2,7 +2,7 @@
 name: gongwen-rag-writing
 display_name: 公文写作助手
 description: "公文写作 RAG 流水线 v2.0：结构感知索引 → 深度模板分析 → 叙事规划 → 论证驱动检索合成 → 排版输出。基于 BGE-small-zh-v1.5 中文向量化。"
-version: 2.0.0
+version: 2.0.1
 tier: heavy
 min_ram_gb: 8
 permissions:
@@ -241,15 +241,29 @@ run_skill_script → gongwen-rag-writing / scripts/search_argument.py \
 
 ## 第五步：自审修订（Agent 主导）
 
-全文草稿完成后，Agent 以「编辑」角色审读：
+全文草稿完成后，Agent 以「编辑」角色审读，**必须**先落盘自审文件，再允许进入排版：
 
-1. **篇幅均衡**：各章节字数比例是否与模板接近？
-2. **术语一致**：同一概念前后用词是否统一？
-3. **数据可信度**：引用数据是否多源交叉验证？单一来源是否标注？
-4. **过渡自然性**：章节间过渡句是否生硬？参考模板的过渡模式修正
-5. **叙事完整性**：第三步规划的呼应/伏笔是否全部兑现？
+```
+.office-agent/work/gongwen-rag-writing/self_review.md
+```
 
-针对性修改后进入排版。
+### 自审清单（写入 self_review.md）
+
+对每一项给出：结论（通过/不通过）+ 证据定位（章节标题或段落摘要）+ 若有则修改动作：
+
+1. **无出处数据**：凡出现具体数字/比例/排名，是否有可回溯素材出处？无出处 → 删改或标注「待核实」且不得当作成绩表述。
+2. **套话空段**：是否存在无信息增量的空泛段（「高度重视」「扎实推进」等堆砌且无措施/数据）？有则压缩或删。
+3. **与模板语气偏离**：句长、敬语、人称是否明显偏离模板分析结果？
+4. **前后数字矛盾**：同一指标多处出现时数值/口径是否一致？
+5. **篇幅均衡**：各章节字数比例是否与模板接近？
+6. **术语一致**：同一概念前后用词是否统一？（若存在 `.office-agent/glossary.md` 须对照）
+7. **叙事完整性**：第三步规划的呼应/伏笔是否全部兑现？
+
+### 硬规则
+
+- **缺 `self_review.md` 不得进入第六步排版**，也不得 `finish` 宣称写作完成。
+- 自审中「不通过」项须先修订草稿，再在同文件追加「修订记录」小节后继续。
+- 针对性修改后进入排版。
 
 ---
 
@@ -273,7 +287,7 @@ Agent 执行:
             a. terminal("...search_argument.py <索引> --plan <该章节论证计划.json> --json")
             b. Agent 阅读检索结果 + 叙事计划 → 按论证角色组织写作
             c. write_file 追加到草稿
-  Step 5: Agent 自审 → 修订
+  Step 5: Agent 自审 → 落盘 self_review.md → 修订
   Step 6: government-document-format：dump → 标注 roles → apply
           交付: <原文件名>_formatted.docx
 ```
