@@ -1,7 +1,7 @@
 .skill-manager-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(28, 32, 36, 0.35);
+  background: var(--overlay-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -15,7 +15,7 @@
   background: var(--paper-0);
   border: 1px solid var(--line-0);
   border-radius: var(--radius-md);
-  box-shadow: 0 12px 40px rgba(20, 28, 32, 0.18);
+  box-shadow: var(--shadow-2);
   display: flex;
   flex-direction: column;
   overflow: hidden;

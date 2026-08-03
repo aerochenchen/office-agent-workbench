@@ -15,6 +15,7 @@
 
   /* -- 点缀色：muted 青绿为主，靛蓝为辅 -- */
   --accent-teal: #3c6e64;
+  --accent-teal-hover: #335f56;
   --accent-teal-soft: #e4ede9;
   --accent-indigo: #445a8c;
   --accent-indigo-soft: #e6e9f1;
@@ -22,7 +23,18 @@
   /* -- 状态色（克制，不用霓虹） -- */
   --status-ok: #3c6e64;
   --status-warn: #9a6a2c;
+  --status-warn-soft: #f7f1e6;
+  --status-warn-line: #e2d2b8;
   --status-error: #a1433a;
+  --status-error-soft: #faf0ef;
+  --status-error-line: #e8c4c0;
+  --status-ok-soft: #eef5f2;
+  --status-ok-line: #c5d9d2;
+
+  /* -- 遮罩 / 阴影（随主题微调） -- */
+  --overlay-scrim: rgba(30, 35, 33, 0.32);
+  --shadow-1: 0 1px 2px rgba(20, 28, 32, 0.18);
+  --shadow-2: 0 12px 40px rgba(20, 28, 32, 0.18);
 
   /* -- 字体 -- */
   --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB",
@@ -68,6 +80,64 @@ html[data-ui-scale="lg"] {
   --font-size-md: 16px;
   --font-size-lg: 18px;
   --font-size-xl: 22px;
+}
+
+/* 稍深：仍为日间浅色，背景与墨色略沉 */
+html[data-ui-theme="deeper"] {
+  --paper-0: #e4e6e1;
+  --paper-1: #eef0eb;
+  --paper-2: #f7f8f5;
+  --ink-0: #151918;
+  --ink-1: #3a423d;
+  --ink-2: #65706a;
+  --line-0: #c5c9c1;
+  --line-1: #d6dad2;
+  --accent-teal: #355f57;
+  --accent-teal-hover: #2c5049;
+  --accent-teal-soft: #d5e3de;
+  --accent-indigo: #3d527e;
+  --accent-indigo-soft: #d9dee9;
+  --status-ok: #355f57;
+  --status-warn: #8a5f27;
+  --status-warn-soft: #f0e6d4;
+  --status-warn-line: #d4c0a0;
+  --status-error: #8f3c35;
+  --status-error-soft: #f3e4e2;
+  --status-error-line: #dcb0ab;
+  --status-ok-soft: #ddeae5;
+  --status-ok-line: #b4ccc4;
+  --overlay-scrim: rgba(22, 26, 24, 0.38);
+  --shadow-1: 0 1px 2px rgba(16, 22, 20, 0.22);
+  --shadow-2: 0 12px 40px rgba(16, 22, 20, 0.22);
+}
+
+/* 护眼纸张：暖米色低蓝光感 */
+html[data-ui-theme="paper"] {
+  --paper-0: #efe6d4;
+  --paper-1: #f5ede4;
+  --paper-2: #fbf6eb;
+  --ink-0: #2a241c;
+  --ink-1: #5a5044;
+  --ink-2: #8a7f70;
+  --line-0: #d4c8b0;
+  --line-1: #e4dac6;
+  --accent-teal: #4a6b5a;
+  --accent-teal-hover: #3f5c4d;
+  --accent-teal-soft: #e2ebe4;
+  --accent-indigo: #5a6280;
+  --accent-indigo-soft: #e4e6ef;
+  --status-ok: #4a6b5a;
+  --status-warn: #9a6a2c;
+  --status-warn-soft: #f3e8d4;
+  --status-warn-line: #e0cfa8;
+  --status-error: #a1433a;
+  --status-error-soft: #f6e8e5;
+  --status-error-line: #e6c2bc;
+  --status-ok-soft: #e5eee8;
+  --status-ok-line: #c2d4c8;
+  --overlay-scrim: rgba(42, 36, 28, 0.28);
+  --shadow-1: 0 1px 2px rgba(42, 36, 28, 0.14);
+  --shadow-2: 0 12px 40px rgba(42, 36, 28, 0.16);
 }
 
 * {

@@ -215,8 +215,8 @@
   font-size: 10px;
   letter-spacing: 0.04em;
   color: var(--status-warn);
-  border: 1px solid #e2d2b8;
-  background: #f7f1e6;
+  border: 1px solid var(--status-warn-line);
+  background: var(--status-warn-soft);
   border-radius: var(--radius-sm);
   padding: 0 5px;
   line-height: 1.6;
@@ -291,7 +291,7 @@
   height: 16px;
   border-radius: 50%;
   background: var(--paper-2);
-  box-shadow: 0 1px 2px rgba(20, 28, 32, 0.18);
+  box-shadow: var(--shadow-1);
   transition: transform var(--motion-fast);
 }
 
@@ -361,7 +361,7 @@
 .skill-preview-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(28, 32, 36, 0.35);
+  background: var(--overlay-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -375,7 +375,7 @@
   border: 1px solid var(--line-0);
   border-radius: var(--radius-md);
   padding: var(--space-4);
-  box-shadow: 0 12px 40px rgba(20, 28, 32, 0.18);
+  box-shadow: var(--shadow-2);
 }
 
 .skill-preview h3 {
@@ -431,20 +431,20 @@
 
 .skill-preview-validation--error {
   color: var(--status-error);
-  background: #faf0ef;
-  border: 1px solid #e8c4c0;
+  background: var(--status-error-soft);
+  border: 1px solid var(--status-error-line);
 }
 
 .skill-preview-validation--fix {
   color: var(--accent-teal);
   background: var(--accent-teal-soft);
-  border: 1px solid #c5d9d2;
+  border: 1px solid var(--status-ok-line);
 }
 
 .skill-preview-validation--warn {
   color: var(--status-warn);
-  background: #f7f1e6;
-  border: 1px solid #e2d2b8;
+  background: var(--status-warn-soft);
+  border: 1px solid var(--status-warn-line);
 }
 
 .skill-preview-note {

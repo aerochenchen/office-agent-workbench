@@ -4,10 +4,15 @@ import { GUIDE_PILLARS } from "../lib/guide";
 import type { PermissionMode, RuntimeConfig } from "../lib/types";
 import {
   applyUiFontScale,
+  applyUiTheme,
   readUiFontScale,
+  readUiTheme,
   UI_FONT_SCALE_OPTIONS,
+  UI_THEME_OPTIONS,
   writeUiFontScale,
+  writeUiTheme,
   type UiFontScale,
+  type UiTheme,
 } from "../lib/uiPreferences";
 import "./SettingsModal.css";
 
@@ -59,6 +64,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
     initial.permission_mode ?? "standard",
   );
   const [fontScale, setFontScale] = useState<UiFontScale>(() => readUiFontScale());
+  const [uiTheme, setUiTheme] = useState<UiTheme>(() => readUiTheme());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +77,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setModelPreset(resolveModelPreset(initial.model));
       setPermissionMode(initial.permission_mode ?? "standard");
       setFontScale(readUiFontScale());
+      setUiTheme(readUiTheme());
       setError(null);
     }
   }, [open, initial]);
@@ -86,12 +93,18 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
 
   function handleClose() {
     applyUiFontScale(readUiFontScale());
+    applyUiTheme(readUiTheme());
     onClose();
   }
 
   function handleFontScaleChange(next: UiFontScale) {
     setFontScale(next);
     applyUiFontScale(next);
+  }
+
+  function handleThemeChange(next: UiTheme) {
+    setUiTheme(next);
+    applyUiTheme(next);
   }
 
   function handleModelPresetChange(value: string) {
@@ -107,6 +120,8 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
     try {
       writeUiFontScale(fontScale);
       applyUiFontScale(fontScale);
+      writeUiTheme(uiTheme);
+      applyUiTheme(uiTheme);
       const partial: Partial<RuntimeConfig> = {
         api_base: apiBase.trim(),
         model: model.trim(),
@@ -167,6 +182,24 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 <h3 id="settings-appearance-title" className="settings-section-title">
                   外观
                 </h3>
+                <label className="field">
+                  <span className="field-label">界面主题</span>
+                  <select
+                    className="field-input"
+                    value={uiTheme}
+                    onChange={(e) => handleThemeChange(e.currentTarget.value as UiTheme)}
+                  >
+                    {UI_THEME_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="settings-permission-hint">
+                  {UI_THEME_OPTIONS.find((o) => o.value === uiTheme)?.hint}
+                  。切换后即时预览，点保存后记住偏好。
+                </p>
                 <label className="field">
                   <span className="field-label">界面文字大小</span>
                   <select

@@ -149,7 +149,7 @@
 }
 
 .btn--primary:hover {
-  background: #335f56;
+  background: var(--accent-teal-hover);
 }
 
 .btn--primary:disabled {
