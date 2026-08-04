@@ -141,6 +141,12 @@ def test_apply_step_update_blocks_in_progress_when_pending():
         apply_step_update(plan, "s1", status="in_progress")
 
 
+def test_apply_step_update_blocks_in_progress_when_rejected():
+    plan = validate_plan({**_minimal_plan(), "approval": "rejected", "status": "cancelled"})
+    with pytest.raises(PlanValidationError, match="approval"):
+        apply_step_update(plan, "s1", status="in_progress")
+
+
 def test_apply_step_update_blocks_done_when_pending():
     plan = validate_plan({**_minimal_plan(), "approval": "pending"})
     with pytest.raises(PlanValidationError, match="approval"):
@@ -194,3 +200,40 @@ def test_render_plan_html_escapes_and_footer():
     assert "A &lt;B&gt; &amp; C" in html
     assert "<script" not in html.lower()
     assert "对话框" in html
+
+
+def test_render_plan_html_escapes_step_title_and_detail():
+    plan = validate_plan(
+        {
+            **_minimal_plan(),
+            "steps": [
+                {
+                    "id": "s1",
+                    "title": "步骤 <A> & B",
+                    "detail": "说明 <tag> & 符号",
+                    "status": "pending",
+                    "depends_on": [],
+                    "inputs": [],
+                    "outputs": [],
+                    "needs_user": False,
+                    "notes": "",
+                },
+                {
+                    "id": "s2",
+                    "title": "第二步",
+                    "detail": "",
+                    "status": "pending",
+                    "depends_on": ["s1"],
+                    "inputs": [],
+                    "outputs": [],
+                    "needs_user": False,
+                    "notes": "",
+                },
+            ],
+        }
+    )
+    html = render_plan_html(plan)
+    assert "步骤 &lt;A&gt; &amp; B" in html
+    assert "说明 &lt;tag&gt; &amp; 符号" in html
+    assert "<A>" not in html
+    assert "<tag>" not in html
