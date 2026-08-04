@@ -144,18 +144,28 @@ def test_system_prompt_includes_plan_discipline():
     text = _build_system_prompt([])
     assert "plan_create" in text
     assert "工作计划" in text
-    assert "按工作计划" in text or "继续" in text
+    assert "剩余步骤数或标题列表" in text
+    assert "可按工作计划继续" in text
 
 
 def test_system_prompt_enforces_plan_confirmation_and_dialog_only_edits():
     text = _build_system_prompt([])
     assert "plan_set_approval" in text
-    assert "工作计划.html" in text
+    assert "output/工作计划.html" in text
     assert "对话框" in text
     assert "needs_user" in text
     assert "ask_user" in text
-    assert "仅供查阅" in text or "仅供" in text
-    assert "不用确认" in text or "跳过确认" in text
+    assert "仅供查阅" in text
+    assert "不用确认" in text
+    assert "禁止解析或同步" in text
+
+
+def test_system_prompt_ask_user_priority():
+    text = _build_system_prompt([])
+    assert "缺路径" in text
+    assert "plan_create 前问清" in text
+    assert "工作计划确认（占本轮 ask_user）" in text
+    assert "needs_user 澄清（若本轮 ask_user 已用则留待下一轮）" in text
 
 
 def test_system_prompt_requires_reading_skill_body(tmp_path: Path, monkeypatch):
