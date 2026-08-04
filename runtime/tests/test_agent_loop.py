@@ -168,6 +168,14 @@ def test_system_prompt_ask_user_priority():
     assert "needs_user 澄清（若本轮 ask_user 已用则留待下一轮）" in text
 
 
+def test_ask_user_schema_description_allows_plan_confirmation():
+    ask_schema = next(s for s in TOOL_SCHEMAS if s["function"]["name"] == "ask_user")
+    desc = ask_schema["function"]["description"]
+    assert "工作计划" in desc or "确认" in desc
+    assert "整轮最多" in desc
+    assert "执行工具" in desc
+
+
 def test_system_prompt_requires_reading_skill_body(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     (tmp_path / "skills").mkdir()

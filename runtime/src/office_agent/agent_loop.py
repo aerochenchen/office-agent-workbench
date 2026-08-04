@@ -343,8 +343,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "ask_user",
             "description": (
-                "仅当缺少关键文件路径导致无法执行时，向用户提一个问题。"
-                "整轮最多一次；用户回答后必须执行工具，禁止继续追问同一事项。"
+                "向用户提一个问题。整轮最多一次；允许用于：缺少关键路径/文件名、"
+                "工作计划确认关、needs_user 步骤需澄清。"
+                "用户回答后必须执行工具，禁止继续追问同一事项。"
             ),
             "parameters": {
                 "type": "object",
