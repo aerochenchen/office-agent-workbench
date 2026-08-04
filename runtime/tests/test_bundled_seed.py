@@ -51,6 +51,8 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
         "meeting-followup",
         "material-gap",
         "sheet-to-brief",
+        "one-to-three",
+        "brief-deck",
         "skill-builder",
     }
     skills: list = []
@@ -85,6 +87,10 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert gap.get("display_name") == "材料摸底"
     sheet = next(s for s in skills if s["id"] == "sheet-to-brief")
     assert sheet.get("display_name") == "表格成文"
+    one = next(s for s in skills if s["id"] == "one-to-three")
+    assert one.get("display_name") == "一文三用"
+    deck = next(s for s in skills if s["id"] == "brief-deck")
+    assert deck.get("display_name") == "汇报成套"
     assert (tmp_path / "shared-scripts" / "format_gongwen.py").is_file()
     assert (tmp_path / "shared-scripts" / "docx_diff.py").is_file()
     assert (tmp_path / "skills" / "government-document-format" / "SKILL.md").is_file()
@@ -95,6 +101,8 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert (tmp_path / "skills" / "meeting-followup" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "material-gap" / "scripts" / "inventory.py").is_file()
     assert (tmp_path / "skills" / "sheet-to-brief" / "SKILL.md").is_file()
+    assert (tmp_path / "skills" / "one-to-three" / "SKILL.md").is_file()
+    assert (tmp_path / "skills" / "brief-deck" / "scripts" / "build_pptx.py").is_file()
 
 
 def test_seed_does_not_clobber_user_skill(tmp_path: Path, monkeypatch):

@@ -17,7 +17,7 @@
 - [ ] Dock / 应用程序图标与品牌图标一致
 - [ ] 首次启动后 UI 显示 Runtime 就绪，或 `http://127.0.0.1:8765/health` 返回 `{"ok":true}`
 - [ ] 能打开文件夹工作区并发送一条对话（需已配置内网模型网关）
-- [ ] 技能列表含 `government-document-format`、`meeting-followup`、`material-gap`、`sheet-to-brief`、`doc-proofread` 等预置技能（bundled seed）
+- [ ] 技能列表含 `government-document-format`、`meeting-followup`、`material-gap`、`sheet-to-brief`、`one-to-three`、`brief-deck`、`doc-proofread` 等预置技能（bundled seed）
 - [ ] `~/.office-agent/` 已创建
 
 ## 说明

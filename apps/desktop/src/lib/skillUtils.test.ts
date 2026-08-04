@@ -18,6 +18,8 @@ describe("BUNDLED_SKILL_IDS", () => {
     expect(BUNDLED_SKILL_IDS.has("meeting-followup")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("material-gap")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("sheet-to-brief")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("one-to-three")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("brief-deck")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("skill-builder")).toBe(true);
   });
 });

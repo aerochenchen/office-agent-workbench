@@ -7,6 +7,8 @@ export const BUNDLED_SKILL_IDS: ReadonlySet<string> = new Set([
   "meeting-followup",
   "material-gap",
   "sheet-to-brief",
+  "one-to-three",
+  "brief-deck",
   "skill-builder",
 ]);
 
