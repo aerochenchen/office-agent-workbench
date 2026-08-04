@@ -3,6 +3,7 @@
   "id": "plan_eval_resume_001",
   "goal": "汇总多份试点材料并生成阶段性汇报",
   "status": "active",
+  "approval": "approved",
   "created_at": "2026-08-04T08:00:00+08:00",
   "updated_at": "2026-08-04T10:30:00+08:00",
   "steps": [

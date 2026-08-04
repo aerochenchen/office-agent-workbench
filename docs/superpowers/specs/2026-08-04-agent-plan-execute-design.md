@@ -3,7 +3,7 @@
 | 项 | 内容 |
 |---|---|
 | 日期 | 2026-08-04 |
-| 状态 | P1 已落地；P2 规格已扩（含确认关） |
+| 状态 | P1 已落地；P2 已落地（确认关 + HTML 简要展示 + 续跑 guide） |
 | 实施计划 | P1：`docs/superpowers/plans/2026-08-04-agent-plan-execute.md`；P2：`docs/superpowers/plans/2026-08-04-agent-plan-execute-p2.md` |
 | 对照基线 | `2026-07-23-office-agent-runtime-design.md` §2 / §7 / §13；现行 `agent_loop` + `ToolExecutor` |
 | 动机例 | 多材料重量任务（如本级规定对照多份上位规章审查）；**例证非范围本身** |
