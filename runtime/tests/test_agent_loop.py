@@ -97,6 +97,10 @@ def test_tool_schema_names_match_executor():
         "read_skill",
         "run_skill_script",
         "run_shared_script",
+        "plan_get",
+        "plan_create",
+        "plan_update_step",
+        "plan_set_status",
         "ask_user",
         "finish",
     }

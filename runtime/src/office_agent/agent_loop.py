@@ -19,6 +19,10 @@ TOOL_LABELS: dict[str, str] = {
     "read_skill": "读取技能说明",
     "run_skill_script": "运行 Skill 脚本",
     "run_shared_script": "运行共享脚本",
+    "plan_get": "查看工作计划",
+    "plan_create": "创建工作计划",
+    "plan_update_step": "更新计划步骤",
+    "plan_set_status": "更新计划状态",
     "ask_user": "需要你确认",
     "finish": "完成任务",
 }
@@ -203,6 +207,110 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "args": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "plan_get",
+            "description": "读取当前工作区的 active 工作计划（.office-agent/work/plan.json）。无计划时返回 missing。",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "plan_create",
+            "description": (
+                "创建新的工作计划并写入 .office-agent/work/plan.json。"
+                "若已有 active 计划则拒绝静默覆盖；steps 至少 2 项。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string", "description": "一句话目标"},
+                    "steps": {
+                        "type": "array",
+                        "description": "步骤列表，每项至少含 id 与 title",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "title": {"type": "string"},
+                                "detail": {"type": "string"},
+                                "depends_on": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                                "inputs": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                                "outputs": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                                "needs_user": {"type": "boolean"},
+                            },
+                            "required": ["id", "title"],
+                        },
+                    },
+                    "resume_hint": {
+                        "type": "string",
+                        "description": "跨会话续跑提示语",
+                    },
+                },
+                "required": ["goal", "steps"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "plan_update_step",
+            "description": (
+                "更新指定步骤的 status / notes / outputs。"
+                "全部步骤 done 或 skipped 时自动将计划标为 completed。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "step_id": {"type": "string", "description": "步骤 id"},
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "pending",
+                            "in_progress",
+                            "done",
+                            "failed",
+                            "skipped",
+                        ],
+                    },
+                    "notes": {"type": "string"},
+                    "outputs": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["step_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "plan_set_status",
+            "description": "更新整个计划的 status（如 cancelled、blocked；手动 completed 需全部步骤已完成）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["active", "completed", "blocked", "cancelled"],
+                    },
+                },
+                "required": ["status"],
             },
         },
     },
@@ -426,6 +534,16 @@ def args_summary(name: str, args: dict[str, Any]) -> str:
         return q[:80]
     if name == "finish":
         return str(args.get("summary") or "")[:80]
+    if name == "plan_get":
+        return "当前计划"
+    if name == "plan_create":
+        return str(args.get("goal") or "")[:80]
+    if name == "plan_update_step":
+        sid = str(args.get("step_id") or "")
+        st = str(args.get("status") or "")
+        return f"{sid} → {st}".strip(" →") if sid or st else sid
+    if name == "plan_set_status":
+        return str(args.get("status") or "")
     raw = json.dumps(args, ensure_ascii=False)
     return raw if len(raw) <= 80 else raw[:77] + "…"
 
@@ -434,7 +552,9 @@ def result_summary(name: str, result: dict[str, Any]) -> str:
     if not isinstance(result, dict):
         return str(result)[:120]
     if result.get("ok") is False:
-        err = str(result.get("error") or result.get("stderr") or "失败")
+        err = str(
+            result.get("error") or result.get("reason") or result.get("stderr") or "失败"
+        )
         return err[:120]
     if name == "workspace_list":
         entries = result.get("entries") or []
@@ -454,6 +574,19 @@ def result_summary(name: str, result: dict[str, Any]) -> str:
         return head or "已完成"
     if name == "finish":
         return str(result.get("summary") or "完成")[:80]
+    if name == "plan_get":
+        plan = result.get("plan") or {}
+        goal = str(plan.get("goal") or "")
+        return goal[:80] if goal else "无计划"
+    if name == "plan_create":
+        plan = result.get("plan") or {}
+        return str(plan.get("goal") or "已创建")[:80]
+    if name == "plan_update_step":
+        plan = result.get("plan") or {}
+        return str(plan.get("status") or "已更新")
+    if name == "plan_set_status":
+        plan = result.get("plan") or {}
+        return str(plan.get("status") or "已更新")
     return "完成"
 
 

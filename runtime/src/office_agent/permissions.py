@@ -29,6 +29,7 @@ READ_ONLY_TOOLS = frozenset(
         "workspace_list",
         "workspace_read",
         "read_skill",
+        "plan_get",
         "ask_user",
         "finish",
     }
@@ -41,6 +42,9 @@ RISKY_TOOLS = frozenset(
         "run_workspace_script",
         "run_skill_script",
         "run_shared_script",
+        "plan_create",
+        "plan_update_step",
+        "plan_set_status",
     }
 )
 
@@ -58,6 +62,12 @@ def _summarize(tool: str, args: dict) -> str:
         return f"run skill script {args.get('skill_id', '')}/{args.get('script', '')}"
     if tool == "run_shared_script":
         return f"run shared script {args.get('name', '')}"
+    if tool == "plan_create":
+        return f"create plan: {args.get('goal', '')}"
+    if tool == "plan_update_step":
+        return f"update step {args.get('step_id', '')} → {args.get('status', '')}"
+    if tool == "plan_set_status":
+        return f"set plan status {args.get('status', '')}"
     return tool
 
 

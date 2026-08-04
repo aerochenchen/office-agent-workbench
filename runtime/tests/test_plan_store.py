@@ -93,3 +93,9 @@ def test_set_plan_status_cancelled():
     plan = validate_plan(_minimal_plan())
     out = set_plan_status(plan, "cancelled")
     assert out["status"] == "cancelled"
+
+
+def test_set_plan_status_completed_requires_all_steps_done():
+    plan = validate_plan(_minimal_plan())
+    with pytest.raises(PlanValidationError, match="done|skipped|completed"):
+        set_plan_status(plan, "completed")

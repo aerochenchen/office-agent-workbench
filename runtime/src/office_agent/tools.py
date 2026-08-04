@@ -2,11 +2,21 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from office_agent.audit import AuditLog
 from office_agent.doc_io import extract_file
 from office_agent.paths import app_data_dir
+from office_agent.plan_store import (
+    PLAN_REL,
+    PlanValidationError,
+    apply_step_update,
+    load_plan,
+    save_plan,
+    set_plan_status,
+)
 from office_agent.script_policy import assert_argv_within_roots, build_script_env
 from office_agent.permissions import (
     RISKY_TOOLS,
@@ -102,6 +112,10 @@ class ToolExecutor:
             "read_skill": self._read_skill,
             "run_skill_script": self._run_skill_script,
             "run_shared_script": self._run_shared_script,
+            "plan_get": self._plan_get,
+            "plan_create": self._plan_create,
+            "plan_update_step": self._plan_update_step,
+            "plan_set_status": self._plan_set_status,
             "ask_user": self._ask_user,
             "finish": self._finish,
         }
@@ -363,6 +377,106 @@ class ToolExecutor:
             "stdout": proc.stdout,
             "stderr": proc.stderr,
         }
+
+    def _plan_path(self) -> Path:
+        return self.workspace.root / PLAN_REL
+
+    def _plan_get(self, args: dict) -> dict:
+        plan = load_plan(self._plan_path())
+        if plan is None:
+            return {"ok": False, "reason": "missing"}
+        return {"ok": True, "plan": plan}
+
+    def _plan_create(self, args: dict) -> dict:
+        path = self._plan_path()
+        existing = load_plan(path)
+        if existing is not None and existing.get("status") == "active":
+            return {"ok": False, "error": "active plan already exists"}
+
+        goal = str(args.get("goal") or "").strip()
+        if not goal:
+            return {"ok": False, "error": "goal is required"}
+
+        raw_steps = args.get("steps")
+        if not isinstance(raw_steps, list) or len(raw_steps) < 2:
+            return {"ok": False, "error": "steps must contain at least 2 items"}
+
+        steps: list[dict] = []
+        for i, raw in enumerate(raw_steps):
+            if not isinstance(raw, dict):
+                return {"ok": False, "error": f"step {i} must be a dict"}
+            step_id = raw.get("id")
+            title = raw.get("title")
+            if not isinstance(step_id, str) or not step_id:
+                return {"ok": False, "error": f"step {i} missing id"}
+            if not isinstance(title, str) or not title:
+                return {"ok": False, "error": f"step {i} missing title"}
+            steps.append(
+                {
+                    "id": step_id,
+                    "title": title,
+                    "detail": str(raw.get("detail") or ""),
+                    "status": "pending",
+                    "depends_on": list(raw.get("depends_on") or []),
+                    "inputs": list(raw.get("inputs") or []),
+                    "outputs": list(raw.get("outputs") or []),
+                    "needs_user": bool(raw.get("needs_user") or False),
+                    "notes": str(raw.get("notes") or ""),
+                }
+            )
+
+        now = datetime.now(timezone.utc).isoformat()
+        plan = {
+            "version": 1,
+            "id": f"plan_{uuid.uuid4().hex}",
+            "goal": goal,
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "steps": steps,
+            "resume_hint": str(args.get("resume_hint") or "按工作计划未完成项继续"),
+        }
+        try:
+            save_plan(path, plan)
+        except PlanValidationError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "plan": plan}
+
+    def _plan_update_step(self, args: dict) -> dict:
+        path = self._plan_path()
+        plan = load_plan(path)
+        if plan is None:
+            return {"ok": False, "error": "no plan found"}
+        step_id = str(args.get("step_id") or "")
+        if not step_id:
+            return {"ok": False, "error": "step_id is required"}
+        try:
+            updated = apply_step_update(
+                plan,
+                step_id,
+                status=args.get("status"),
+                notes=args.get("notes"),
+                outputs=args.get("outputs"),
+            )
+            save_plan(path, updated)
+        except PlanValidationError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "plan": updated}
+
+    def _plan_set_status(self, args: dict) -> dict:
+        path = self._plan_path()
+        plan = load_plan(path)
+        if plan is None:
+            return {"ok": False, "error": "no plan found"}
+        status = str(args.get("status") or "")
+        if not status:
+            return {"ok": False, "error": "status is required"}
+        try:
+            updated = set_plan_status(plan, status)
+            save_plan(path, updated)
+        except PlanValidationError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "plan": updated}
 
     def _ask_user(self, args: dict) -> dict:
         q = str(args.get("question") or args.get("prompt") or "")

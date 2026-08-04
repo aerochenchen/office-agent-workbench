@@ -133,6 +133,12 @@ def apply_step_update(
 
 
 def set_plan_status(plan: dict, status: str) -> dict:
+    if status == "completed":
+        for step in plan.get("steps", []):
+            if step.get("status") not in ("done", "skipped"):
+                raise PlanValidationError(
+                    "cannot mark plan completed until every step is done or skipped"
+                )
     updated = copy.deepcopy(plan)
     updated["status"] = status
     updated["updated_at"] = _now_iso()
