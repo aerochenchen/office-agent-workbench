@@ -32,5 +32,5 @@ def test_agent_work_dir_created_with_readme(tmp_path: Path):
     out = tmp_path / AGENT_OUTPUT_REL
     assert work.is_dir()
     assert out.is_dir()
-    assert "output" in (work / "README.txt").read_text(encoding="utf-8")
+    assert "工作成果" in (work / "README.txt").read_text(encoding="utf-8")
     assert "成果" in (out / "README.txt").read_text(encoding="utf-8")

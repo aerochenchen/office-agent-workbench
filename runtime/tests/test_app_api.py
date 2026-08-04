@@ -100,14 +100,14 @@ def test_open_workspace_and_tree(client: TestClient, tmp_path: Path):
     assert r.status_code == 200
     assert r.json()["ok"] is True
     assert (ws / ".office-agent" / "work").is_dir()
-    assert (ws / "output").is_dir()
+    assert (ws / "工作成果").is_dir()
 
     tree = client.get("/workspace/tree")
     assert tree.status_code == 200
     names = {e["name"] for e in tree.json()["entries"]}
     assert "doc.txt" in names
     assert ".office-agent" in names
-    assert "output" in names
+    assert "工作成果" in names
 
 
 def test_workspace_tree_requires_open(client: TestClient):
@@ -542,7 +542,7 @@ def test_audit_log_redacts_sensitive_args(tmp_path: Path):
     audit = AuditLog(tmp_path / "a.sqlite")
     audit.record(
         "workspace_write",
-        {"path": "output/draft.docx", "content": "绝密公文内容全文" * 100},
+        {"path": "工作成果/draft.docx", "content": "绝密公文内容全文" * 100},
         True,
     )
     audit.record("run_shared_script", {"name": "fmt", "api_key": "sk-xxx"}, True)
@@ -552,7 +552,7 @@ def test_audit_log_redacts_sensitive_args(tmp_path: Path):
 
     import json as _json
     write_args = _json.loads(rows[0][1])
-    assert write_args["path"] == "output/draft.docx"
+    assert write_args["path"] == "工作成果/draft.docx"
     assert "绝密公文内容全文" not in write_args["content"]
     assert "redacted" in write_args["content"]
     assert "len=" in write_args["content"]

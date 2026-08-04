@@ -361,7 +361,7 @@ Run: `cd runtime && python -m pytest tests/test_agent_loop.py::test_system_promp
 3. 用户说继续时禁止无故重规划  
 4. `finish` 时若未完成须说明剩余项并提示按工作计划继续  
 5. 单文件校对、两版对照、单一排版等简单任务不强制建 Plan  
-6. 业务产出仍写 `output/`，Plan 只管家务状态  
+6. 业务产出仍写 `工作成果/`，Plan 只管家务状态  
 
 - [ ] **Step 4: Run related tests PASS**
 
@@ -391,7 +391,7 @@ EOF
 说明人工/后续 AB 步骤：
 
 1. 打开空文件夹，将 `seed-plan.json` 复制为 `.office-agent/work/plan.json`  
-2. 在 `output/` 放置两份占位已完成说明（可选）  
+2. 在 `工作成果/` 放置两份占位已完成说明（可选）  
 3. 话术：`按工作计划未完成项继续`  
 4. 金标：Agent 调用 `plan_get`，推进 s3 而非重建 Plan；最终 plan `completed` 或剩余项减少  
 
@@ -455,7 +455,7 @@ Expected: PASS
 
 | 阶段 | 内容 | 新计划文件 |
 |------|------|------------|
-| P2 | guide「继续工作计划」；`finish` 摘要约定加固；可选 `output/工作计划.md` | 另开 `2026-08-XX-agent-plan-execute-p2.md` |
+| P2 | guide「继续工作计划」；`finish` 摘要约定加固；可选 `工作成果/工作计划.md` | 另开 `2026-08-XX-agent-plan-execute-p2.md` |
 | P3 | UI 只读进度 | 另开 |
 | P4 | 领域 Skill 模板（如规章审查） | 业务单独立项 |
 

@@ -116,6 +116,7 @@ export const DELIVERABLE_SUFFIXES = [
   ".ppt",
   ".pdf",
   ".md",
+  ".html",
   ".txt",
   ".json",
 ] as const;
@@ -131,7 +132,7 @@ export function hasDeliverableSuffix(path: string): boolean {
 }
 
 /**
- * Relative deliverable fragment in backticks, e.g. `output/a.docx` or `.office-agent/b.md`.
+ * Relative deliverable fragment in backticks, e.g. `工作成果/a.docx` or `.office-agent/b.md`.
  * Rejects absolute paths and `..` segments.
  */
 export function isRelativeDeliverablePath(path: string): boolean {
@@ -139,7 +140,7 @@ export function isRelativeDeliverablePath(path: string): boolean {
   if (!p || p.startsWith("/") || /^[a-zA-Z]:\//.test(p)) return false;
   if (p.includes("..")) return false;
   if (!hasDeliverableSuffix(p)) return false;
-  return /^(output\/|\.office-agent\/)/.test(p) || !p.startsWith(".");
+  return /^(工作成果\/|output\/|\.office-agent\/)/.test(p) || !p.startsWith(".");
 }
 
 /** Join workspace root with a relative path (forward slashes). */

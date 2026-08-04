@@ -47,20 +47,22 @@ describe("hasDeliverableSuffix", () => {
     expect(hasDeliverableSuffix("deck.pptx")).toBe(true);
     expect(hasDeliverableSuffix("old.ppt")).toBe(true);
     expect(hasDeliverableSuffix("report.docx")).toBe(true);
+    expect(hasDeliverableSuffix("工作成果/工作计划.html")).toBe(true);
     expect(hasDeliverableSuffix("notes.exe")).toBe(false);
   });
 });
 
 describe("isRelativeDeliverablePath", () => {
   it("accepts output deliverables and rejects absolute paths", () => {
-    expect(isRelativeDeliverablePath("output/report.docx")).toBe(true);
-    expect(isRelativeDeliverablePath("output/slides.pptx")).toBe(true);
+    expect(isRelativeDeliverablePath("工作成果/report.docx")).toBe(true);
+    expect(isRelativeDeliverablePath("工作成果/slides.pptx")).toBe(true);
+    expect(isRelativeDeliverablePath("工作成果/工作计划.html")).toBe(true);
     expect(isRelativeDeliverablePath("/tmp/report.docx")).toBe(false);
   });
 });
 
 describe("resolveUnderWorkspace", () => {
   it("joins workspace root with relative path", () => {
-    expect(resolveUnderWorkspace("/ws", "./output/a.md")).toBe("/ws/output/a.md");
+    expect(resolveUnderWorkspace("/ws", "./工作成果/a.md")).toBe("/ws/工作成果/a.md");
   });
 });

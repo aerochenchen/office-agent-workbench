@@ -111,7 +111,7 @@ def test_approval_statuses_constant():
 
 
 def test_plan_html_rel_constant():
-    assert PLAN_HTML_REL == "output/工作计划.html"
+    assert PLAN_HTML_REL == "工作成果/工作计划.html"
 
 
 def test_effective_approval_defaults_to_approved():
@@ -192,6 +192,10 @@ def test_render_plan_html_includes_goal_and_steps():
     assert "做完两件事" in html
     assert "第一步" in html
     assert "第二步" in html
+    # Avoid duplicated numbering: titles must not be prefixed with "1. "
+    assert "1. 第一步" not in html
+    assert 'class="steps"' in html
+    assert "文书通" in html
 
 
 def test_render_plan_html_escapes_and_footer():
@@ -201,6 +205,7 @@ def test_render_plan_html_escapes_and_footer():
     assert "待确认" in html
     assert "<script" not in html.lower()
     assert "对话框" in html
+    assert "plan-badge" in html
 
 
 def test_render_plan_html_shows_cancelled_when_rejected():

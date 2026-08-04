@@ -34,7 +34,7 @@ target_file_type: .pptx
 用户口述场合 / 单位主色(hex) / 已有 .pptx
 .office-agent/work/office-visual-design/   # 定制方案落盘（可选）
 palettes/*.md                             # 预置场合方案（技能内）
-output/*.pptx                             # 套用后的幻灯片
+工作成果/*.pptx                             # 套用后的幻灯片
 ```
 
 ## 四步纪律（必须按序）

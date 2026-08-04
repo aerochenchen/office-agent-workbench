@@ -36,7 +36,7 @@ target_file_type: .docx
 ```
 旧版.docx / 新版.docx（或 范本.docx / 修订稿.docx）
 .office-agent/work/doc-diff-review/diff.json
-output/对照审校.md
+工作成果/对照审校.md
 ```
 
 ## 四步纪律（必须按序）
@@ -57,7 +57,7 @@ run_shared_script
 
 ### Step 3 — 解读改动（Agent，约 2～4 步）
 
-`workspace_read` 读取 diff JSON，写 `output/对照审校.md`：
+`workspace_read` 读取 diff JSON，写 `工作成果/对照审校.md`：
 
 **默认模式（两版对比）**
 
@@ -73,7 +73,7 @@ run_shared_script
 
 ### Step 4 — 收尾（Agent，1 步）
 
-`finish` 时给出 `output/对照审校.md` 与 diff JSON 路径；提醒表格改动可能未完全覆盖。
+`finish` 时给出 `工作成果/对照审校.md` 与 diff JSON 路径；提醒表格改动可能未完全覆盖。
 
 ## 步数预算
 
@@ -88,7 +88,7 @@ run_shared_script
 1. **必须先跑 `docx_diff`**，禁止凭记忆空口对比两篇全文。
 2. 报告中的每条主要改动须能对应 JSON 里至少一条 `changes[]`。
 3. 不把未改动段落写成「已修改」。
-4. 交付在 `output/`；diff JSON 在 `.office-agent/work/doc-diff-review/`。
+4. 交付在 `工作成果/`；diff JSON 在 `.office-agent/work/doc-diff-review/`。
 
 ## 变更记录
 

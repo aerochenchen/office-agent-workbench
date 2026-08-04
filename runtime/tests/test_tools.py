@@ -52,8 +52,8 @@ def test_workspace_write_relocates_root_docx_to_output(tmp_path: Path, monkeypat
         {"path": "AI.docx", "content": "final\n"},
     )
     assert result["ok"] is True
-    assert result["path"] == "output/AI.docx"
-    assert (ws / "output" / "AI.docx").is_file()
+    assert result["path"] == "工作成果/AI.docx"
+    assert (ws / "工作成果" / "AI.docx").is_file()
     assert not (ws / "AI.docx").exists()
 
 

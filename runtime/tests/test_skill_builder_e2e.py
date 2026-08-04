@@ -164,5 +164,5 @@ def test_export_zip_lands_in_output(seeded):
     )
     assert exported["ok"] is True, exported["stderr"]
     payload = json.loads(exported["stdout"])
-    assert payload["zip"] == "output/端到端示例-e2e-demo.zip"
+    assert payload["zip"] == "工作成果/端到端示例-e2e-demo.zip"
     assert (tools.workspace.root / payload["zip"]).is_file()

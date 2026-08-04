@@ -70,7 +70,7 @@
 | 文件 | 用途 |
 |------|------|
 | `.office-agent/work/plan.json` | **唯一权威**机器可读 Plan（当前工作区至多一份 active plan） |
-| `output/工作计划.html` | **给人看的简要说明**（从 JSON 渲染；非权威、不支持回写） |
+| `工作成果/工作计划.html` | **给人看的简要说明**（从 JSON 渲染；非权威、不支持回写） |
 
 同时只允许一个 `status=active` 的 Plan。新复杂任务若已有 active plan：先 `ask_user` 一次（继续旧计划 / 归档旧计划并新建），或用户明确说「重新规划」则将旧 plan 标 `cancelled` 后新建。
 
@@ -154,14 +154,14 @@
 | Tool / 行为 | 作用 |
 |------|------|
 | `plan_set_approval` | 将 `approval` 设为 `approved` / `rejected`（拒绝时可顺带 `cancelled`） |
-| `plan_create` 默认 | 新计划 `approval=pending`；并渲染/刷新 `output/工作计划.html`（简要说明，非权威） |
+| `plan_create` 默认 | 新计划 `approval=pending`；并渲染/刷新 `工作成果/工作计划.html`（简要说明，非权威） |
 | `plan_update_step` 硬闸 | `approval != approved`（含缺省兼容后的非 approved）时，禁止把任一步标为 `in_progress` / `done`（可允许只改 notes） |
 | `render_plan_html` | 纯函数：从 JSON 生成静态 HTML（转义文本、无脚本）；页内写明「如需修改请在对话框提出」 |
 
 ### 6.2 与现有工具关系
 
 - 真正干活仍用 `workspace_*` / `run_*` / `read_skill`
-- Plan 工具只管家务状态；禁止把业务正文塞进 `notes` 代替 `output/`
+- Plan 工具只管家务状态；禁止把业务正文塞进 `notes` 代替 `工作成果/`
 - 命中领域 Skill 时：**先 `read_skill`，再决定是否用 Skill 步骤模板填 Plan**（有 Skill 用 Skill 纪律；无 Skill 用通用 Plan）
 
 ### 6.3 System 纪律（摘录，实施时写入 `_build_system_prompt`）
@@ -177,7 +177,7 @@
 **P2 增补：确认关（推荐规则）**
 
 1. **新建复杂任务工作计划后，在推进任何业务步骤之前**必须：
-   - 确保 `output/工作计划.html` 已写出（目标 + 编号步骤 + **修改须走对话框**的说明）
+   - 确保 `工作成果/工作计划.html` 已写出（目标 + 编号步骤 + **修改须走对话框**的说明）
    - 用 `ask_user` **一次**请用户确认：按此执行 / 要改哪里（对话里说） / 取消  
    - 用户同意 → `plan_set_approval(approved)` 后再执行  
    - 用户要改 → **仅在对话中**按反馈更新 `plan.json`，重渲染 HTML，`approval` 保持/拉回 pending，再确认  
@@ -211,7 +211,7 @@
 ```
 用户提出复杂任务
     →（若缺关键路径：ask_user 一次澄清）
-    → plan_create（approval=pending）+ 写 output/工作计划.html
+    → plan_create（approval=pending）+ 写 工作成果/工作计划.html
     → ask_user 确认工作计划（改计划请对话说明）
     → 用户同意：plan_set_approval(approved)
     → loop:
@@ -237,7 +237,7 @@
 |------|------|------|----------|
 | **P0 定稿** | 规格确认 | 本文 + Phase1 计划勾选范围 | 评审 |
 | **P1 底座 MVP** | 工具 + schema + system 纪律 + 单测 + 合成续跑夹具 | 可 API/对话驱动的 Plan+执行+续跑 | **已完成** |
-| **P2 体验加固** | **确认关** + `output/工作计划.html` 简要展示 + guide 续跑话术 + finish 摘要；改计划**仅对话** | 办事人先看见计划、确认后再干、可发现续跑 | 小～中 |
+| **P2 体验加固** | **确认关** + `工作成果/工作计划.html` 简要展示 + guide 续跑话术 + finish 摘要；改计划**仅对话** | 办事人先看见计划、确认后再干、可发现续跑 | 小～中 |
 | **P3 UI** | 右侧或对话区只读 Plan 进度（步骤列表 + 状态） | 可见可控，仍不引入多 Agent | 中 |
 | **P4 领域模板（可选）** | 如「规章对照审查」Skill：默认 steps 模板 + 脚本分批 | 例证场景达标，反哺通用层 | 按业务单独立项 |
 
@@ -259,7 +259,7 @@
 ### 9.2 P2 必须
 
 1. 新建计划默认 `approval=pending`；未批准前 `plan_update_step(…, in_progress|done)` 被拒绝
-2. 确认路径：写 `output/工作计划.html`（含「仅供查阅、修改走对话框」说明）+ `ask_user` 确认 + `plan_set_approval(approved)` 后方可推进步骤
+2. 确认路径：写 `工作成果/工作计划.html`（含「仅供查阅、修改走对话框」说明）+ `ask_user` 确认 + `plan_set_approval(approved)` 后方可推进步骤
 3. 续跑 / 「不用确认直接做」**不**强制再次全盘确认（规则见 §6.3）；改计划**仅**对话路径（§6.4）
 4. 空态/办事能力树可一键填入「按工作计划未完成项继续」
 5. `finish.summary` 在未完成时稳定包含剩余步数或步骤标题列表（可用 helper 生成建议摘要，prompt 纪律兜底）
@@ -318,7 +318,7 @@
 | D3 | 先 P1 工具与纪律，再 P2 体验（含确认关），再 P3 UI |
 | D4 | 简单任务不强制 Plan；续跑以工作区 Plan 为准 |
 | D5（P2） | 复杂任务新建计划后**必须用户确认**再执行；续跑与显式跳过确认除外 |
-| D6（P2） | 给人看的简要说明为 `output/工作计划.html`（静态、转义、无脚本）；机器权威仍在 `work/plan.json` |
+| D6（P2） | 给人看的简要说明为 `工作成果/工作计划.html`（静态、转义、无脚本）；机器权威仍在 `work/plan.json` |
 | D7（P2） | 改计划**只走对话框**；展示文件手改忽略、不回写 |
 
 P1 已执行完毕。P2 按 `docs/superpowers/plans/2026-08-04-agent-plan-execute-p2.md` 实施。

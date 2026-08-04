@@ -57,13 +57,13 @@
 - `op` ∈ `add|delete|replace`
 - Wave 1 仅保证正文段落；复杂表格可进 `warnings`
 
-### 3.3 校对报告（`output/校对报告.md`）
+### 3.3 校对报告（`工作成果/校对报告.md`）
 
 - 每条问题含：分类（称谓/数字/标点/术语/口径/逻辑追问）、定位（`unit_id` 或 `p{idx}`）、原文摘要、建议
 - 禁止无定位空泛批评
 - 若存在 `.office-agent/glossary.md`，术语/口径类须对照该文件
 
-### 3.4 对照审校（`output/对照审校.md`）
+### 3.4 对照审校（`工作成果/对照审校.md`）
 
 - 先跑 `docx_diff`，再解读为主要改动列表；条款模式按标题聚类
 - 改动须能回溯到 diff JSON 中的 `op` + 段落 index
@@ -82,7 +82,7 @@
 
 ### 3.7 government-document-format
 
-- Step 4 自检清单：角色覆盖、空 role、西式标号、产出在 `output/`
+- Step 4 自检清单：角色覆盖、空 role、西式标号、产出在 `工作成果/`
 - 禁止跳过 dump→roles→apply
 
 ### 3.8 全局

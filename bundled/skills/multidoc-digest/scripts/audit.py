@@ -2,7 +2,7 @@
 """Audit a digest report for coverage and citation integrity.
 
 Usage:
-    python audit.py output/汇总报告.md
+    python audit.py 工作成果/汇总报告.md
     python audit.py <report> --work-dir .office-agent/work/multidoc-digest --sample 8
 """
 
@@ -298,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", default=None)
     parser.add_argument("--chunks", default=None)
     parser.add_argument("--cards", default=None)
-    parser.add_argument("--output", default=None, help="Default: output/审计报告.md")
+    parser.add_argument("--output", default=None, help="Default: 工作成果/审计报告.md")
     parser.add_argument("--sample", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args(argv)
@@ -329,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     if not cards_dir.is_absolute():
         cards_dir = (cwd / cards_dir).resolve()
 
-    out_path = Path(args.output) if args.output else cwd / "output" / "审计报告.md"
+    out_path = Path(args.output) if args.output else cwd / "工作成果" / "审计报告.md"
     if not out_path.is_absolute():
         out_path = (cwd / out_path).resolve()
 

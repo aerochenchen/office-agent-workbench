@@ -237,7 +237,7 @@ def main() -> int:
     work = ws / ".office-agent" / "work" / "multidoc-digest"
     write_synthetic_cards(work)
     run([py, str(SKILL_SCRIPTS / "merge_outline.py")], cwd=ws)
-    report = ws / "output" / "汇总报告.md"
+    report = ws / "工作成果" / "汇总报告.md"
     write_synthetic_report(work, report)
     run([py, str(SKILL_SCRIPTS / "audit.py"), str(report)], cwd=ws)
 
@@ -260,14 +260,14 @@ def main() -> int:
         "workspace": str(ws),
         "gold_vs_packs": gold_vs_packs,
         "gold_vs_report_smoke": gold_vs_report,
-        "audit_md": str(ws / "output" / "审计报告.md"),
+        "audit_md": str(ws / "工作成果" / "审计报告.md"),
         "expect_invalid_citation": "d999#s01",
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
     # Assertions for CI-ish smoke
     assert gold_vs_packs["hit_rate"] == 1.0, gold_vs_packs
-    audit_md = (ws / "output" / "审计报告.md").read_text(encoding="utf-8")
+    audit_md = (ws / "工作成果" / "审计报告.md").read_text(encoding="utf-8")
     assert "d999#s01" in audit_md
     assert "无效引用" in audit_md
     print("SMOKE OK: ingest preserves gold facts; audit flags invalid citation.")

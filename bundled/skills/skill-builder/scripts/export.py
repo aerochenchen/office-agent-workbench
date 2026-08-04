@@ -3,7 +3,7 @@
 
 Usage:
     python export.py <skill_id> --to-draft            # 拉回草稿区改（迭代用）
-    python export.py <skill_id> --zip                 # 打成 output/<中文名>-<id>.zip（分享用）
+    python export.py <skill_id> --zip                 # 打成 工作成果/<中文名>-<id>.zip（分享用）
     python export.py <skill_id> --zip --with-fixtures # 连自测样例一起打包
 
 同事拿到 zip 后，在技能面板点「导入技能」选该文件即可。
@@ -31,7 +31,7 @@ from skill_common import (  # noqa: E402
     text_files,
 )
 
-OUTPUT_REL = Path("output")
+OUTPUT_REL = Path("工作成果")
 SKIP_PARTS = {"__pycache__", ".git"}
 SKIP_NAMES = {".DS_Store"}
 
@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("skill_id", help="技能 id（技能目录名）")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--to-draft", action="store_true", help="复制到工作区草稿区以便修改")
-    mode.add_argument("--zip", action="store_true", help="打包到 output/ 供分享")
+    mode.add_argument("--zip", action="store_true", help="打包到 工作成果/ 供分享")
     parser.add_argument("--with-fixtures", action="store_true", help="打包时带上 fixtures/")
     args = parser.parse_args(argv)
 

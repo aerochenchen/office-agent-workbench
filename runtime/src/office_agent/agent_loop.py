@@ -111,7 +111,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": (
                 "在工作区内写入或覆盖文本文件。"
                 "脚本与中间产物 → .office-agent/work/；"
-                "最终交付（docx/pdf 等）→ output/；"
+                "最终交付（docx/pdf 等）→ 工作成果/；"
                 "不要往工作区根目录堆 Agent 产出（根目录留给用户源材料）。"
             ),
             "parameters": {
@@ -119,7 +119,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "相对路径，如 .office-agent/work/merge_docs.py 或 output/AI.docx",
+                        "description": "相对路径，如 .office-agent/work/merge_docs.py 或 工作成果/AI.docx",
                     },
                     "content": {"type": "string", "description": "文件内容"},
                 },
@@ -133,7 +133,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "run_workspace_script",
             "description": (
                 "在工作区沙箱内直接运行已有的 .py 脚本（cwd=工作区根目录）。"
-                "脚本应位于 .office-agent/work/；脚本内最终产出请写到 output/（如 output/AI.docx）。"
+                "脚本应位于 .office-agent/work/；脚本内最终产出请写到 工作成果/（如 工作成果/AI.docx）。"
                 "写完后必须用本工具执行，禁止让用户去终端手动 python。"
             ),
             "parameters": {
@@ -198,7 +198,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": (
                 "运行共享脚本。公文排版 format_gongwen："
                 "先 args=[dump, docx]，Agent 写 roles.json 后 "
-                "args=[apply, docx, roles.json]；结果宜落到 output/。"
+                "args=[apply, docx, roles.json]；结果宜落到 工作成果/。"
                 "两版对比 docx_diff：args=[旧.docx, 新.docx, --out, 报告.json]。"
             ),
             "parameters": {
@@ -225,7 +225,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "plan_create",
             "description": (
                 "创建新的工作计划并写入 .office-agent/work/plan.json，"
-                "同时生成 output/工作计划.html 供查阅。"
+                "同时生成 工作成果/工作计划.html 供查阅。"
                 "默认 approval=pending，需 plan_set_approval(approved) 后才能执行步骤。"
                 "若已有 active 计划则拒绝静默覆盖；steps 至少 2 项。"
             ),
@@ -323,7 +323,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "plan_set_approval",
             "description": (
                 "设置工作计划的 approval：approved 或 rejected。"
-                "rejected 会将计划标为 cancelled 并刷新 output/工作计划.html。"
+                "rejected 会将计划标为 cancelled 并刷新 工作成果/工作计划.html。"
                 "用户说「不用确认」时，create 后可直接 approved。"
             ),
             "parameters": {
@@ -361,7 +361,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "finish",
-            "description": "结束当前任务并给出面向用户的总结（提及成果在 output/ 下的路径）",
+            "description": "结束当前任务并给出面向用户的总结（提及成果在 工作成果/ 下的路径）",
             "parameters": {
                 "type": "object",
                 "properties": {"summary": {"type": "string"}},
@@ -418,9 +418,9 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "请优先使用已启用的 Skill 与内置工具。\n"
         "目录约定（必须遵守）：\n"
         "- 工作区根目录：只保留用户自己的源材料（纪要、模板、附件等），不要往根目录堆 Agent 产出；\n"
-        "- `output/`：最终交付成果（如 `output/AI.docx`、排版后的公文）；\n"
+        "- `工作成果/`：最终交付成果（如 `工作成果/AI.docx`、排版后的公文）；\n"
         "- `.office-agent/work/`：过程文件（自写 .py、草稿、临时 json/中间文件）；\n"
-        "- 运行脚本时 cwd 已是工作区根，脚本内请用 `output/文件名` 写出最终成果，"
+        "- 运行脚本时 cwd 已是工作区根，脚本内请用 `工作成果/文件名` 写出最终成果，"
         "脚本自身放在 `.office-agent/work/xxx.py`。\n"
         "重要区分：\n"
         "- workspace_* 只能访问用户打开的工作区文件夹；\n"
@@ -451,14 +451,16 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "工作计划纪律：\n"
         "- 任务复杂、涉及多文件/多步骤、批量处理，或用户明确要求分步推进时，"
         "先调用 plan_create 制定工作计划；\n"
-        "- plan_create 后须确保 output/工作计划.html 已写出（目标与步骤简要说明），"
+        "- plan_create 后须确保 工作成果/工作计划.html 已写出（目标与步骤简要说明），"
         "再用 ask_user 一次请用户确认：按此执行 / 在对话框说明要改哪里 / 取消；"
+        "ask_user 的问题中必须带上可点击路径 `工作成果/工作计划.html`（反引号包裹），"
+        "方便用户一键打开查阅；"
         "用户同意 → plan_set_approval(approved) 后再执行业务步骤；"
         "用户要改 → 仅在对话框中更新 plan.json、重渲染 HTML、approval 保持 pending 后再确认；"
         "用户取消 → plan_set_approval(rejected) 与 plan_set_status(cancelled)，finish 说明已取消；\n"
         "- 跳过确认（不 ask_user）当且仅当：续跑且计划已 approved、"
         "用户明确说不用确认直接做、或未建工作计划的简单任务；\n"
-        "- output/工作计划.html 仅供查阅；修改步骤或目标只能在对话框提出，"
+        "- 工作成果/工作计划.html 仅供查阅；修改步骤或目标只能在对话框提出，"
         "禁止解析或同步用户对手改展示文件的期望；\n"
         "- 若已有进行中的工作计划，每轮开始前先 plan_get 读取当前工作计划，"
         "每轮只推进一个可执行步骤（依赖已满足且非 needs_user 待确认），"
@@ -468,8 +470,8 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "- 调用 finish 时若工作计划尚有未完成步骤，须在摘要中说明剩余步骤数或标题列表，"
         "并提示用户可按工作计划继续；\n"
         "- 单文件校对、两版 docx 对照、单一公文排版等简单、单步任务，不强制建工作计划；\n"
-        "- 业务交付成果仍写入 output/；工作计划仅记录任务进度，"
-        "不替代 output/ 中的正式产出。\n"
+        "- 业务交付成果仍写入 工作成果/；工作计划仅记录任务进度，"
+        "不替代 工作成果/ 中的正式产出。\n"
         "Skill 使用纪律：\n"
         "- 下面的 Skill 目录只给出名称与用途摘要，不含具体步骤；\n"
         "- 当任务命中某个 Skill 时，必须先 read_skill(skill_id=...) 读取它的 SKILL.md 全文，"
@@ -500,6 +502,34 @@ def _ask_user_text(args: dict[str, Any], result: dict[str, Any]) -> str:
         if result.get(key):
             return str(result[key]).strip()
     return "请补充必要信息后继续。"
+
+
+_PLAN_HTML_BACKTICK = "`工作成果/工作计划.html`"
+
+
+def _ensure_plan_html_link_in_ask(
+    text: str, tool_events: list[dict[str, Any]]
+) -> str:
+    """If this turn created a plan, make sure the confirm message linkifies the HTML brief."""
+    created = any(
+        e.get("name") == "plan_create"
+        and isinstance(e.get("result"), dict)
+        and e["result"].get("ok")
+        for e in tool_events
+    )
+    if not created:
+        return text
+    if "工作计划.html" in text:
+        # Ensure backticks so MarkdownMessage can linkify relative deliverables.
+        if _PLAN_HTML_BACKTICK not in text:
+            text = text.replace("工作成果/工作计划.html", _PLAN_HTML_BACKTICK)
+            text = text.replace("output/工作计划.html", _PLAN_HTML_BACKTICK)
+        return text
+    suffix = (
+        f"\n\n请先打开查阅工作计划简要说明：{_PLAN_HTML_BACKTICK}\n"
+        "（点击路径即可用系统应用打开。本页仅供查阅；如需修改请在本对话中说明。）"
+    )
+    return f"{text.rstrip()}{suffix}"
 
 
 def _parse_tool_args(raw: str) -> dict[str, Any]:
@@ -754,7 +784,9 @@ def run_agent(
                         }
                     )
                     if name == "ask_user":
-                        final_text = _ask_user_text(args, result)
+                        final_text = _ensure_plan_html_link_in_ask(
+                            _ask_user_text(args, result), tool_events
+                        )
                         stop_for_user = True
                         break
                     if name == "finish" and result.get("ok"):

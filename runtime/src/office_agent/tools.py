@@ -56,7 +56,7 @@ def _normalize_rel(rel: str) -> str:
 
 
 def relocate_write_path(rel: str) -> str:
-    """Route agent writes: root .py → work/; root deliverables → output/."""
+    """Route agent writes: root .py → work/; root deliverables → 工作成果/."""
     normalized = _normalize_rel(rel)
     if normalized.startswith(f"{AGENT_WORK_REL}/") or normalized == AGENT_WORK_REL:
         return normalized

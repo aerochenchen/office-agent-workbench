@@ -151,13 +151,14 @@ def test_system_prompt_includes_plan_discipline():
 def test_system_prompt_enforces_plan_confirmation_and_dialog_only_edits():
     text = _build_system_prompt([])
     assert "plan_set_approval" in text
-    assert "output/工作计划.html" in text
+    assert "工作成果/工作计划.html" in text
     assert "对话框" in text
     assert "needs_user" in text
     assert "ask_user" in text
     assert "仅供查阅" in text
     assert "不用确认" in text
     assert "禁止解析或同步" in text
+    assert "`工作成果/工作计划.html`" in text or "反引号" in text
 
 
 def test_system_prompt_ask_user_priority():
@@ -275,6 +276,49 @@ def test_ask_user_pauses_for_answer(tmp_path: Path, monkeypatch):
     assert result.final_text == "哪个docx？"
     assert len(gateway.chat_calls) == 1
     assert result.tool_events[0]["name"] == "ask_user"
+
+
+def test_ask_user_after_plan_create_injects_html_link(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "ws").mkdir()
+    executor = ToolExecutor(Workspace(tmp_path / "ws"), SkillRegistry(), permission_mode="trust")
+    gateway = FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[
+                    _tool_call(
+                        "c1",
+                        "plan_create",
+                        {
+                            "goal": "办两件事",
+                            "steps": [
+                                {"id": "s1", "title": "摸底"},
+                                {"id": "s2", "title": "成文"},
+                            ],
+                        },
+                    ),
+                    _tool_call(
+                        "c2",
+                        "ask_user",
+                        {"question": "请确认是否按此工作计划执行？"},
+                    ),
+                ],
+            ),
+            _completion(content="不应再继续"),
+        ]
+    )
+    result = run_agent(
+        user_message="帮我分步处理材料",
+        attached_paths=[],
+        gateway=gateway,
+        tools=executor,
+        catalog=[],
+        max_steps=5,
+    )
+    assert "`工作成果/工作计划.html`" in result.final_text
+    assert "请确认是否按此工作计划执行" in result.final_text
+    assert (tmp_path / "ws" / "工作成果" / "工作计划.html").is_file()
 
 
 def test_history_is_passed_to_model(tmp_path: Path, monkeypatch):

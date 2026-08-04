@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 PLAN_REL = ".office-agent/work/plan.json"
-PLAN_HTML_REL = "output/工作计划.html"
+PLAN_HTML_REL = "工作成果/工作计划.html"
 
 PLAN_STATUSES = frozenset({"active", "completed", "blocked", "cancelled"})
 STEP_STATUSES = frozenset({"pending", "in_progress", "done", "failed", "skipped"})
@@ -188,26 +188,41 @@ def _plan_status_label(plan: dict) -> str:
     return ""
 
 
+_STEP_STATUS_LABEL = {
+    "pending": "待开始",
+    "in_progress": "进行中",
+    "done": "已完成",
+    "failed": "失败",
+    "skipped": "已跳过",
+}
+
+
 def render_plan_html(plan: dict) -> str:
+    """Render a static, view-only HTML brief. No scripts; user text is escaped.
+
+    Step titles must NOT include manual numbers — use ``<ol>`` only to avoid
+    duplicated numbering (e.g. ``1. 1. …``).
+    """
     goal = html.escape(plan.get("goal", ""))
     status_label = _plan_status_label(plan)
     steps = plan.get("steps", [])
 
-    step_items = []
-    for i, step in enumerate(steps, start=1):
+    step_items: list[str] = []
+    for step in steps:
         title = html.escape(step.get("title", ""))
-        detail = html.escape(step.get("detail", ""))
-        status = html.escape(step.get("status", ""))
-        item = f"<li><strong>{i}. {title}</strong> ({status})"
-        if detail:
-            item += f"<br>{detail}"
-        item += "</li>"
-        step_items.append(item)
+        detail = html.escape(step.get("detail", "")).strip()
+        raw_status = str(step.get("status") or "pending")
+        status_cn = html.escape(_STEP_STATUS_LABEL.get(raw_status, raw_status))
+        detail_html = f'<p class="detail">{detail}</p>' if detail else ""
+        step_items.append(
+            f'<li><div class="step-title">{title}</div>'
+            f'<span class="step-badge">{status_cn}</span>{detail_html}</li>'
+        )
 
     steps_html = "\n".join(step_items)
-    status_html = ""
+    badge = ""
     if status_label:
-        status_html = f"<h2>状态</h2>\n<p>{html.escape(status_label)}</p>\n"
+        badge = f'<p class="plan-badge">{html.escape(status_label)}</p>\n'
     footer = (
         "本页为工作计划简要说明，仅供查阅。"
         "如需修改步骤或目标，请在对话框中直接提出修改意见，不要改本文件。"
@@ -217,17 +232,151 @@ def render_plan_html(plan: dict) -> str:
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>工作计划</title>
+<style>
+  :root {{
+    --ink: #1c2430;
+    --muted: #5b6573;
+    --line: #e6ebf0;
+    --paper: #f7f5f1;
+    --card: #ffffff;
+    --accent: #1f4e79;
+    --badge-bg: #eef3f8;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.65 "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+      system-ui, sans-serif;
+  }}
+  main {{
+    max-width: 40rem;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 3rem;
+  }}
+  header {{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+  }}
+  .eyebrow {{
+    margin: 0 0 0.35rem;
+    color: var(--accent);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }}
+  h1 {{
+    margin: 0;
+    font-size: 1.55rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+  }}
+  .plan-badge {{
+    display: inline-block;
+    margin: 0.75rem 0 0;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: var(--badge-bg);
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }}
+  h2 {{
+    margin: 1.4rem 0 0.55rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }}
+  .goal {{
+    margin: 0;
+    padding: 0.9rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }}
+  ol.steps {{
+    list-style: none;
+    counter-reset: plan-step;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.65rem;
+  }}
+  ol.steps > li {{
+    counter-increment: plan-step;
+    position: relative;
+    padding: 0.85rem 1rem 0.85rem 2.75rem;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }}
+  ol.steps > li::before {{
+    content: counter(plan-step);
+    position: absolute;
+    left: 0.85rem;
+    top: 0.9rem;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 650;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .step-title {{
+    font-weight: 600;
+    margin-right: 0.4rem;
+  }}
+  .step-badge {{
+    display: inline-block;
+    margin-top: 0.15rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    background: var(--badge-bg);
+    color: var(--muted);
+    font-size: 0.72rem;
+  }}
+  .detail {{
+    margin: 0.4rem 0 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+  }}
+  footer {{
+    margin-top: 1.75rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 0.85rem;
+  }}
+  footer p {{ margin: 0; }}
+</style>
 </head>
 <body>
+<main>
+<header>
+<p class="eyebrow">文书通 · 工作计划</p>
 <h1>工作计划</h1>
-{status_html}<h2>目标</h2>
-<p>{goal}</p>
+{badge}</header>
+<section>
+<h2>目标</h2>
+<p class="goal">{goal}</p>
+</section>
+<section>
 <h2>步骤</h2>
-<ol>
+<ol class="steps">
 {steps_html}
 </ol>
+</section>
 <footer><p>{footer}</p></footer>
+</main>
 </body>
 </html>
 """

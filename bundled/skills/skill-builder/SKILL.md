@@ -37,7 +37,7 @@ required_tools: python-docx
   SKILL.md
   scripts/*.py
   references/*.md
-output/<中文名>-<skill-id>.zip                # 仅在用户要分享时产出
+工作成果/<中文名>-<skill-id>.zip                # 仅在用户要分享时产出
 ```
 
 规范细则见 `references/skill-md-spec.md`（frontmatter 字段、命名、正文章节）与 `references/script-conventions.md`（脚本 CLI 约定、可用依赖、硬禁项）。**起草前必须先读这两份**。
@@ -142,7 +142,7 @@ run_skill_script
   args: [<skill-id>, --zip]
 ```
 
-产出 `output/<中文名>-<skill-id>.zip`。告诉用户：同事在技能面板点「导入技能」→「zip / md 文件」选这个包即可。
+产出 `工作成果/<中文名>-<skill-id>.zip`。告诉用户：同事在技能面板点「导入技能」→「zip / md 文件」选这个包即可。
 
 ---
 
@@ -174,7 +174,7 @@ run_skill_script
 
 1. `~/.office-agent/skills/<skill-id>/` — 已安装并启用的技能
 2. `.office-agent/work/skill-draft/<skill-id>/` — 草稿留档，下次迭代的起点
-3. `output/<中文名>-<skill-id>.zip` — 仅在用户要分享时产出
+3. `工作成果/<中文名>-<skill-id>.zip` — 仅在用户要分享时产出
 
 向用户交付时说清三件事：技能叫什么、下次用哪句话触发、去技能面板点刷新。
 

@@ -30,14 +30,14 @@
 ### one-to-three
 
 - 触发：一文三用及相关 saying（报告正文 / 汇报提纲 / 答问口径）
-- 交付（全流程）：`output/报告正文.md`、`output/汇报提纲.md`、`output/答问口径.md`
+- 交付（全流程）：`工作成果/报告正文.md`、`工作成果/汇报提纲.md`、`工作成果/答问口径.md`
 - 用户只要其中一环时只交对应产物
 - 硬规则：定量须带来源或标「待核实」；答问口径不得编造未在材料中的事实；缺料明显时先提示走 `material-gap` 或在文首列缺口
 
 ### brief-deck
 
 - 触发：汇报提纲、演示文稿、生成 PPT + 汇报稿
-- 交付按需：`output/汇报提纲.md`、`.office-agent/work/brief-deck/slides.json`、`output/汇报演示.pptx`、`output/汇报稿.md`
+- 交付按需：`工作成果/汇报提纲.md`、`.office-agent/work/brief-deck/slides.json`、`工作成果/汇报演示.pptx`、`工作成果/汇报稿.md`
 - 页纲与幻灯页、讲稿段落可对齐（同序号/同标题）
 - 硬规则：一页一意；禁止无来源的定量页（数字须能回溯提纲/材料或标待核实）
 - 成套 PPT 须经 `run_skill_script` 调用 `build_pptx.py`；配色精修可再调 `office-visual-design`

@@ -3,7 +3,7 @@
 
 Usage:
   python build_pptx.py --slides .office-agent/work/brief-deck/slides.json \\
-                       --out output/汇报演示.pptx
+                       --out 工作成果/汇报演示.pptx
 """
 from __future__ import annotations
 
@@ -179,7 +179,7 @@ def build(slides_path: Path, out_path: Path) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build formal PPTX from slides JSON")
     parser.add_argument("--slides", required=True, help="Path to slides.json")
-    parser.add_argument("--out", default="output/汇报演示.pptx", help="Output pptx path")
+    parser.add_argument("--out", default="工作成果/汇报演示.pptx", help="Output pptx path")
     args = parser.parse_args(argv)
 
     slides_path = Path(args.slides)

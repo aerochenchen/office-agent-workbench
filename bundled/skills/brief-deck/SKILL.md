@@ -31,11 +31,11 @@ target_file_type: .pptx
 ## 输入与产出
 
 ```
-用户材料，或 output/汇报提纲.md（可来自 one-to-three）
+用户材料，或 工作成果/汇报提纲.md（可来自 one-to-three）
 .office-agent/work/brief-deck/slides.json
-output/汇报提纲.md          # 按需
-output/汇报演示.pptx        # 按需（硬交付）
-output/汇报稿.md            # 按需
+工作成果/汇报提纲.md          # 按需
+工作成果/汇报演示.pptx        # 按需（硬交付）
+工作成果/汇报稿.md            # 按需
 ```
 
 用户只要提纲时可不生成 pptx；要「演示文稿」时须产出 pptx + 建议同步汇报稿。
@@ -44,11 +44,11 @@ output/汇报稿.md            # 按需
 
 ### Step 1 — 定位输入（Agent，1 步）
 
-优先顺序：用户指定路径 → 已有 `output/汇报提纲.md` → 源材料文件。缺路径 `ask_user` **一次**。
+优先顺序：用户指定路径 → 已有 `工作成果/汇报提纲.md` → 源材料文件。缺路径 `ask_user` **一次**。
 
 ### Step 2 — 写或核对提纲（Agent，1～3 步）
 
-若尚无提纲：读材料后写 `output/汇报提纲.md`（结构同 `one-to-three` 的提纲：页序、一页一意、3～5 条要点）。  
+若尚无提纲：读材料后写 `工作成果/汇报提纲.md`（结构同 `one-to-three` 的提纲：页序、一页一意、3～5 条要点）。  
 若已有提纲：核对页序是否适合上台（过长则拆页，过碎则合并），必要时回写提纲。
 
 硬规则：一页一意；定量要点须能回溯材料或标「待核实」。
@@ -81,7 +81,7 @@ run_skill_script
   script: build_pptx.py
   args: [
     --slides, .office-agent/work/brief-deck/slides.json,
-    --out, output/汇报演示.pptx
+    --out, 工作成果/汇报演示.pptx
   ]
 ```
 
@@ -89,7 +89,7 @@ run_skill_script
 
 ### Step 5 — 写汇报稿并收尾（Agent，1～3 步）
 
-写 `output/汇报稿.md`：按页序分段，每段对应一页标题；口语可念、含过渡句；数字与提纲一致。  
+写 `工作成果/汇报稿.md`：按页序分段，每段对应一页标题；口语可念、含过渡句；数字与提纲一致。  
 `finish` 列出 `汇报提纲.md` / `汇报演示.pptx` / `汇报稿.md` 路径。
 
 ## 步数预算
@@ -106,7 +106,7 @@ run_skill_script
 1. 提纲页序、`slides.json`、pptx 页、汇报稿段落必须可对齐（同序同题）。
 2. 禁止无来源定量页。
 3. 生成 pptx 必须走 `build_pptx.py`，禁止空口宣称已生成文件。
-4. 交付在 `output/`；过程 JSON 在 `.office-agent/work/brief-deck/`。
+4. 交付在 `工作成果/`；过程 JSON 在 `.office-agent/work/brief-deck/`。
 
 ## 变更记录
 

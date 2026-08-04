@@ -38,7 +38,7 @@ required_tools: python-docx
   packs/<doc_id>.md
   cards/<doc_id>.json
   outline.json
-output/
+工作成果/
   汇总报告.md
   审计报告.md
 ```
@@ -108,7 +108,7 @@ run_skill_script
 ### Step 4 — 按主题成文 reduce（Agent，约 3～6 步）
 
 1. `workspace_read` → `outline.json`
-2. 按主题撰写 `output/汇总报告.md`（写入路径用相对工作区：`output/汇总报告.md`）
+2. 按主题撰写 `工作成果/汇总报告.md`（写入路径用相对工作区：`工作成果/汇总报告.md`）
 3. **每一段论述**末尾或句内标注 `〔doc_id#sec〕`，且必须来自该主题的 `support_citations`
 4. 文末「参考文献」表：列出报告中出现的 `doc_id` → 文件名（可从 outline/manifest 映射）
 
@@ -120,10 +120,10 @@ run_skill_script
 run_skill_script
   skill_id: multidoc-digest
   script: audit.py
-  args: [output/汇总报告.md]
+  args: [工作成果/汇总报告.md]
 ```
 
-产出 `output/审计报告.md`。向用户摘要：覆盖率、未用文件数、无效引用数、单一来源数据告警数、**审计 PASS/FAIL**。
+产出 `工作成果/审计报告.md`。向用户摘要：覆盖率、未用文件数、无效引用数、单一来源数据告警数、**审计 PASS/FAIL**。
 
 硬规则：`invalid_citations`、报告中无出处定量句、卡片定量缺 citations、`risks` 泄漏为正文 → **FAIL**（脚本退出码 1）。FAIL 时须修订报告或卡片后重跑本步，不得宣称汇总完成。
 
@@ -148,8 +148,8 @@ run_skill_script
 
 ## 交付物
 
-1. `output/汇总报告.md` — 分主题正文 + 内联引用 + 参考文献
-2. `output/审计报告.md` — 覆盖率、未用清单、无效引用、风险清单、抽检对照
+1. `工作成果/汇总报告.md` — 分主题正文 + 内联引用 + 参考文献
+2. `工作成果/审计报告.md` — 覆盖率、未用清单、无效引用、风险清单、抽检对照
 
 评估时优先看审计报告：金标事实是否出现、无效引用是否为 0、未用文件是否合理、审计结论是否 PASS。
 

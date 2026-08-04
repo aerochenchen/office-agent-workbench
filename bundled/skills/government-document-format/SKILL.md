@@ -90,7 +90,7 @@ run_shared_script
 - [ ] 每个非空段在 `roles.json` 中有对应 `index`（无遗漏段落）
 - [ ] 无空 `role`；拿不准的已标 `skip`/`body` 并在 `notes` 说明
 - [ ] 西式二级（`1.1` 等）已标 `h2` 或已由 apply 转换（查 stdout `numbering_fixed`）
-- [ ] 产出文件在 `output/`（或用户明确指定的交付路径），而非工作区根目录乱堆
+- [ ] 产出文件在 `工作成果/`（或用户明确指定的交付路径），而非工作区根目录乱堆
 - [ ] 向用户报告：输出路径、`notes`、脚本 `warnings`；印章/页码/垂直精确定位标为人工项
 
 写作/汇总最终交付 `.docx` 时：**默认走本 skill 四步**；禁止跳过结构标注直接 `format_gongwen apply`。

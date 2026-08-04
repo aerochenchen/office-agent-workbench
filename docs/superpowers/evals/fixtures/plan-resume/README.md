@@ -8,17 +8,17 @@
 
 **与 P2 确认关的关系：**
 
-- **新建计划**（`plan_create`）默认 `approval=pending`，须写 `output/工作计划.html` 并经用户确认（`ask_user` → `plan_set_approval(approved)`）后方可推进步骤。
+- **新建计划**（`plan_create`）默认 `approval=pending`，须写 `工作成果/工作计划.html` 并经用户确认（`ask_user` → `plan_set_approval(approved)`）后方可推进步骤。
 - **本夹具为续跑场景**：`seed-plan.json` 已标 `"approval": "approved"`，模拟用户此前已确认，Agent 可直接推进 s3/s4，**不**应再次全盘确认。
-- 展示文件 `output/工作计划.html` 仅供查阅；修改计划须在对话框提出，权威仍为 `.office-agent/work/plan.json`（§6.4）。
+- 展示文件 `工作成果/工作计划.html` 仅供查阅；修改计划须在对话框提出，权威仍为 `.office-agent/work/plan.json`（§6.4）。
 
 ## 人工 / AB 步骤
 
 1. 打开空文件夹作为临时工作区。
 2. 将 `seed-plan.json` 复制为 `.office-agent/work/plan.json`。
-3. （可选）在 `output/` 放置两份占位已完成说明，与 s1/s2 的 `outputs` 对应：
-   - `output/材料清单.md`
-   - `output/要点摘录.md`
+3. （可选）在 `工作成果/` 放置两份占位已完成说明，与 s1/s2 的 `outputs` 对应：
+   - `工作成果/材料清单.md`
+   - `工作成果/要点摘录.md`
 4. 用户话术：**按工作计划未完成项继续**
 5. 观察 Agent 是否：
    - 调用 `plan_get` 读取现有 Plan；
@@ -34,7 +34,7 @@
 | 确认关 | 不重复确认（seed `approval=approved`） |
 | 步骤推进 | s3 → s4 顺序执行，依赖满足 |
 | 终态 | Plan `completed` 或 s3/s4 中至少一项变为 `done` |
-| 产物 | `output/` 出现 s3/s4 声明的交付物（或等价说明） |
+| 产物 | `工作成果/` 出现 s3/s4 声明的交付物（或等价说明） |
 
 ## 文件
 

@@ -34,8 +34,8 @@ target_file_type: .docx
 用户指定的 .docx（或文件夹内唯一稿）
 .office-agent/glossary.md          # 可选：单位术语/称谓/禁写口径
 .office-agent/work/doc-proofread/  # 过程摘录（可选）
-output/校对报告.md                 # 必交
-output/校对批注要点.md             # 可选：按严重度精简给领导看
+工作成果/校对报告.md                 # 必交
+工作成果/校对批注要点.md             # 可选：按严重度精简给领导看
 ```
 
 ## 四步纪律（必须按序）
@@ -62,7 +62,7 @@ workspace_extract
 
 ### Step 4 — 写校对报告（Agent，约 2～4 步）
 
-写入 `output/校对报告.md`，结构：
+写入 `工作成果/校对报告.md`，结构：
 
 ```markdown
 # 校对报告
@@ -80,7 +80,7 @@ workspace_extract
 - **建议**：…
 ```
 
-可选再写 `output/校对批注要点.md`（只保留高优先级 5～15 条）。
+可选再写 `工作成果/校对批注要点.md`（只保留高优先级 5～15 条）。
 
 **红笔模式**（用户说「红笔」「审稿领导」「站不住」）：侧重逻辑追问、论据不足、易被追问处；仍须每条带定位。
 
@@ -101,7 +101,7 @@ workspace_extract
 1. **每条问题必须有定位**（`unit_id` 或 `meta.para_start` / locator 中的 `pN`）；无定位条目视为不合格，删掉重写。
 2. 不编造文中不存在的句子；原文摘要须来自抽取单元。
 3. 有 glossary 时，不得与已约定术语冲突而不说明。
-4. 最终交付在 `output/`；过程文件在 `.office-agent/work/doc-proofread/`。
+4. 最终交付在 `工作成果/`；过程文件在 `.office-agent/work/doc-proofread/`。
 
 ## 变更记录
 

@@ -14,7 +14,7 @@
       "status": "done",
       "depends_on": [],
       "inputs": ["*.docx", "*.md"],
-      "outputs": ["output/材料清单.md"],
+      "outputs": ["工作成果/材料清单.md"],
       "needs_user": false,
       "notes": "已完成：共 3 份 docx、1 份 md"
     },
@@ -24,8 +24,8 @@
       "detail": "从各材料提取进展、问题、下一步，写入要点摘录",
       "status": "done",
       "depends_on": ["s1"],
-      "inputs": ["output/材料清单.md"],
-      "outputs": ["output/要点摘录.md"],
+      "inputs": ["工作成果/材料清单.md"],
+      "outputs": ["工作成果/要点摘录.md"],
       "needs_user": false,
       "notes": "已完成：4 条进展、2 条问题"
     },
@@ -35,8 +35,8 @@
       "detail": "按统一结构合并要点，标注来源文件",
       "status": "pending",
       "depends_on": ["s2"],
-      "inputs": ["output/要点摘录.md"],
-      "outputs": ["output/汇总对照.md"],
+      "inputs": ["工作成果/要点摘录.md"],
+      "outputs": ["工作成果/汇总对照.md"],
       "needs_user": false,
       "notes": ""
     },
@@ -46,8 +46,8 @@
       "detail": "基于汇总对照撰写阶段性汇报初稿",
       "status": "pending",
       "depends_on": ["s3"],
-      "inputs": ["output/汇总对照.md"],
-      "outputs": ["output/阶段性汇报.md"],
+      "inputs": ["工作成果/汇总对照.md"],
+      "outputs": ["工作成果/阶段性汇报.md"],
       "needs_user": false,
       "notes": ""
     }

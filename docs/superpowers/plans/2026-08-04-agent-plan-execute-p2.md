@@ -4,7 +4,7 @@
 
 **Goal:** 复杂任务新建工作计划后先给人看并确认，再执行；续跑可发现；finish 摘要含剩余项。
 
-**Architecture:** 扩展 `plan_store` 的 `approval` 字段与硬闸；新增 `plan_set_approval` + `render_plan_html`（写入 `output/工作计划.html`，静态简要说明）；收紧 `plan_update_step`；更新 system 纪律（改计划仅对话）；guide 增加续跑叶子。不上 UI 面板（P3）。
+**Architecture:** 扩展 `plan_store` 的 `approval` 字段与硬闸；新增 `plan_set_approval` + `render_plan_html`（写入 `工作成果/工作计划.html`，静态简要说明）；收紧 `plan_update_step`；更新 system 纪律（改计划仅对话）；guide 增加续跑叶子。不上 UI 面板（P3）。
 
 **Tech Stack:** 现有 Python runtime、`guide.ts`、pytest / 前端既有测试习惯
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 权威 Plan 仍为 `.office-agent/work/plan.json`；`output/工作计划.html` 仅为查阅用简要说明
+- 权威 Plan 仍为 `.office-agent/work/plan.json`；`工作成果/工作计划.html` 仅为查阅用简要说明
 - 新计划默认 `approval=pending`；缺省旧文件按 `approved` 兼容
 - 未 `approved` 禁止 step → `in_progress`/`done`
 - 确认关：复杂新建必确认；续跑与「不用确认」跳过；简单任务不建 Plan
@@ -45,7 +45,7 @@
 **Interfaces:**
 - Produces:
   - `APPROVAL_STATUSES = frozenset({"pending", "approved", "rejected"})`
-  - `PLAN_HTML_REL = "output/工作计划.html"`
+  - `PLAN_HTML_REL = "工作成果/工作计划.html"`
   - `effective_approval(plan) -> str` — 缺省 → `"approved"`
   - `set_plan_approval(plan, approval: str, *, cancel_if_rejected: bool = True) -> dict`
   - `render_plan_html(plan) -> str` — 静态 HTML；含目标、步骤、页脚修改说明；对用户文本 `html.escape`
@@ -75,7 +75,7 @@ def test_render_plan_html_escapes_and_footer():
 - Test: `test_plan_tools.py`
 
 行为：
-- `plan_create` → `approval=pending` + 写入 `output/工作计划.html`
+- `plan_create` → `approval=pending` + 写入 `工作成果/工作计划.html`
 - `plan_set_approval`：approved / rejected（rejected→cancelled）；刷新 html
 - 用户「不用确认」：create 后立即 `plan_set_approval(approved)`，不 ask_user
 

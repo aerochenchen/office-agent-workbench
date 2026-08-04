@@ -76,10 +76,10 @@ def test_assert_argv_rejects_absolute_outside_roots(tmp_path: Path) -> None:
 
 def test_assert_argv_allows_workspace_relative_path(tmp_path: Path) -> None:
     root = tmp_path / "ws"
-    doc = root / "output" / "report.docx"
+    doc = root / "工作成果" / "report.docx"
     doc.parent.mkdir(parents=True)
     doc.write_bytes(b"PK")
-    assert_argv_within_roots(["output/report.docx"], [root])
+    assert_argv_within_roots(["工作成果/report.docx"], [root])
 
 
 def test_assert_argv_allows_non_path_flags_and_literals() -> None:

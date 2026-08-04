@@ -9,9 +9,9 @@ class SandboxError(ValueError):
 # Platform scratch + user-facing deliverables under the workspace root.
 # Root itself is reserved for the user's own source materials.
 AGENT_WORK_REL = ".office-agent/work"
-AGENT_OUTPUT_REL = "output"
+AGENT_OUTPUT_REL = "工作成果"
 
-# Root-level writes with these suffixes are treated as deliverables → output/
+# Root-level writes with these suffixes are treated as deliverables → 工作成果/
 DELIVERABLE_SUFFIXES = frozenset({
     ".docx",
     ".doc",
@@ -51,7 +51,7 @@ class Workspace:
         if not readme.is_file():
             readme.write_text(
                 "本目录存放智能体运行过程中的脚本与中间文件。\n"
-                "最终成果请查看工作区下的 output/ 目录。\n"
+                "最终成果请查看工作区下的「工作成果」目录。\n"
                 "工作区根目录请留给您自己的源材料。\n",
                 encoding="utf-8",
             )
