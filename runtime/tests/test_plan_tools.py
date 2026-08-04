@@ -83,3 +83,38 @@ def test_plan_update_and_complete(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     )["ok"]
     got = ex.execute("plan_get", {})
     assert got["plan"]["status"] == "completed"
+
+
+def test_plan_get_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    ex = _executor(tmp_path, monkeypatch)
+    got = ex.execute("plan_get", {})
+    assert got["ok"] is False
+    assert got["reason"] == "missing"
+
+
+def test_plan_set_status_cancelled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    ex = _executor(tmp_path, monkeypatch)
+    ex.execute(
+        "plan_create",
+        {
+            "goal": "A",
+            "steps": [{"id": "s1", "title": "a"}, {"id": "s2", "title": "b"}],
+        },
+    )
+    result = ex.execute("plan_set_status", {"status": "cancelled"})
+    assert result["ok"] is True
+    assert result["plan"]["status"] == "cancelled"
+
+
+def test_plan_set_status_completed_guard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    ex = _executor(tmp_path, monkeypatch)
+    ex.execute(
+        "plan_create",
+        {
+            "goal": "A",
+            "steps": [{"id": "s1", "title": "a"}, {"id": "s2", "title": "b"}],
+        },
+    )
+    result = ex.execute("plan_set_status", {"status": "completed"})
+    assert result["ok"] is False
+    assert "done" in result["error"].lower() or "skipped" in result["error"].lower()

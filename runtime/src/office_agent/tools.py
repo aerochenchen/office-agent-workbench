@@ -130,7 +130,9 @@ class ToolExecutor:
                 self.gate.check(name, args)
             result = handlers[name](args)
             ok = bool(result.get("ok", True))
-            detail = str(result.get("error") or result.get("stderr") or "")[:500]
+            detail = str(
+                result.get("error") or result.get("reason") or result.get("stderr") or ""
+            )[:500]
             self._audit(name, args, ok, detail)
             return result
         except PermissionDenied as e:
