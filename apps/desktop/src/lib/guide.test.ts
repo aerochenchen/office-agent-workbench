@@ -91,6 +91,15 @@ describe("guide copy", () => {
     }
   });
 
+  it("includes plan-resume for continuing unfinished work-plan items", () => {
+    const leaf = listCapabilityLeaves().find((l) => l.id === "plan-resume");
+    expect(leaf).toEqual({
+      id: "plan-resume",
+      label: "继续工作计划",
+      saying: "按工作计划未完成项继续",
+    });
+  });
+
   it("index.html boot splash mirrors GUIDE_PILLARS title+summary", () => {
     const html = readFileSync(resolve(here, "../../index.html"), "utf8");
     for (const p of GUIDE_PILLARS) {

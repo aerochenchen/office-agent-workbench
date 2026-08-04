@@ -224,6 +224,11 @@ export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
         label: "缺啥补啥",
         saying: "对照要写的题目，列出文件夹里还缺哪些关键材料",
       },
+      {
+        id: "plan-resume",
+        label: "继续工作计划",
+        saying: "按工作计划未完成项继续",
+      },
     ],
   },
 ] as const;
