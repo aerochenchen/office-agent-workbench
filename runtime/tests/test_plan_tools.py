@@ -180,12 +180,26 @@ def test_plan_set_approval_rejected_cancels(
             "steps": [{"id": "s1", "title": "a"}, {"id": "s2", "title": "b"}],
         },
     )
+    html_path = ws / PLAN_HTML_REL
+    html_before = html_path.read_text(encoding="utf-8")
+    mtime_before = html_path.stat().st_mtime
+    assert "已取消" not in html_before
+
     rejected = ex.execute("plan_set_approval", {"approval": "rejected"})
     assert rejected["ok"] is True
     assert rejected["plan"]["approval"] == "rejected"
     assert rejected["plan"]["status"] == "cancelled"
-    html = (ws / PLAN_HTML_REL).read_text(encoding="utf-8")
-    assert "cancelled" in html or "A" in html
+
+    html_after = html_path.read_text(encoding="utf-8")
+    assert html_after != html_before
+    assert html_path.stat().st_mtime >= mtime_before
+    assert "已取消" in html_after
+
+    blocked = ex.execute(
+        "plan_update_step", {"step_id": "s1", "status": "in_progress"}
+    )
+    assert blocked["ok"] is False
+    assert "approval" in blocked["error"].lower()
 
 
 def test_plan_set_status_completed_guard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

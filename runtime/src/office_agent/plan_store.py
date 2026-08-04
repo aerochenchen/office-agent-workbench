@@ -176,8 +176,21 @@ def set_plan_approval(
     return validate_plan(updated)
 
 
+def _plan_status_label(plan: dict) -> str:
+    approval = plan.get("approval")
+    status = plan.get("status")
+    if approval == "rejected" or status == "cancelled":
+        return "已取消"
+    if approval == "pending":
+        return "待确认"
+    if status == "completed":
+        return "已完成"
+    return ""
+
+
 def render_plan_html(plan: dict) -> str:
     goal = html.escape(plan.get("goal", ""))
+    status_label = _plan_status_label(plan)
     steps = plan.get("steps", [])
 
     step_items = []
@@ -192,6 +205,9 @@ def render_plan_html(plan: dict) -> str:
         step_items.append(item)
 
     steps_html = "\n".join(step_items)
+    status_html = ""
+    if status_label:
+        status_html = f"<h2>状态</h2>\n<p>{html.escape(status_label)}</p>\n"
     footer = (
         "本页为工作计划简要说明，仅供查阅。"
         "如需修改步骤或目标，请在对话框中直接提出修改意见，不要改本文件。"
@@ -205,7 +221,7 @@ def render_plan_html(plan: dict) -> str:
 </head>
 <body>
 <h1>工作计划</h1>
-<h2>目标</h2>
+{status_html}<h2>目标</h2>
 <p>{goal}</p>
 <h2>步骤</h2>
 <ol>

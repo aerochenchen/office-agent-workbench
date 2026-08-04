@@ -198,8 +198,18 @@ def test_render_plan_html_escapes_and_footer():
     plan = validate_plan({**_minimal_plan(), "goal": "A <B> & C", "approval": "pending"})
     html = render_plan_html(plan)
     assert "A &lt;B&gt; &amp; C" in html
+    assert "待确认" in html
     assert "<script" not in html.lower()
     assert "对话框" in html
+
+
+def test_render_plan_html_shows_cancelled_when_rejected():
+    plan = validate_plan(
+        {**_minimal_plan(), "approval": "rejected", "status": "cancelled"}
+    )
+    html = render_plan_html(plan)
+    assert "已取消" in html
+    assert "<script" not in html.lower()
 
 
 def test_render_plan_html_escapes_step_title_and_detail():
