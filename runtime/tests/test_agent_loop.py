@@ -101,6 +101,7 @@ def test_tool_schema_names_match_executor():
         "plan_create",
         "plan_update_step",
         "plan_set_status",
+        "plan_set_approval",
         "ask_user",
         "finish",
     }

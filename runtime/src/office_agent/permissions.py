@@ -45,6 +45,7 @@ RISKY_TOOLS = frozenset(
         "plan_create",
         "plan_update_step",
         "plan_set_status",
+        "plan_set_approval",
     }
 )
 
@@ -68,6 +69,8 @@ def _summarize(tool: str, args: dict) -> str:
         return f"update step {args.get('step_id', '')} → {args.get('status', '')}"
     if tool == "plan_set_status":
         return f"set plan status {args.get('status', '')}"
+    if tool == "plan_set_approval":
+        return f"set plan approval {args.get('approval', '')}"
     return tool
 
 

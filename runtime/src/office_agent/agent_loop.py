@@ -23,6 +23,7 @@ TOOL_LABELS: dict[str, str] = {
     "plan_create": "创建工作计划",
     "plan_update_step": "更新计划步骤",
     "plan_set_status": "更新计划状态",
+    "plan_set_approval": "确认工作计划",
     "ask_user": "需要你确认",
     "finish": "完成任务",
 }
@@ -223,7 +224,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "plan_create",
             "description": (
-                "创建新的工作计划并写入 .office-agent/work/plan.json。"
+                "创建新的工作计划并写入 .office-agent/work/plan.json，"
+                "同时生成 output/工作计划.html 供查阅。"
+                "默认 approval=pending，需 plan_set_approval(approved) 后才能执行步骤。"
                 "若已有 active 计划则拒绝静默覆盖；steps 至少 2 项。"
             ),
             "parameters": {
@@ -311,6 +314,27 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["status"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "plan_set_approval",
+            "description": (
+                "设置工作计划的 approval：approved 或 rejected。"
+                "rejected 会将计划标为 cancelled 并刷新 output/工作计划.html。"
+                "用户说「不用确认」时，create 后可直接 approved。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "approval": {
+                        "type": "string",
+                        "enum": ["approved", "rejected"],
+                    },
+                },
+                "required": ["approval"],
             },
         },
     },
@@ -555,6 +579,8 @@ def args_summary(name: str, args: dict[str, Any]) -> str:
         return f"{sid} → {st}".strip(" →") if sid or st else sid
     if name == "plan_set_status":
         return str(args.get("status") or "")
+    if name == "plan_set_approval":
+        return str(args.get("approval") or "")
     raw = json.dumps(args, ensure_ascii=False)
     return raw if len(raw) <= 80 else raw[:77] + "…"
 
@@ -598,6 +624,13 @@ def result_summary(name: str, result: dict[str, Any]) -> str:
     if name == "plan_set_status":
         plan = result.get("plan") or {}
         return str(plan.get("status") or "已更新")
+    if name == "plan_set_approval":
+        plan = result.get("plan") or {}
+        approval = str(plan.get("approval") or "")
+        status = str(plan.get("status") or "")
+        if approval and status:
+            return f"{approval} · {status}"
+        return approval or status or "已更新"
     return "完成"
 
 

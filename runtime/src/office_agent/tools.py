@@ -10,11 +10,14 @@ from office_agent.audit import AuditLog
 from office_agent.doc_io import extract_file
 from office_agent.paths import app_data_dir
 from office_agent.plan_store import (
+    PLAN_HTML_REL,
     PLAN_REL,
     PlanValidationError,
     apply_step_update,
     load_plan,
+    render_plan_html,
     save_plan,
+    set_plan_approval,
     set_plan_status,
 )
 from office_agent.script_policy import assert_argv_within_roots, build_script_env
@@ -116,6 +119,7 @@ class ToolExecutor:
             "plan_create": self._plan_create,
             "plan_update_step": self._plan_update_step,
             "plan_set_status": self._plan_set_status,
+            "plan_set_approval": self._plan_set_approval,
             "ask_user": self._ask_user,
             "finish": self._finish,
         }
@@ -383,6 +387,10 @@ class ToolExecutor:
     def _plan_path(self) -> Path:
         return self.workspace.root / PLAN_REL
 
+    def _write_plan_html(self, plan: dict) -> None:
+        self.workspace.ensure_layout()
+        self.workspace.write_text(PLAN_HTML_REL, render_plan_html(plan))
+
     def _plan_get(self, args: dict) -> dict:
         plan = load_plan(self._plan_path())
         if plan is None:
@@ -433,6 +441,7 @@ class ToolExecutor:
             "id": f"plan_{uuid.uuid4().hex}",
             "goal": goal,
             "status": "active",
+            "approval": "pending",
             "created_at": now,
             "updated_at": now,
             "steps": steps,
@@ -440,6 +449,7 @@ class ToolExecutor:
         }
         try:
             save_plan(path, plan)
+            self._write_plan_html(plan)
         except PlanValidationError as e:
             return {"ok": False, "error": str(e)}
         return {"ok": True, "plan": plan}
@@ -476,6 +486,22 @@ class ToolExecutor:
         try:
             updated = set_plan_status(plan, status)
             save_plan(path, updated)
+        except PlanValidationError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "plan": updated}
+
+    def _plan_set_approval(self, args: dict) -> dict:
+        path = self._plan_path()
+        plan = load_plan(path)
+        if plan is None:
+            return {"ok": False, "error": "no plan found"}
+        approval = str(args.get("approval") or "")
+        if not approval:
+            return {"ok": False, "error": "approval is required"}
+        try:
+            updated = set_plan_approval(plan, approval)
+            save_plan(path, updated)
+            self._write_plan_html(updated)
         except PlanValidationError as e:
             return {"ok": False, "error": str(e)}
         return {"ok": True, "plan": updated}
