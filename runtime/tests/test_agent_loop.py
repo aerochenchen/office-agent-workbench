@@ -147,6 +147,17 @@ def test_system_prompt_includes_plan_discipline():
     assert "按工作计划" in text or "继续" in text
 
 
+def test_system_prompt_enforces_plan_confirmation_and_dialog_only_edits():
+    text = _build_system_prompt([])
+    assert "plan_set_approval" in text
+    assert "工作计划.html" in text
+    assert "对话框" in text
+    assert "needs_user" in text
+    assert "ask_user" in text
+    assert "仅供查阅" in text or "仅供" in text
+    assert "不用确认" in text or "跳过确认" in text
+
+
 def test_system_prompt_requires_reading_skill_body(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     (tmp_path / "skills").mkdir()
