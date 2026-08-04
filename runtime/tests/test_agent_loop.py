@@ -139,6 +139,13 @@ def test_work_prompt_includes_local_use_and_colleague_tone():
     assert "内网使用" not in text
 
 
+def test_system_prompt_includes_plan_discipline():
+    text = _build_system_prompt([])
+    assert "plan_create" in text
+    assert "工作计划" in text
+    assert "按工作计划" in text or "继续" in text
+
+
 def test_system_prompt_requires_reading_skill_body(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     (tmp_path / "skills").mkdir()
