@@ -10,9 +10,14 @@
   3. Stage into apps/desktop/src-tauri/resources/{runtime,bundled}
   4. npm + tauri build (NSIS only)
   -MicrosoftStore merges tauri.microsoftstore.conf.json for store packaging.
+  -Msix stages a payload (exe + resources + Package.appxmanifest + Assets)
+  under packaging/msix-payload and runs `winapp cert generate` + `winapp pack`
+  to produce packaging/msix-out/*.msix for the sideload spike. Mutually
+  exclusive with -MicrosoftStore.
 
 .NOTES
   Requires: Python 3.11+, Node.js/npm, Rust toolchain, WebView2 SDK bits via Tauri.
+  -Msix additionally requires the `winapp` CLI on PATH (winget install microsoft.winappcli).
   Run from anywhere; script resolves the repo root from its own path.
 #>
 [CmdletBinding()]
@@ -20,8 +25,13 @@ param(
     [switch]$SkipSidecar,
     [switch]$SkipTauri,
     [switch]$Clean,
-    [switch]$MicrosoftStore
+    [switch]$MicrosoftStore,
+    [switch]$Msix
 )
+
+if ($MicrosoftStore -and $Msix) {
+    throw "-Msix cannot be combined with -MicrosoftStore"
+}
 
 $ErrorActionPreference = "Stop"
 
@@ -36,6 +46,8 @@ $DistRuntime = Join-Path $PackagingDir "dist\office-agent-runtime"
 $StagedRuntime = Join-Path $ResourcesDir "runtime"
 $StagedBundled = Join-Path $ResourcesDir "bundled"
 $BundledSrc = Join-Path $RepoRoot "bundled"
+$MsixPayloadDir = Join-Path $PackagingDir "msix-payload"
+$MsixOutDir = Join-Path $PackagingDir "msix-out"
 
 function Write-Step([string]$Message) {
     Write-Host ""
@@ -174,6 +186,116 @@ function Build-Tauri {
     }
 }
 
+function Build-Msix {
+    Write-Step "Stage MSIX payload + winapp pack"
+
+    $winapp = Get-Command winapp -ErrorAction SilentlyContinue
+    if (-not $winapp) {
+        throw "winapp CLI not found on PATH. Install it with: winget install microsoft.winappcli"
+    }
+
+    $manifest = Join-Path $SrcTauri "Package.appxmanifest"
+    if (-not (Test-Path $manifest)) {
+        throw "Package.appxmanifest missing at $manifest"
+    }
+    $assetsDir = Join-Path $SrcTauri "Assets"
+    if (-not (Test-Path $assetsDir)) {
+        throw "Assets directory missing at $assetsDir"
+    }
+    if (-not (Test-Path $ResourcesDir)) {
+        throw "Staged resources missing at $ResourcesDir — run without -SkipSidecar first."
+    }
+
+    # Recreate payload + out dirs from scratch for a reproducible spike build.
+    foreach ($dir in @($MsixPayloadDir, $MsixOutDir)) {
+        if (Test-Path $dir) {
+            Remove-Item -Recurse -Force $dir
+        }
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+
+    # Locate the main product exe. Prefer the well-known productName path;
+    # fall back to scanning target/release for the exe that isn't the sidecar.
+    $mainExe = Join-Path $SrcTauri "target\release\文书通.exe"
+    if (-not (Test-Path $mainExe)) {
+        $releaseDir = Join-Path $SrcTauri "target\release"
+        $candidate = Get-ChildItem -Path $releaseDir -Filter "*.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne "office-agent-runtime.exe" } |
+            Select-Object -First 1
+        if (-not $candidate) {
+            throw "Could not locate main product exe under $releaseDir. Run tauri build first (drop -SkipTauri)."
+        }
+        $mainExe = $candidate.FullName
+    }
+
+    # Copy the exe into the payload root, renamed to match the manifest's
+    # Executable="文书通.exe" so the appx identity stays stable regardless of
+    # which exe filename Tauri actually produced.
+    Copy-Item -Path $mainExe -Destination (Join-Path $MsixPayloadDir "文书通.exe") -Force
+
+    # Copy the full staged resources tree (runtime/ + bundled/), required by
+    # the app at runtime — not just the single exe.
+    Copy-Item -Path $ResourcesDir -Destination (Join-Path $MsixPayloadDir "resources") -Recurse -Force
+
+    # Copy manifest + Assets alongside the payload so winapp pack can read
+    # them from the same directory it packs.
+    Copy-Item -Path $manifest -Destination (Join-Path $MsixPayloadDir "Package.appxmanifest") -Force
+    Copy-Item -Path $assetsDir -Destination (Join-Path $MsixPayloadDir "Assets") -Recurse -Force
+
+    $stagedRuntimeExe = Join-Path $MsixPayloadDir "resources\runtime\office-agent-runtime.exe"
+    if (-not (Test-Path $stagedRuntimeExe)) {
+        throw "MSIX payload missing sidecar: $stagedRuntimeExe"
+    }
+
+    $devCert = Join-Path $MsixOutDir "devcert.pfx"
+
+    # Same stderr-vs-Stop trap as Build-Sidecar / Build-Tauri: preview CLIs
+    # often write progress to stderr; with $ErrorActionPreference=Stop that
+    # becomes a terminating NativeCommandError even on success.
+    Write-Step "winapp cert generate"
+    Push-Location $MsixPayloadDir
+    try {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & winapp cert generate --if-exists skip --output $devCert
+        $certExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
+        if ($certExit -ne 0) { throw "winapp cert generate failed with exit $certExit" }
+    }
+    finally {
+        Pop-Location
+    }
+
+    Write-Step "winapp pack"
+    # winapp pack --output expects an MSIX filename, not a directory. Omit it,
+    # run from the payload dir, then collect any new *.msix into msix-out/.
+    Push-Location $MsixPayloadDir
+    try {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & winapp pack . --cert $devCert
+        $packExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
+        if ($packExit -ne 0) { throw "winapp pack failed with exit $packExit" }
+
+        Get-ChildItem -Path . -Filter "*.msix" -ErrorAction SilentlyContinue | ForEach-Object {
+            Move-Item -Path $_.FullName -Destination $MsixOutDir -Force
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    $msixFiles = Get-ChildItem -Path $MsixOutDir -Filter "*.msix" -ErrorAction SilentlyContinue
+    if (-not $msixFiles) {
+        throw "winapp pack reported success but no .msix found in $MsixOutDir"
+    }
+    foreach ($f in $msixFiles) {
+        Write-Host ("MSIX package: " + $f.FullName) -ForegroundColor Green
+    }
+    Write-Host ("Dev cert: " + $devCert) -ForegroundColor Green
+}
+
 Ensure-Python
 if (-not $SkipSidecar) {
     Ensure-Venv
@@ -190,4 +312,8 @@ if (-not $SkipTauri) {
 else {
     Write-Step "SkipTauri: resources staged only"
     Write-Host "Staged at $ResourcesDir"
+}
+
+if ($Msix) {
+    Build-Msix
 }

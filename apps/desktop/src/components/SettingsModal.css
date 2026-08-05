@@ -136,10 +136,37 @@
 }
 
 .settings-subsection-title {
-  margin: var(--space-2) 0 0;
+  margin: 0;
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--ink-1);
+  letter-spacing: 0.04em;
+}
+
+.settings-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-1);
+}
+
+.settings-callout {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-sm);
+  background: var(--paper-1);
+  font-size: var(--font-size-xs);
+  color: var(--ink-1);
+  line-height: 1.55;
+}
+
+.settings-field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .field {
@@ -150,7 +177,8 @@
 
 .field-label {
   font-size: var(--font-size-xs);
-  color: var(--ink-1);
+  font-weight: 600;
+  color: var(--ink-0);
 }
 
 .field-input {
@@ -166,6 +194,14 @@
   margin: 0;
   color: var(--status-error);
   font-size: var(--font-size-xs);
+}
+
+.settings-field-hint {
+  margin: 0;
+  padding-left: 1px;
+  font-size: var(--font-size-xs);
+  color: var(--ink-2);
+  line-height: 1.45;
 }
 
 .settings-permission-hint {

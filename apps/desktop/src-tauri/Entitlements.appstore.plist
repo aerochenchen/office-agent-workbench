@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Mac App Store entitlements for 文书通.
+  Team ID: UBGZD7Z333
+  Bundle ID: com.wenshutong.officeapp
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+
+  <key>com.apple.application-identifier</key>
+  <string>UBGZD7Z333.com.wenshutong.officeapp</string>
+
+  <key>com.apple.developer.team-identifier</key>
+  <string>UBGZD7Z333</string>
+
+  <!-- Model API + localhost Runtime HTTP -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <key>com.apple.security.network.server</key>
+  <true/>
+
+  <!-- Native folder / skill file pickers -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+
+  <!-- Persist access to user-chosen workspace folders across relaunches -->
+  <key>com.apple.security.files.bookmarks.app-scope</key>
+  <true/>
+</dict>
+</plist>

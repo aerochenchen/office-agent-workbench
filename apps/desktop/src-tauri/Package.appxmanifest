@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+  <Identity
+    Name="ChenZai.Wenshutong"
+    Publisher="CN=ChenZai Wenshutong Spike"
+    Version="0.1.0.0" />
+  <Properties>
+    <DisplayName>文书通</DisplayName>
+    <PublisherDisplayName>ChenZai</PublisherDisplayName>
+    <Logo>Assets/StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="zh-cn" />
+  </Resources>
+  <Applications>
+    <Application Id="Wenshutong" Executable="文书通.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="文书通"
+        Description="本地办公智能体"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets/Square150x150Logo.png"
+        Square44x44Logo="Assets/Square44x44Logo.png" />
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
