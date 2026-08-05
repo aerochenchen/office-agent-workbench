@@ -647,7 +647,6 @@ function App() {
         <SkillPanel
           skills={skills}
           collapsed={skillsCollapsed}
-          chatEmpty={messages.length === 0}
           pickDisabled={sending || !runtimeReady}
           onPickSaying={setDraftPrefill}
           onToggle={handleToggleSkill}

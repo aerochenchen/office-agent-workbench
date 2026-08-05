@@ -59,7 +59,7 @@
   /* -- 布局尺寸 -- */
   --topbar-height: 52px;
   --tree-width: 240px;
-  --skills-width: 300px;
+  --skills-width: 240px;
 
   /* -- 动效：唯一统一时长 -- */
   --motion-fast: 120ms ease-out;

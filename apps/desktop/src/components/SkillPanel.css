@@ -142,16 +142,6 @@
   cursor: not-allowed;
 }
 
-.capability-tree-idle {
-  margin: auto 0;
-  padding: var(--space-5) var(--space-4);
-  font-size: var(--font-size-sm);
-  color: var(--ink-2);
-  line-height: 1.55;
-  text-align: center;
-  letter-spacing: 0.04em;
-}
-
 .skill-list {
   list-style: none;
   margin: 0;

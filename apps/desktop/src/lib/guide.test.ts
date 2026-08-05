@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 import {
   CAPABILITY_TREE,
   FORBIDDEN_USER_TERMS,
+  GUIDE_EMPTY_HEADLINE_NO_FOLDER,
+  GUIDE_EMPTY_HEADLINE_WITH_FOLDER,
   GUIDE_HINTS,
   GUIDE_PILLARS,
-  GUIDE_TRY_HEADLINE,
-  GUIDE_TRY_SAYINGS,
-  GUIDE_TRY_SUBLINE,
+  guideEmptyHeadline,
   listCapabilityLeaves,
   isModelSetupError,
   MODEL_SETUP_REPLY,
@@ -21,9 +21,8 @@ function collectUserCopy(): string[] {
   return [
     ...GUIDE_PILLARS.flatMap((p) => [p.title, p.summary, p.body]),
     ...Object.values(GUIDE_HINTS),
-    GUIDE_TRY_HEADLINE,
-    GUIDE_TRY_SUBLINE,
-    ...GUIDE_TRY_SAYINGS,
+    GUIDE_EMPTY_HEADLINE_NO_FOLDER,
+    GUIDE_EMPTY_HEADLINE_WITH_FOLDER,
     ...CAPABILITY_TREE.flatMap((b) => [
       b.label,
       ...b.children.flatMap((c) => [c.label, c.saying]),
@@ -46,27 +45,14 @@ describe("guide copy", () => {
     expect(MODEL_SETUP_REPLY).toMatch(/模型/);
   });
 
-  it("emptyChat invites chatting first", () => {
-    expect(GUIDE_HINTS.emptyChat.length).toBeGreaterThan(8);
-    expect(GUIDE_HINTS.emptyChat).toMatch(/打开文件夹|办事/);
+  it("empty headlines are state-aware: folder gate then one-sentence start", () => {
+    expect(GUIDE_EMPTY_HEADLINE_NO_FOLDER).toBe("打开文件夹，一句话开始办事");
+    expect(GUIDE_EMPTY_HEADLINE_WITH_FOLDER).toBe("一句话开始办事");
+    expect(guideEmptyHeadline(false)).toBe(GUIDE_EMPTY_HEADLINE_NO_FOLDER);
+    expect(guideEmptyHeadline(true)).toBe(GUIDE_EMPTY_HEADLINE_WITH_FOLDER);
   });
 
-  it("try-sayings are the empty-chat capability signal", () => {
-    expect(GUIDE_TRY_HEADLINE).toMatch(/一句话|办事/);
-    expect(GUIDE_TRY_SAYINGS.length).toBeGreaterThanOrEqual(6);
-    expect(GUIDE_TRY_SAYINGS.length).toBeLessThanOrEqual(10);
-    for (const saying of GUIDE_TRY_SAYINGS) {
-      expect(saying.trim().length).toBeGreaterThan(4);
-    }
-  });
-
-  it("emptyChat nudges folder-first for office work; workspaceReady points to the rail", () => {
-    expect(GUIDE_HINTS.emptyChat).toMatch(/打开文件夹/);
-    expect(GUIDE_HINTS.workspaceReady).toMatch(/右侧/);
-    expect(GUIDE_HINTS.capabilityTreeIdle).toMatch(/中间|开聊/);
-  });
-
-  it("capability tree is categorized office scenarios with unique ids", () => {
+  it("capability tree is the sole empty-chat capability catalog (no featured subset)", () => {
     expect(CAPABILITY_TREE.length).toBeGreaterThanOrEqual(5);
     const ids = new Set<string>();
     for (const branch of CAPABILITY_TREE) {
@@ -81,14 +67,7 @@ describe("guide copy", () => {
         expect(leaf.saying.trim().length).toBeGreaterThan(4);
       }
     }
-    expect(listCapabilityLeaves().length).toBeGreaterThan(GUIDE_TRY_SAYINGS.length);
-  });
-
-  it("featured try-sayings all come from the capability tree", () => {
-    const sayings = new Set(listCapabilityLeaves().map((l) => l.saying));
-    for (const saying of GUIDE_TRY_SAYINGS) {
-      expect(sayings.has(saying)).toBe(true);
-    }
+    expect(listCapabilityLeaves().length).toBeGreaterThanOrEqual(16);
   });
 
   it("includes plan-resume for continuing unfinished work-plan items", () => {

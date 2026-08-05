@@ -3,8 +3,7 @@ import type { ChatMessage, LiveStep } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
 import {
   GUIDE_HINTS,
-  GUIDE_TRY_HEADLINE,
-  GUIDE_TRY_SAYINGS,
+  guideEmptyHeadline,
 } from "../lib/guide";
 import { runtimeLogHint } from "../lib/runtimeClient";
 import type { HealthState } from "../lib/runtimeStatus";
@@ -227,11 +226,9 @@ export default function ChatPanel({
       ? `本地服务未就绪，请关闭后重新打开本应用；若仍失败，查看 ${runtimeLogHint()}`
       : health === "checking"
         ? GUIDE_HINTS.bootWaiting
-        : workspaceOpen
-          ? GUIDE_HINTS.workspaceReady
-          : GUIDE_HINTS.emptyChat;
+        : null;
 
-  function applyTrySaying(saying: string) {
+  function applyPrefill(saying: string) {
     setDraft(saying);
     requestAnimationFrame(() => {
       const el = inputRef.current;
@@ -244,9 +241,9 @@ export default function ChatPanel({
 
   useEffect(() => {
     if (!draftPrefill) return;
-    applyTrySaying(draftPrefill);
+    applyPrefill(draftPrefill);
     onDraftPrefillConsumed?.();
-    // Only react to new prefill tokens from the capability tree / empty-chat chips.
+    // Only react to new prefill tokens from the capability tree.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- consume once per prefill value
   }, [draftPrefill]);
 
@@ -366,27 +363,10 @@ export default function ChatPanel({
               <div className="chat-empty-tagline">{APP_TAGLINE}</div>
             </div>
             {health !== "down" && health !== "checking" ? (
-              <div className="chat-try">
-                <div className="chat-try-headline">{GUIDE_TRY_HEADLINE}</div>
-                <ul className="chat-try-list" aria-label="可尝试的说法">
-                  {GUIDE_TRY_SAYINGS.map((saying) => (
-                    <li key={saying}>
-                      <button
-                        type="button"
-                        className="chat-try-item"
-                        disabled={disabled}
-                        onClick={() => applyTrySaying(saying)}
-                      >
-                        {saying}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <p className="empty-hint chat-empty-hint">{emptyHint}</p>
-              </div>
-            ) : (
+              <p className="chat-empty-headline">{guideEmptyHeadline(workspaceOpen)}</p>
+            ) : emptyHint ? (
               <p className="empty-hint chat-empty-hint">{emptyHint}</p>
-            )}
+            ) : null}
           </div>
         )}
         {messages.map((m) => (

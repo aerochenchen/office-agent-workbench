@@ -1,14 +1,12 @@
 import { useMemo, useState } from "react";
 import type { SkillInspectResult, SkillMeta } from "../lib/types";
-import { CAPABILITY_TREE, GUIDE_HINTS } from "../lib/guide";
+import { CAPABILITY_TREE } from "../lib/guide";
 import SkillManager from "./SkillManager";
 import "./SkillPanel.css";
 
 interface Props {
   skills: SkillMeta[];
   collapsed: boolean;
-  /** True when the active chat has no messages — hide the full tree to avoid duplicating the empty-chat chips. */
-  chatEmpty?: boolean;
   pickDisabled?: boolean;
   onPickSaying: (saying: string) => void;
   onToggle: (id: string, enabled: boolean) => void;
@@ -27,7 +25,6 @@ interface Props {
 export default function SkillPanel({
   skills,
   collapsed,
-  chatEmpty = false,
   pickDisabled = false,
   onPickSaying,
   onToggle,
@@ -65,54 +62,48 @@ export default function SkillPanel({
         </div>
 
         <div className="pane-body capability-tree-scroll">
-          {chatEmpty ? (
-            <p className="capability-tree-idle">{GUIDE_HINTS.capabilityTreeIdle}</p>
-          ) : (
-            <>
-              <ul className="capability-tree" aria-label="办事能力">
-                {CAPABILITY_TREE.map((branch) => {
-                  const open = openBranches.has(branch.id);
-                  const beyond = branch.id === "beyond";
-                  return (
-                    <li
-                      key={branch.id}
-                      className={`capability-branch${beyond ? " capability-branch--beyond" : ""}`}
-                    >
-                      <button
-                        type="button"
-                        className="capability-branch-toggle"
-                        aria-expanded={open}
-                        onClick={() => toggleBranch(branch.id)}
-                      >
-                        <span
-                          className={`capability-branch-chevron${open ? " capability-branch-chevron--open" : ""}`}
-                          aria-hidden="true"
-                        />
-                        <span className="capability-branch-label">{branch.label}</span>
-                      </button>
-                      {open ? (
-                        <ul className="capability-leaves">
-                          {branch.children.map((leaf) => (
-                            <li key={leaf.id}>
-                              <button
-                                type="button"
-                                className="capability-leaf"
-                                title={leaf.saying}
-                                disabled={pickDisabled}
-                                onClick={() => onPickSaying(leaf.saying)}
-                              >
-                                {leaf.label}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
+          <ul className="capability-tree" aria-label="办事能力">
+            {CAPABILITY_TREE.map((branch) => {
+              const open = openBranches.has(branch.id);
+              const beyond = branch.id === "beyond";
+              return (
+                <li
+                  key={branch.id}
+                  className={`capability-branch${beyond ? " capability-branch--beyond" : ""}`}
+                >
+                  <button
+                    type="button"
+                    className="capability-branch-toggle"
+                    aria-expanded={open}
+                    onClick={() => toggleBranch(branch.id)}
+                  >
+                    <span
+                      className={`capability-branch-chevron${open ? " capability-branch-chevron--open" : ""}`}
+                      aria-hidden="true"
+                    />
+                    <span className="capability-branch-label">{branch.label}</span>
+                  </button>
+                  {open ? (
+                    <ul className="capability-leaves">
+                      {branch.children.map((leaf) => (
+                        <li key={leaf.id}>
+                          <button
+                            type="button"
+                            className="capability-leaf"
+                            title={leaf.saying}
+                            disabled={pickDisabled}
+                            onClick={() => onPickSaying(leaf.saying)}
+                          >
+                            {leaf.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         </div>
 
         <div className="skill-panel-footer">

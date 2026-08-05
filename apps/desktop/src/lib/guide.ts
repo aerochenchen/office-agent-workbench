@@ -63,10 +63,16 @@ export const GUIDE_PILLARS: readonly GuidePillar[] = [
 
 export const GUIDE_WELCOME_TITLE = "认识文书通";
 
-/** Empty-chat headline: one visual that signals breadth of capability. */
-export const GUIDE_TRY_HEADLINE = "一句话开始办事";
-/** @deprecated Kept for copy audits; UI no longer shows a separate subline. */
-export const GUIDE_TRY_SUBLINE = "点一句填入下方，再按发送";
+/** Empty-chat headline when no folder is open. */
+export const GUIDE_EMPTY_HEADLINE_NO_FOLDER = "打开文件夹，一句话开始办事";
+/** Empty-chat headline when a folder is already open. */
+export const GUIDE_EMPTY_HEADLINE_WITH_FOLDER = "一句话开始办事";
+
+export function guideEmptyHeadline(workspaceOpen: boolean): string {
+  return workspaceOpen
+    ? GUIDE_EMPTY_HEADLINE_WITH_FOLDER
+    : GUIDE_EMPTY_HEADLINE_NO_FOLDER;
+}
 
 /**
  * Official 办事能力 tree — grounded in agent primitives (folder read/write,
@@ -233,45 +239,12 @@ export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
   },
 ] as const;
 
-/** Featured leaf ids for the empty-chat grid (one main visual, not the full tree). */
-const FEATURED_SAYING_IDS: readonly string[] = [
-  "format-gongwen",
-  "revision-diff",
-  "multidoc-digest",
-  "action-items",
-  "excel-brief",
-  "proofread",
-  "ppt-palette",
-  "clause-compare",
-] as const;
-
-function leafById(id: string): CapabilityLeaf | undefined {
-  for (const branch of CAPABILITY_TREE) {
-    const found = branch.children.find((c) => c.id === id);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-/** Flat featured sayings for the empty-chat main visual. */
-export const GUIDE_TRY_SAYINGS: readonly string[] = FEATURED_SAYING_IDS.map((id) => {
-  const leaf = leafById(id);
-  if (!leaf) throw new Error(`FEATURED_SAYING_IDS missing leaf: ${id}`);
-  return leaf.saying;
-});
-
 export function listCapabilityLeaves(): CapabilityLeaf[] {
   return CAPABILITY_TREE.flatMap((b) => [...b.children]);
 }
 
 export const GUIDE_HINTS = {
   noWorkspace: "打开文件夹后，对话与成果会保存在本地；办事时文书通只在该文件夹内读写。",
-  /** Under empty-chat featured sayings when no folder is open. */
-  emptyChat: "要排版、汇总等办事，请先打开文件夹",
-  /** Under empty-chat featured sayings when a folder is already open. */
-  workspaceReady: "开聊后可在右侧浏览全部分类",
-  /** Right rail while empty chat — avoid duplicating the middle featured list. */
-  capabilityTreeIdle: "先在中间选一句开始。开聊后，这里展示完整分类。",
   bootWaiting: "首次启动约需数秒，请稍候。",
   noSessions: "暂无对话。点击上方「新建对话」开始。",
   noSkills: "可导入本地技能包增强能力；安装与运行均在本机。",
