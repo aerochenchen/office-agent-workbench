@@ -9,6 +9,7 @@
   2. PyInstaller onedir -> packaging/dist/office-agent-runtime
   3. Stage into apps/desktop/src-tauri/resources/{runtime,bundled}
   4. npm + tauri build (NSIS only)
+  -MicrosoftStore merges tauri.microsoftstore.conf.json for store packaging.
 
 .NOTES
   Requires: Python 3.11+, Node.js/npm, Rust toolchain, WebView2 SDK bits via Tauri.
@@ -18,7 +19,8 @@
 param(
     [switch]$SkipSidecar,
     [switch]$SkipTauri,
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$MicrosoftStore
 )
 
 $ErrorActionPreference = "Stop"
@@ -141,7 +143,17 @@ function Build-Tauri {
                 throw "npm install failed"
             }
         }
-        & npx --yes tauri build
+        $tauriArgs = @("tauri", "build")
+        if ($MicrosoftStore) {
+            $storeConf = Join-Path $SrcTauri "tauri.microsoftstore.conf.json"
+            if (-not (Test-Path $storeConf)) {
+                $ErrorActionPreference = $prevEap
+                throw "Microsoft Store config missing: $storeConf"
+            }
+            Write-Host "Microsoft Store mode: merging $storeConf"
+            $tauriArgs += @("--config", "src-tauri/tauri.microsoftstore.conf.json")
+        }
+        & npx --yes @tauriArgs
         $tauriExit = $LASTEXITCODE
         $ErrorActionPreference = $prevEap
         if ($tauriExit -ne 0) { throw "tauri build failed with exit $tauriExit" }
