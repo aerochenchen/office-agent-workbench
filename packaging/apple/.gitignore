@@ -1,0 +1,8 @@
+# Local Apple signing materials (never commit)
+# Patterns are relative to this directory.
+*.key
+*.p12
+*.cer
+*.pem
+*.certSigningRequest
+*.provisionprofile
