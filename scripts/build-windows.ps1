@@ -226,12 +226,14 @@ function Build-Msix {
             throw "Could not locate main product exe under $releaseDir. Run tauri build first (drop -SkipTauri)."
         }
         $mainExe = $candidate.FullName
+        Write-Host "Using fallback main exe: $mainExe"
     }
 
-    # Copy the exe into the payload root, renamed to match the manifest's
-    # Executable="文书通.exe" so the appx identity stays stable regardless of
-    # which exe filename Tauri actually produced.
-    Copy-Item -Path $mainExe -Destination (Join-Path $MsixPayloadDir "文书通.exe") -Force
+    # MakeAppx rejects non-ASCII payload filenames (文书通.exe becomes ???.exe).
+    # Stage as ASCII Wenshutong.exe to match Package.appxmanifest Executable.
+    $stagedMainExe = Join-Path $MsixPayloadDir "Wenshutong.exe"
+    Copy-Item -Path $mainExe -Destination $stagedMainExe -Force
+    Write-Host "Staged main exe as Wenshutong.exe (from $mainExe)"
 
     # Copy the full staged resources tree (runtime/ + bundled/), required by
     # the app at runtime — not just the single exe.

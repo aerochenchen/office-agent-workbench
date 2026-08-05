@@ -20,7 +20,7 @@
     <Resource Language="zh-cn" />
   </Resources>
   <Applications>
-    <Application Id="Wenshutong" Executable="文书通.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="Wenshutong" Executable="Wenshutong.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="文书通"
         Description="本地办公智能体"
