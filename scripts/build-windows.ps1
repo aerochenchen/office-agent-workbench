@@ -229,20 +229,22 @@ function Build-Msix {
         Write-Host "Using fallback main exe: $mainExe"
     }
 
-    # MakeAppx rejects non-ASCII payload filenames (文书通.exe becomes ???.exe).
-    # Stage as ASCII Wenshutong.exe to match Package.appxmanifest Executable.
-    $stagedMainExe = Join-Path $MsixPayloadDir "Wenshutong.exe"
+    # Nest under App\ so package-root "resources/" does not collide with
+    # MakeAppx-generated resources.pri (common 0x8007007b failure mode).
+    # MakeAppx also rejects non-ASCII filenames — stage as Wenshutong.exe.
+    $appDir = Join-Path $MsixPayloadDir "App"
+    New-Item -ItemType Directory -Path $appDir -Force | Out-Null
+    $stagedMainExe = Join-Path $appDir "Wenshutong.exe"
     Copy-Item -Path $mainExe -Destination $stagedMainExe -Force
-    Write-Host "Staged main exe as Wenshutong.exe (from $mainExe)"
+    Write-Host "Staged main exe as App\Wenshutong.exe (from $mainExe)"
 
-    # Copy the full staged resources tree (runtime/ + bundled/), required by
-    # the app at runtime — not just the single exe.
-    Copy-Item -Path $ResourcesDir -Destination (Join-Path $MsixPayloadDir "resources") -Recurse -Force
+    # Copy the full staged resources tree next to the exe (runtime/ + bundled/).
+    Copy-Item -Path $ResourcesDir -Destination (Join-Path $appDir "resources") -Recurse -Force
 
     # MakeAppx rejects non-ASCII payload paths (0x8007007b). Skill fixture
     # samples use Chinese filenames; strip fixtures/ from the MSIX payload
     # (not needed at runtime — only for skill self-tests).
-    $bundledRoot = Join-Path $MsixPayloadDir "resources\bundled"
+    $bundledRoot = Join-Path $appDir "resources\bundled"
     if (Test-Path $bundledRoot) {
         Get-ChildItem -Path $bundledRoot -Recurse -Directory -Filter "fixtures" -ErrorAction SilentlyContinue |
             ForEach-Object {
@@ -251,12 +253,11 @@ function Build-Msix {
             }
     }
 
-    # Copy manifest + Assets alongside the payload so winapp pack can read
-    # them from the same directory it packs.
+    # Manifest + Assets stay at package root (winapp / MakeAppx convention).
     Copy-Item -Path $manifest -Destination (Join-Path $MsixPayloadDir "Package.appxmanifest") -Force
     Copy-Item -Path $assetsDir -Destination (Join-Path $MsixPayloadDir "Assets") -Recurse -Force
 
-    $stagedRuntimeExe = Join-Path $MsixPayloadDir "resources\runtime\office-agent-runtime.exe"
+    $stagedRuntimeExe = Join-Path $appDir "resources\runtime\office-agent-runtime.exe"
     if (-not (Test-Path $stagedRuntimeExe)) {
         throw "MSIX payload missing sidecar: $stagedRuntimeExe"
     }

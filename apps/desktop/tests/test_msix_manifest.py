@@ -18,7 +18,8 @@ def test_identity_and_entry_are_spike_safe():
     assert 'Name="ChenZai.Wenshutong"' in text or "Name='ChenZai.Wenshutong'" in text
     assert "CN=ChenZai Wenshutong Spike" in text
     assert re.search(r'Version="0\.1\.0\.0"', text)
-    # MakeAppx rejects non-ASCII payload filenames (文书通.exe → ???.exe).
-    assert "Wenshutong.exe" in text
+    # Nested under App\ to avoid package-root resources/ vs resources.pri clash;
+    # ASCII exe name avoids MakeAppx non-ASCII path failures.
+    assert 'Executable="App\\Wenshutong.exe"' in text
     assert "文书通.exe" not in text
     assert "runFullTrust" in text or "partialTrust" in text or "windows.fullTrustApplication" in text
