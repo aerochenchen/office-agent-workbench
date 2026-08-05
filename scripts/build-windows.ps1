@@ -239,6 +239,18 @@ function Build-Msix {
     # the app at runtime — not just the single exe.
     Copy-Item -Path $ResourcesDir -Destination (Join-Path $MsixPayloadDir "resources") -Recurse -Force
 
+    # MakeAppx rejects non-ASCII payload paths (0x8007007b). Skill fixture
+    # samples use Chinese filenames; strip fixtures/ from the MSIX payload
+    # (not needed at runtime — only for skill self-tests).
+    $bundledRoot = Join-Path $MsixPayloadDir "resources\bundled"
+    if (Test-Path $bundledRoot) {
+        Get-ChildItem -Path $bundledRoot -Recurse -Directory -Filter "fixtures" -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                Write-Host "Removing MSIX-incompatible fixtures: $($_.FullName)"
+                Remove-Item -LiteralPath $_.FullName -Recurse -Force
+            }
+    }
+
     # Copy manifest + Assets alongside the payload so winapp pack can read
     # them from the same directory it packs.
     Copy-Item -Path $manifest -Destination (Join-Path $MsixPayloadDir "Package.appxmanifest") -Force
