@@ -264,65 +264,75 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 <h3 id="settings-model-title" className="settings-section-title">
                   模型
                 </h3>
-                <p className="settings-permission-hint">{MODEL_TAB_INTRO}</p>
+                <p className="settings-callout">{MODEL_TAB_INTRO}</p>
 
-                <label className="field">
-                  <span className="field-label">选用模型</span>
-                  <select
-                    className="field-input"
-                    value={modelPreset}
-                    onChange={(e) => handleModelPresetChange(e.currentTarget.value)}
-                  >
-                    {MODEL_PRESETS.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                    <option value={MODEL_CUSTOM}>自定义…</option>
-                  </select>
-                </label>
-                <p className="settings-permission-hint">{MODEL_FIELD_HINTS.model}</p>
+                <div className="settings-field-block">
+                  <label className="field">
+                    <span className="field-label">选用模型</span>
+                    <select
+                      className="field-input"
+                      value={modelPreset}
+                      onChange={(e) => handleModelPresetChange(e.currentTarget.value)}
+                    >
+                      {MODEL_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                      <option value={MODEL_CUSTOM}>自定义…</option>
+                    </select>
+                  </label>
+                  <p className="settings-field-hint">{MODEL_FIELD_HINTS.model}</p>
+                </div>
 
                 {modelPreset === MODEL_CUSTOM && (
-                  <label className="field">
-                    <span className="field-label">模型名称</span>
-                    <input
-                      className="field-input"
-                      value={model}
-                      onChange={(e) => setModel(e.currentTarget.value)}
-                      placeholder="例如 deepseek-v4-flash"
-                    />
-                  </label>
+                  <div className="settings-field-block">
+                    <label className="field">
+                      <span className="field-label">模型名称</span>
+                      <input
+                        className="field-input"
+                        value={model}
+                        onChange={(e) => setModel(e.currentTarget.value)}
+                        placeholder="例如 deepseek-v4-flash"
+                      />
+                    </label>
+                  </div>
                 )}
 
-                <h4 className="settings-subsection-title">连接设置</h4>
+                <div className="settings-subsection">
+                  <h4 className="settings-subsection-title">连接设置</h4>
 
-                <label className="field">
-                  <span className="field-label">API Base（接口地址）</span>
-                  <input
-                    className="field-input"
-                    value={apiBase}
-                    onChange={(e) => setApiBase(e.currentTarget.value)}
-                    placeholder="https://api.deepseek.com"
-                  />
-                </label>
-                <p className="settings-permission-hint">{MODEL_FIELD_HINTS.apiBase}</p>
+                  <div className="settings-field-block">
+                    <label className="field">
+                      <span className="field-label">API Base（接口地址）</span>
+                      <input
+                        className="field-input"
+                        value={apiBase}
+                        onChange={(e) => setApiBase(e.currentTarget.value)}
+                        placeholder="https://api.deepseek.com"
+                      />
+                    </label>
+                    <p className="settings-field-hint">{MODEL_FIELD_HINTS.apiBase}</p>
+                  </div>
 
-                <label className="field">
-                  <span className="field-label">API Key（密钥）</span>
-                  <input
-                    className="field-input"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.currentTarget.value)}
-                    placeholder={
-                      initial.api_key_set
-                        ? `已保存 ${initial.api_key_masked || "***"}；留空不修改`
-                        : "粘贴 API Key"
-                    }
-                  />
-                </label>
-                <p className="settings-permission-hint">{MODEL_FIELD_HINTS.apiKey}</p>
+                  <div className="settings-field-block">
+                    <label className="field">
+                      <span className="field-label">API Key（密钥）</span>
+                      <input
+                        className="field-input"
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.currentTarget.value)}
+                        placeholder={
+                          initial.api_key_set
+                            ? `已保存 ${initial.api_key_masked || "***"}；留空不修改`
+                            : "粘贴 API Key"
+                        }
+                      />
+                    </label>
+                    <p className="settings-field-hint">{MODEL_FIELD_HINTS.apiKey}</p>
+                  </div>
+                </div>
 
                 {error && <p className="field-error">{error}</p>}
               </section>
