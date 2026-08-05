@@ -260,8 +260,20 @@ function Build-Msix {
     }
 
     Write-Step "winapp pack"
-    & winapp pack $MsixPayloadDir --cert $devCert --output $MsixOutDir
-    if ($LASTEXITCODE -ne 0) { throw "winapp pack failed with exit $LASTEXITCODE" }
+    # winapp pack --output expects an MSIX filename, not a directory. Omit it,
+    # run from the payload dir, then collect any new *.msix into msix-out/.
+    Push-Location $MsixPayloadDir
+    try {
+        & winapp pack . --cert $devCert
+        if ($LASTEXITCODE -ne 0) { throw "winapp pack failed with exit $LASTEXITCODE" }
+
+        Get-ChildItem -Path . -Filter "*.msix" -ErrorAction SilentlyContinue | ForEach-Object {
+            Move-Item -Path $_.FullName -Destination $MsixOutDir -Force
+        }
+    }
+    finally {
+        Pop-Location
+    }
 
     $msixFiles = Get-ChildItem -Path $MsixOutDir -Filter "*.msix" -ErrorAction SilentlyContinue
     if (-not $msixFiles) {
