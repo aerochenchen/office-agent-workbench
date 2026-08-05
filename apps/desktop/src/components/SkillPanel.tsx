@@ -85,7 +85,7 @@ export default function SkillPanel({
                         onClick={() => toggleBranch(branch.id)}
                       >
                         <span
-                          className={`capability-branch-seal${open ? " capability-branch-seal--open" : ""}`}
+                          className={`capability-branch-chevron${open ? " capability-branch-chevron--open" : ""}`}
                           aria-hidden="true"
                         />
                         <span className="capability-branch-label">{branch.label}</span>
@@ -101,8 +101,7 @@ export default function SkillPanel({
                                 disabled={pickDisabled}
                                 onClick={() => onPickSaying(leaf.saying)}
                               >
-                                <span className="capability-leaf-dot" aria-hidden="true" />
-                                <span className="capability-leaf-label">{leaf.label}</span>
+                                {leaf.label}
                               </button>
                             </li>
                           ))}
