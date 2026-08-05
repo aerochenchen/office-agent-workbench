@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "publisher": "Chenzai",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      }
+    }
+  }
+}
