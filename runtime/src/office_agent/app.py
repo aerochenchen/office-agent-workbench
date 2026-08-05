@@ -36,7 +36,7 @@ from office_agent.workspace import SandboxError, Workspace
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = AppConfig(
-    api_base="https://api.deepseek.com/v1",
+    api_base="https://api.deepseek.com",
     api_key="",
     model="deepseek-v4-flash",
     allowed_hosts=["api.deepseek.com", "127.0.0.1", "localhost"],

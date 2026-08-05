@@ -43,11 +43,22 @@ const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; hint: str
 /** Common OpenAI-compatible model ids; unknown values fall back to「自定义」. */
 const MODEL_PRESETS: ReadonlyArray<{ id: string; label: string }> = [
   { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
-  { id: "deepseek-chat", label: "DeepSeek Chat" },
-  { id: "deepseek-reasoner", label: "DeepSeek Reasoner" },
+  { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
 ];
 
 const MODEL_CUSTOM = "__custom__";
+
+const MODEL_TAB_INTRO =
+  "文书通不自带云模型。填写你自己的接口地址与密钥后即可对话；材料仍在本机。下列以 DeepSeek 为例便于开箱配置，也可换成单位内网或其它兼容接口。入口与步骤以各供应商官网当前说明为准。";
+
+const MODEL_FIELD_HINTS = {
+  model:
+    "决定用哪套模型回答。DeepSeek 可选 Flash（更快）或 Pro（更强）；其它服务选「自定义」并填写对方提供的模型名。",
+  apiBase:
+    "模型服务地址。DeepSeek 官方为 https://api.deepseek.com；单位内网或其它服务请按对方说明填写（有的需带 /v1）。",
+  apiKey:
+    "访问该服务的密钥，仅保存在本机。DeepSeek：登录开放平台 → API Keys → 创建并复制后粘贴到此处。具体菜单名称与路径以官网为准。",
+} as const;
 
 function resolveModelPreset(modelName: string): string {
   const trimmed = modelName.trim();
@@ -253,6 +264,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 <h3 id="settings-model-title" className="settings-section-title">
                   模型
                 </h3>
+                <p className="settings-permission-hint">{MODEL_TAB_INTRO}</p>
 
                 <label className="field">
                   <span className="field-label">选用模型</span>
@@ -269,6 +281,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                     <option value={MODEL_CUSTOM}>自定义…</option>
                   </select>
                 </label>
+                <p className="settings-permission-hint">{MODEL_FIELD_HINTS.model}</p>
 
                 {modelPreset === MODEL_CUSTOM && (
                   <label className="field">
@@ -277,7 +290,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                       className="field-input"
                       value={model}
                       onChange={(e) => setModel(e.currentTarget.value)}
-                      placeholder="例如 deepseek-chat"
+                      placeholder="例如 deepseek-v4-flash"
                     />
                   </label>
                 )}
@@ -285,17 +298,18 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 <h4 className="settings-subsection-title">连接设置</h4>
 
                 <label className="field">
-                  <span className="field-label">API Base</span>
+                  <span className="field-label">API Base（接口地址）</span>
                   <input
                     className="field-input"
                     value={apiBase}
                     onChange={(e) => setApiBase(e.currentTarget.value)}
-                    placeholder="http://127.0.0.1:8000/v1"
+                    placeholder="https://api.deepseek.com"
                   />
                 </label>
+                <p className="settings-permission-hint">{MODEL_FIELD_HINTS.apiBase}</p>
 
                 <label className="field">
-                  <span className="field-label">API Key</span>
+                  <span className="field-label">API Key（密钥）</span>
                   <input
                     className="field-input"
                     type="password"
@@ -308,6 +322,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                     }
                   />
                 </label>
+                <p className="settings-permission-hint">{MODEL_FIELD_HINTS.apiKey}</p>
 
                 {error && <p className="field-error">{error}</p>}
               </section>

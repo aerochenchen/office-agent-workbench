@@ -296,6 +296,10 @@ export default function SkillManager({
             </div>
           </header>
 
+          <p className="skill-manager-intro">
+            技能是本机专项方法包，可启停与导入。此处管理智能体工作的专项方法是否启用。详情以技能包说明为准。
+          </p>
+
           <div className="skill-manager-body">
             <section className="skill-manager-section" aria-labelledby="skill-manager-enabled">
               <h3 id="skill-manager-enabled" className="skill-manager-section-title">

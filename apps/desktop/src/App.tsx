@@ -32,7 +32,7 @@ import SettingsModal from "./components/SettingsModal";
 import PermissionModal from "./components/PermissionModal";
 
 const DEFAULT_CONFIG: RuntimeConfig = {
-  api_base: "https://api.deepseek.com/v1",
+  api_base: "https://api.deepseek.com",
   api_key: "",
   model: "deepseek-v4-flash",
   allowed_hosts: ["api.deepseek.com", "127.0.0.1", "localhost"],
