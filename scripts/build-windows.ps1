@@ -253,6 +253,35 @@ function Build-Msix {
             }
     }
 
+    # MakeAppx 0x8007007b: payload filenames must not contain OPC/Appx-illegal
+    # characters. PyInstaller ships python-docx's unpacked template with
+    # "[Content_Types].xml" — brackets collide with package OPC rules.
+    # Prefer dropping the unpacked template when default.docx is present.
+    $docxTemplates = Join-Path $appDir "resources\runtime\_internal\docx\templates"
+    $unpackedTpl = Join-Path $docxTemplates "default-docx-template"
+    $defaultDocx = Join-Path $docxTemplates "default.docx"
+    if ((Test-Path $unpackedTpl) -and (Test-Path $defaultDocx)) {
+        Write-Host "Removing unpacked docx template (default.docx present): $unpackedTpl"
+        Remove-Item -LiteralPath $unpackedTpl -Recurse -Force
+    }
+    Get-ChildItem -LiteralPath $appDir -Recurse -Force -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '[\[\]<>:"|?*]' } |
+        ForEach-Object {
+            Write-Host "Removing MSIX-illegal filename: $($_.FullName)"
+            Remove-Item -LiteralPath $_.FullName -Force
+        }
+    # Unused agent skill packs / placeholders under site-packages.
+    Get-ChildItem -LiteralPath $appDir -Recurse -Force -Directory -Filter ".agents" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Write-Host "Removing MSIX-unused dir: $($_.FullName)"
+            Remove-Item -LiteralPath $_.FullName -Recurse -Force
+        }
+    Get-ChildItem -LiteralPath $appDir -Recurse -Force -File -Filter ".keep" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            Write-Host "Removing MSIX-unused file: $($_.FullName)"
+            Remove-Item -LiteralPath $_.FullName -Force
+        }
+
     # Manifest + Assets stay at package root (winapp / MakeAppx convention).
     Copy-Item -Path $manifest -Destination (Join-Path $MsixPayloadDir "Package.appxmanifest") -Force
     Copy-Item -Path $assetsDir -Destination (Join-Path $MsixPayloadDir "Assets") -Recurse -Force
@@ -263,6 +292,7 @@ function Build-Msix {
     }
 
     $devCert = Join-Path $MsixOutDir "devcert.pfx"
+    $msixOutFile = Join-Path $MsixOutDir "Wenshutong_0.1.0.0_x64.msix"
 
     # Same stderr-vs-Stop trap as Build-Sidecar / Build-Tauri: preview CLIs
     # often write progress to stderr; with $ErrorActionPreference=Stop that
@@ -282,13 +312,12 @@ function Build-Msix {
     }
 
     Write-Step "winapp pack"
-    # winapp pack --output expects an MSIX filename, not a directory. Omit it,
-    # run from the payload dir, then collect any new *.msix into msix-out/.
+    # Explicit ASCII --output avoids DisplayName-derived paths; collect into msix-out/.
     Push-Location $MsixPayloadDir
     try {
         $prevEap = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
-        & winapp pack . --cert $devCert
+        & winapp pack . --cert $devCert --output $msixOutFile
         $packExit = $LASTEXITCODE
         $ErrorActionPreference = $prevEap
         if ($packExit -ne 0) { throw "winapp pack failed with exit $packExit" }
