@@ -249,11 +249,18 @@ function Build-Msix {
 
     $devCert = Join-Path $MsixOutDir "devcert.pfx"
 
+    # Same stderr-vs-Stop trap as Build-Sidecar / Build-Tauri: preview CLIs
+    # often write progress to stderr; with $ErrorActionPreference=Stop that
+    # becomes a terminating NativeCommandError even on success.
     Write-Step "winapp cert generate"
     Push-Location $MsixPayloadDir
     try {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         & winapp cert generate --if-exists skip --output $devCert
-        if ($LASTEXITCODE -ne 0) { throw "winapp cert generate failed with exit $LASTEXITCODE" }
+        $certExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
+        if ($certExit -ne 0) { throw "winapp cert generate failed with exit $certExit" }
     }
     finally {
         Pop-Location
@@ -264,8 +271,12 @@ function Build-Msix {
     # run from the payload dir, then collect any new *.msix into msix-out/.
     Push-Location $MsixPayloadDir
     try {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         & winapp pack . --cert $devCert
-        if ($LASTEXITCODE -ne 0) { throw "winapp pack failed with exit $LASTEXITCODE" }
+        $packExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
+        if ($packExit -ne 0) { throw "winapp pack failed with exit $packExit" }
 
         Get-ChildItem -Path . -Filter "*.msix" -ErrorAction SilentlyContinue | ForEach-Object {
             Move-Item -Path $_.FullName -Destination $MsixOutDir -Force
