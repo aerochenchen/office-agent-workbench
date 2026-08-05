@@ -1,0 +1,63 @@
+# Manual Windows NSIS build for Microsoft Store (EXE/MSI listing).
+# Trigger: Actions → Build Windows MS Store → Run workflow
+# Download: run summary → Artifacts → wenshutong-windows-msstore
+# Upload to Partner Center is manual (see docs/APP store 相关/文书通-Microsoft-Store上架.md).
+name: Build Windows MS Store
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Ensure Git Bash on PATH
+        shell: pwsh
+        run: |
+          $gitBin = "C:\Program Files\Git\bin"
+          if (-not (Test-Path "$gitBin\bash.exe")) {
+            throw "Git Bash not found (required by tauri beforeBuildCommand)"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $gitBin
+
+      - name: Build Windows NSIS installer (Microsoft Store config)
+        shell: pwsh
+        run: .\scripts\build-windows.ps1 -MicrosoftStore
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wenshutong-windows-msstore
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 14
