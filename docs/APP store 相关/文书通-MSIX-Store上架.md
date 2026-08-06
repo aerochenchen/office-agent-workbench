@@ -18,7 +18,7 @@
 
 ## 3. 提交前本机核对（Windows）
 
-1. 信任 `store-devcert.pfx`（若 Artifact 含证书）：`winapp cert install .\store-devcert.pfx`  
+1. 以管理员身份启动 PowerShell 后，信任 `store-devcert.pfx`（若 Artifact 含证书）：`winapp cert install .\store-devcert.pfx`
 2. `Add-AppxPackage .\Wenshutong_*.msix`  
 3. Smoke：启动 → 配模型对话 → 开文件夹 → 技能 → PDF  
 4. 截图（Desktop PNG ≥1366×768，建议 ≥4 张；设置页勿含真实 Key）

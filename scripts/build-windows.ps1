@@ -47,6 +47,33 @@ if ($MsixStore -and $MicrosoftStore) {
 
 $ErrorActionPreference = "Stop"
 
+function Assert-MsixStorePrerequisites {
+    if (-not $MsixStore) {
+        return
+    }
+
+    foreach ($field in @(
+        @{ Name = "StorePackageName"; Value = $StorePackageName },
+        @{ Name = "StorePublisher"; Value = $StorePublisher },
+        @{ Name = "StorePublisherDisplayName"; Value = $StorePublisherDisplayName },
+        @{ Name = "StoreVersion"; Value = $StoreVersion }
+    )) {
+        if ([string]::IsNullOrWhiteSpace($field.Value)) {
+            throw "$($field.Name) must not be empty when using -MsixStore"
+        }
+    }
+    if ($StoreVersion -notmatch '^\d+\.\d+\.\d+\.0$') {
+        throw "StoreVersion must match x.y.z.0 (for example 0.1.0.0)"
+    }
+
+    $winapp = Get-Command winapp -ErrorAction SilentlyContinue
+    if (-not $winapp) {
+        throw "winapp CLI not found on PATH. Install it with: winget install microsoft.winappcli"
+    }
+}
+
+Assert-MsixStorePrerequisites
+
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $PackagingDir = Join-Path $RepoRoot "packaging"
 $RuntimeDir = Join-Path $RepoRoot "runtime"
@@ -367,24 +394,7 @@ function Build-Msix {
 function Build-MsixStore {
     Write-Step "Build Store-identity MSIX"
 
-    foreach ($field in @(
-        @{ Name = "StorePackageName"; Value = $StorePackageName },
-        @{ Name = "StorePublisher"; Value = $StorePublisher },
-        @{ Name = "StorePublisherDisplayName"; Value = $StorePublisherDisplayName },
-        @{ Name = "StoreVersion"; Value = $StoreVersion }
-    )) {
-        if ([string]::IsNullOrWhiteSpace($field.Value)) {
-            throw "$($field.Name) must not be empty when using -MsixStore"
-        }
-    }
-    if ($StoreVersion -notmatch '^\d+\.\d+\.\d+\.0$') {
-        throw "StoreVersion must match x.y.z.0 (for example 0.1.0.0)"
-    }
-
-    $winapp = Get-Command winapp -ErrorAction SilentlyContinue
-    if (-not $winapp) {
-        throw "winapp CLI not found on PATH. Install it with: winget install microsoft.winappcli"
-    }
+    Assert-MsixStorePrerequisites
 
     $storeManifest = Join-Path $SrcTauri "Package.store.appxmanifest"
     if (-not (Test-Path $storeManifest)) {

@@ -7,6 +7,7 @@
   <Identity
     Name="__STORE_PACKAGE_NAME__"
     Publisher="__STORE_PUBLISHER__"
+    ProcessorArchitecture="x64"
     Version="__STORE_VERSION__" />
   <Properties>
     <DisplayName>「文书通」</DisplayName>

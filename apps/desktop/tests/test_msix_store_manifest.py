@@ -24,3 +24,4 @@ def test_store_manifest_placeholders_and_display_name():
     assert 'Executable="App\\Wenshutong.exe"' in text
     assert "runFullTrust" in text
     assert re.search(r'Version="__STORE_VERSION__"', text)
+    assert 'ProcessorArchitecture="x64"' in text

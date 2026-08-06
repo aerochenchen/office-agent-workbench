@@ -11,7 +11,7 @@
 
 - Spike（已完成构建能力）：`docs/superpowers/specs/2026-08-05-msix-spike-design.md`
 - 旧 EXE 路径（并行搁置）：`docs/APP store 相关/文书通-Microsoft-Store上架.md`
-- 操作短文（实现计划阶段补写）：建议 `docs/APP store 相关/文书通-MSIX-Store上架.md`
+- 操作短文（已提供）：`docs/APP store 相关/文书通-MSIX-Store上架.md`
 
 ---
 
