@@ -401,7 +401,9 @@ function Build-MsixStore {
     if ($manifestText.Contains("__STORE_")) {
         throw "Store manifest still contains unresolved __STORE_ placeholder(s)"
     }
-    Set-Content -Path (Join-Path $MsixPayloadDir "Package.appxmanifest") -Value $manifestText -Encoding utf8
+    $manifestPath = Join-Path $MsixPayloadDir "Package.appxmanifest"
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($manifestPath, $manifestText, $utf8NoBom)
 
     Write-Host "Store Identity Name: $StorePackageName"
     Write-Host "Store Identity Publisher: $StorePublisher"

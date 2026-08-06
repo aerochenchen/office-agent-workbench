@@ -12,12 +12,13 @@ def test_script_defines_msix_store_switch():
     assert "[switch]$MsixStore" in text or "$MsixStore" in text
     assert "StorePackageName" in text
     assert "StorePublisher" in text
+    assert "StorePublisherDisplayName" in text
+    assert "StoreVersion" in text
     assert "Package.store.appxmanifest" in text
-    assert "Build-MsixStore" in text or "MsixStore" in text
+    assert "Build-MsixStore" in text
 
 
 def test_msix_store_mutex_with_other_pack_modes():
     text = SCRIPT.read_text(encoding="utf-8")
-    # Must refuse combining store pack with spike Msix or MicrosoftStore EXE mode.
-    assert "MsixStore" in text and "MicrosoftStore" in text and "Msix" in text
-    assert "cannot be combined" in text.lower() or "互斥" in text or "throw" in text
+    assert "-MsixStore cannot be combined with -Msix" in text
+    assert "-MsixStore cannot be combined with -MicrosoftStore" in text
