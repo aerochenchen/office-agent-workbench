@@ -14,13 +14,14 @@ dependencies = [
   "python-pptx>=1.0.0",
   "openpyxl>=3.1.0",
   "xlrd>=2.0.1",
+  "pdfplumber>=0.11.0",
 ]
 
 [project.scripts]
 office-agent-runtime = "office_agent.__main__:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.2.0"]
+dev = ["pytest>=8.2.0", "reportlab>=4.0.0"]
 packaging = ["pyinstaller>=6.3.0"]
 
 [build-system]

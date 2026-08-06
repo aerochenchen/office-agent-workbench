@@ -50,6 +50,58 @@ def _write_xls(path: Path) -> None:
     book.save(str(path))
 
 
+def _write_pdf_pages(path: Path, page_texts: list[str | None]) -> None:
+    """Write a minimal multi-page PDF. None = empty content (no text layer)."""
+    reportlab = pytest.importorskip("reportlab")
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    c = canvas.Canvas(str(path), pagesize=A4)
+    for text in page_texts:
+        if text:
+            c.setFont("Helvetica", 12)
+            y = 800
+            for line in text.split("\n"):
+                c.drawString(72, y, line)
+                y -= 18
+        c.showPage()
+    c.save()
+
+
+def _write_pdf_with_table(path: Path) -> None:
+    reportlab = pytest.importorskip("reportlab")
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = SimpleDocTemplate(str(path), pagesize=A4)
+    styles = getSampleStyleSheet()
+    data = [
+        ["Dept", "Rate", "Note"],
+        ["Office", "95%", "pilot"],
+        ["Biz", "88%", ""],
+    ]
+    table = Table(data, colWidths=[120, 80, 120])
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ]
+        )
+    )
+    doc.build(
+        [
+            Paragraph("Progress report", styles["Heading1"]),
+            Spacer(1, 12),
+            table,
+        ]
+    )
+
+
 def test_extract_docx_units(tmp_path: Path):
     src = tmp_path / "a.docx"
     _write_docx(src)
@@ -204,3 +256,69 @@ def test_workspace_extract_passes_granularity(tmp_path: Path):
     assert r["ok"] is True
     assert len([u for u in r["units"] if u["kind"] in {"paragraph", "heading"}]) == 5
     assert r["units"][0]["meta"]["granularity"] == "paragraph"
+
+
+def test_extract_pdf_pages_and_empty_warning(tmp_path: Path):
+    src = tmp_path / "mixed.pdf"
+    _write_pdf_pages(src, ["Alpha progress 128 sites", None])
+    result = extract_file(src, tmp_path)
+    assert result.ok is True
+    assert result.format == "pdf"
+    assert result.doc_key
+    page_units = [u for u in result.units if u.kind == "page"]
+    assert len(page_units) >= 1
+    blob = "\n".join(u.text for u in page_units)
+    assert "128" in blob
+    assert any("无文本层" in w for w in result.warnings)
+
+
+def test_extract_pdf_table_unit(tmp_path: Path):
+    src = tmp_path / "table.pdf"
+    _write_pdf_with_table(src)
+    result = extract_file(src, tmp_path)
+    assert result.ok is True
+    tables = [u for u in result.units if u.kind == "table"]
+    assert tables, "expected at least one table unit"
+    assert any("|" in u.text for u in tables)
+    assert any("Office" in u.text or "95%" in u.text for u in tables)
+
+
+def test_extract_pdf_paragraph_granularity(tmp_path: Path):
+    src = tmp_path / "para.pdf"
+    _write_pdf_pages(src, ["Line one\nLine two"])
+    section = extract_file(src, tmp_path, granularity="section")
+    paragraph = extract_file(src, tmp_path, granularity="paragraph")
+    assert paragraph.ok is True
+    para_units = [u for u in paragraph.units if u.kind == "paragraph"]
+    assert len(para_units) >= 1
+    assert all(u.meta.get("granularity") == "paragraph" for u in para_units)
+    assert section.units[0].kind == "page"
+
+
+def test_extract_pdf_cells_falls_back(tmp_path: Path):
+    src = tmp_path / "cells.pdf"
+    _write_pdf_pages(src, ["fallback body"])
+    result = extract_file(src, tmp_path, granularity="cells")
+    assert result.ok is True
+    assert result.format == "pdf"
+    assert any(u.kind == "page" for u in result.units)
+
+
+def test_workspace_extract_pdf_tool(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path / "data"))
+    (tmp_path / "data" / "skills").mkdir(parents=True)
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    _write_pdf_pages(ws / "材料.pdf", ["Workspace PDF body 42"])
+    ex = ToolExecutor(
+        Workspace(ws),
+        SkillRegistry(),
+        permission_mode="trust",
+        audit=AuditLog(tmp_path / "data" / "a.sqlite"),
+    )
+    r = ex.execute("workspace_extract", {"path": "材料.pdf"})
+    assert r["ok"] is True
+    assert r["format"] == "pdf"
+    assert r["units"]
+    assert r["units"][0]["unit_id"].startswith(r["doc_key"] + "#u")
+    assert any("42" in u["text"] for u in r["units"])
