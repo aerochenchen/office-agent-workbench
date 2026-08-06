@@ -1,7 +1,7 @@
 # 文书通 · PDF 文本/表格抽取设计
 
 **日期：** 2026-08-06  
-**状态：** 待实施  
+**状态：** 已实施  
 **范围：** 标准 Runtime 的 `workspace_extract` / `doc_io` 补齐数字 PDF 抽取（含基础表格），不含 OCR
 
 ## 1. Objective
