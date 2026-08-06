@@ -10,7 +10,7 @@ from docx import Document
 from openpyxl import Workbook
 
 from office_agent.audit import AuditLog
-from office_agent.doc_io import DocIOError, extract_file, normalize_path
+from office_agent.doc_io import DocIOError, extract_file, extract_pdf, normalize_path
 from office_agent.skills import SkillRegistry
 from office_agent.tools import ToolExecutor
 from office_agent.workspace import Workspace
@@ -66,6 +66,29 @@ def _write_pdf_pages(path: Path, page_texts: list[str | None]) -> None:
                 c.drawString(72, y, line)
                 y -= 18
         c.showPage()
+    c.save()
+
+
+def _write_pdf_table_lines_only(path: Path) -> None:
+    """PDF page with drawn grid lines but no text layer (triggers find_tables)."""
+    reportlab = pytest.importorskip("reportlab")
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    c = canvas.Canvas(str(path), pagesize=A4)
+    x0, y0 = 72, 600
+    w, h = 300, 100
+    rows, cols = 3, 3
+    cell_w = w / cols
+    cell_h = h / rows
+    for i in range(rows + 1):
+        y = y0 - i * cell_h
+        c.line(x0, y, x0 + w, y)
+    for j in range(cols + 1):
+        x = x0 + j * cell_w
+        c.line(x, y0, x, y0 - h)
+    c.showPage()
     c.save()
 
 
@@ -269,7 +292,61 @@ def test_extract_pdf_pages_and_empty_warning(tmp_path: Path):
     assert len(page_units) >= 1
     blob = "\n".join(u.text for u in page_units)
     assert "128" in blob
+    empty_page_warnings = [
+        w for w in result.warnings if "无文本层" in w and "第2页" in w
+    ]
+    assert empty_page_warnings, "empty page must warn even without table detection"
+    assert not any(u.kind == "table" for u in result.units)
+
+
+def test_extract_pdf_table_lines_no_text_warns(tmp_path: Path):
+    """Grid-only page: find_tables may fire but chars are empty — must still warn."""
+    src = tmp_path / "grid_only.pdf"
+    _write_pdf_table_lines_only(src)
+    result = extract_file(src, tmp_path)
+    assert result.ok is True
     assert any("无文本层" in w for w in result.warnings)
+    assert not any(u.kind == "table" for u in result.units)
+    assert not any(u.text.strip("| \t") for u in result.units)
+
+
+def test_extract_pdf_skips_empty_cell_table_rows(tmp_path: Path, monkeypatch):
+    """Empty-cell grids must not produce pseudo table units (pipe-only rows)."""
+    import pdfplumber
+
+    class _FakeTable:
+        bbox = (0.0, 0.0, 100.0, 100.0)
+
+        def extract(self):
+            return [["", "", ""], ["", "", ""]]
+
+    class _FakePage:
+        chars: list[dict[str, str]] = []
+
+        def find_tables(self):
+            return [_FakeTable()]
+
+        def filter(self, _pred):
+            return self
+
+        def extract_text(self):
+            return ""
+
+    class _FakePdf:
+        pages = [_FakePage()]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(pdfplumber, "open", lambda _path: _FakePdf())
+    units, _truncated, warnings = extract_pdf(
+        tmp_path / "fake.pdf", "abc123", max_chars=8000, max_units=50
+    )
+    assert not units
+    assert any("无文本层" in w for w in warnings)
 
 
 def test_extract_pdf_table_unit(tmp_path: Path):

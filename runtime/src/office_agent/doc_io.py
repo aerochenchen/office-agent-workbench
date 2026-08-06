@@ -602,6 +602,15 @@ def extract_xlsx(
     return units, truncated, warnings
 
 
+def _pdf_page_has_text_layer(page: Any) -> bool:
+    """True when pdfplumber exposes at least one non-whitespace char on the page."""
+    try:
+        chars = getattr(page, "chars", None) or []
+        return any((c.get("text") or "").strip() for c in chars)
+    except Exception:  # noqa: BLE001
+        return bool((page.extract_text() or "").strip())
+
+
 def extract_pdf(
     path: Path,
     doc_key: str,
@@ -698,7 +707,7 @@ def extract_pdf(
                 body = page.extract_text() or ""
 
             body = (body or "").strip()
-            if not body and not table_objs:
+            if not _pdf_page_has_text_layer(page):
                 warnings.append(
                     f"第{page_no}页: 无文本层（疑似扫描或纯图，暂不支持 OCR）"
                 )
@@ -739,6 +748,8 @@ def extract_pdf(
                         " ".join(str(c).split()) if c is not None else ""
                         for c in row
                     ]
+                    if not any(cells):
+                        continue
                     line = " | ".join(cells).strip()
                     if line:
                         rows.append(line)
