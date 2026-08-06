@@ -55,7 +55,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "workspace_read",
             "description": (
                 "读取工作区内【纯文本】文件内容。"
-                "Office 文件（.docx/.doc/.xlsx/.xls）请改用 workspace_extract。"
+                "Office/PDF 文件（.docx/.doc/.xlsx/.xls/.pdf）请改用 workspace_extract。"
             ),
             "parameters": {
                 "type": "object",
@@ -69,11 +69,13 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "workspace_extract",
             "description": (
-                "从工作区 Office 文件抽取可引用文本单元（含 unit_id）。"
-                "支持 .docx/.xlsx；.doc/.xls 会先规范化为 docx/xlsx 再抽取。"
+                "从工作区 Office/PDF 文件抽取可引用文本单元（含 unit_id）。"
+                "支持 .docx/.xlsx/.pdf；.doc/.xls 会先规范化为 docx/xlsx 再抽取。"
+                "PDF 仅支持有文本层的数字稿；扫描/纯图页会 warning，不做 OCR。"
                 "不要用 workspace_read 读这些二进制格式。"
                 "docx 可用 granularity=paragraph 按段抽取（校对/定位）；默认 section 按章节。"
                 "xlsx 可用 granularity=cells 按单元格抽取（表格成文）；默认按行块。"
+                "pdf 默认按页；granularity=paragraph 按页内文本行块；不支持 cells。"
             ),
             "parameters": {
                 "type": "object",
@@ -95,7 +97,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "type": "string",
                         "description": (
                             "抽取粒度：docx 用 section|paragraph；"
-                            "xlsx 用 section|cells（cells=单元格级定位）"
+                            "xlsx 用 section|cells；"
+                            "pdf 用 section|paragraph（cells 会回退为 section）"
                         ),
                         "enum": ["section", "paragraph", "cells"],
                     },
@@ -436,7 +439,8 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "- 汇报提纲/演示文稿/汇报稿优先按 brief-deck（pptx 用其 build_pptx.py）；\n"
         "- PPT 正式配色/换皮仍按 office-visual-design；\n"
         "- 若工作区存在 `.office-agent/glossary.md`，校对、术语统一与起草前应先读取，口径与之对齐；\n"
-        "- 读取 .docx/.doc/.xlsx/.xls 请用 workspace_extract（.doc/.xls 会先转为 docx/xlsx）；"
+        "- 读取 .docx/.doc/.xlsx/.xls/.pdf 请用 workspace_extract"
+        "（.doc/.xls 会先转为 docx/xlsx；PDF 扫描页无 OCR）；\n"
         "纯文本才用 workspace_read；\n"
         "- 不要对「scripts」调用 workspace_list，除非工作区里真有该目录。\n"
         "执行纪律：\n"
