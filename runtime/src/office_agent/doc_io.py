@@ -3,7 +3,7 @@
 
 - .doc  → .docx (soffice / textutil / optional Word COM later)
 - .xls  → .xlsx (xlrd → openpyxl)
-- extract: .docx / .xlsx → list of units with stable unit_id anchors
+- extract: .docx / .xlsx / .pdf → list of units with stable unit_id anchors
 """
 
 from __future__ import annotations
@@ -147,6 +147,8 @@ def normalize_path(
         return src, "docx", warnings
     if suffix == ".xlsx":
         return src, "xlsx", warnings
+    if suffix == ".pdf":
+        return src, "pdf", warnings
     if suffix == ".doc":
         out = _normalize_doc(src, workspace_root, force=force)
         return out, "docx", warnings
@@ -155,7 +157,7 @@ def normalize_path(
         return out, "xlsx", warnings
     raise DocIOError(
         f"unsupported format for normalize: {suffix} "
-        "(supported: .doc .docx .xls .xlsx)"
+        "(supported: .doc .docx .xls .xlsx .pdf)"
     )
 
 
@@ -600,6 +602,167 @@ def extract_xlsx(
     return units, truncated, warnings
 
 
+def extract_pdf(
+    path: Path,
+    doc_key: str,
+    *,
+    max_chars: int,
+    max_units: int,
+    granularity: str = "section",
+) -> tuple[list[ExtractUnit], bool, list[str]]:
+    try:
+        import pdfplumber
+    except ImportError as e:
+        raise DocIOError(
+            "reading .pdf requires pdfplumber; install runtime deps"
+        ) from e
+
+    gran = (granularity or "section").strip().lower()
+    if gran == "cells":
+        gran = "section"
+        cells_fallback = True
+    else:
+        cells_fallback = False
+    if gran not in {"section", "paragraph"}:
+        gran = "section"
+
+    warnings: list[str] = []
+    if cells_fallback:
+        warnings.append("pdf 不支持 granularity=cells，已回退为 section")
+
+    units: list[ExtractUnit] = []
+    total_chars = 0
+    truncated = False
+    unit_i = 0
+
+    def _append(kind: str, locator: str, text: str, meta: dict[str, Any]) -> bool:
+        nonlocal unit_i, total_chars, truncated
+        text = text.strip()
+        if not text:
+            return False
+        if len(units) >= max_units:
+            truncated = True
+            return True
+        if total_chars + len(text) > max_chars:
+            remain = max_chars - total_chars
+            if remain <= 0:
+                truncated = True
+                return True
+            text = text[:remain] + "…"
+            truncated = True
+        unit_i += 1
+        units.append(
+            ExtractUnit(
+                unit_id=f"{doc_key}#u{unit_i:02d}",
+                kind=kind,
+                locator=locator,
+                text=text,
+                tags=_tags_for(text),
+                meta=meta,
+            )
+        )
+        total_chars += len(text)
+        return truncated
+
+    with pdfplumber.open(str(path)) as pdf:
+        for page_no, page in enumerate(pdf.pages, start=1):
+            table_objs = []
+            try:
+                table_objs = page.find_tables() or []
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"第{page_no}页: 表检测失败（{exc}）")
+                table_objs = []
+
+            # Body text: prefer filtering out table bboxes; fall back to full page.
+            try:
+                if table_objs:
+                    bboxes = [t.bbox for t in table_objs if getattr(t, "bbox", None)]
+
+                    def _not_in_tables(obj: dict[str, Any]) -> bool:
+                        x0 = float(obj.get("x0", 0))
+                        x1 = float(obj.get("x1", 0))
+                        top = float(obj.get("top", 0))
+                        bottom = float(obj.get("bottom", 0))
+                        cx = (x0 + x1) / 2
+                        cy = (top + bottom) / 2
+                        for bx0, btop, bx1, bbottom in bboxes:
+                            if bx0 <= cx <= bx1 and btop <= cy <= bbottom:
+                                return False
+                        return True
+
+                    filtered = page.filter(_not_in_tables)
+                    body = filtered.extract_text() or ""
+                else:
+                    body = page.extract_text() or ""
+            except Exception:  # noqa: BLE001
+                body = page.extract_text() or ""
+
+            body = (body or "").strip()
+            if not body and not table_objs:
+                warnings.append(
+                    f"第{page_no}页: 无文本层（疑似扫描或纯图，暂不支持 OCR）"
+                )
+            elif gran == "paragraph":
+                blocks = [b.strip() for b in body.split("\n") if b.strip()]
+                for bi, block in enumerate(blocks, start=1):
+                    if _append(
+                        "paragraph",
+                        f"第{page_no}页@块{bi}",
+                        block,
+                        {
+                            "page": page_no,
+                            "block": bi,
+                            "granularity": "paragraph",
+                        },
+                    ):
+                        break
+            elif body:
+                if _append(
+                    "page",
+                    f"第{page_no}页",
+                    body,
+                    {"page": page_no, "granularity": "section"},
+                ):
+                    pass
+
+            for ti, tobj in enumerate(table_objs, start=1):
+                try:
+                    grid = tobj.extract()
+                except Exception as exc:  # noqa: BLE001
+                    warnings.append(f"第{page_no}页-表{ti}: 抽取失败（{exc}）")
+                    continue
+                if not grid:
+                    continue
+                rows: list[str] = []
+                for row in grid:
+                    cells = [
+                        " ".join(str(c).split()) if c is not None else ""
+                        for c in row
+                    ]
+                    line = " | ".join(cells).strip()
+                    if line:
+                        rows.append(line)
+                if not rows:
+                    continue
+                if _append(
+                    "table",
+                    f"第{page_no}页-表{ti}",
+                    "\n".join(rows),
+                    {
+                        "page": page_no,
+                        "table_index": ti,
+                        "granularity": gran,
+                    },
+                ):
+                    break
+            if truncated or len(units) >= max_units:
+                break
+
+    if not units and not any("无文本层" in w for w in warnings):
+        warnings.append("pdf 未解析到文本或表格")
+    return units, truncated, warnings
+
+
 def extract_file(
     path: Path,
     workspace_root: Path | None = None,
@@ -609,7 +772,7 @@ def extract_file(
     force_normalize: bool = False,
     granularity: str = "section",
 ) -> ExtractResult:
-    """Normalize if needed, then extract units from docx/xlsx."""
+    """Normalize if needed, then extract units from docx/xlsx/pdf."""
     path = path.resolve()
     source_name = path.name
     warnings: list[str] = []
@@ -651,6 +814,14 @@ def extract_file(
             )
         elif fmt == "xlsx":
             units, truncated, w2 = extract_xlsx(
+                modern,
+                doc_key,
+                max_chars=max_chars,
+                max_units=max_units,
+                granularity=granularity,
+            )
+        elif fmt == "pdf":
+            units, truncated, w2 = extract_pdf(
                 modern,
                 doc_key,
                 max_chars=max_chars,
