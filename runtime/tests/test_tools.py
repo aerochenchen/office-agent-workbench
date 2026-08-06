@@ -235,3 +235,72 @@ def test_write_escape_rejected(tmp_path: Path, monkeypatch):
     result = ex.execute("workspace_write", {"path": "../x.txt", "content": "no"})
     assert result["ok"] is False
     assert "escapes" in result["error"] or "sandbox" in result["error"].lower() or "path" in result["error"].lower()
+
+
+def test_finish_without_deliverables_still_ok(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute("finish", {"summary": "闲聊结束"})
+    assert result["ok"] is True
+    assert result["finished"] is True
+    assert result["summary"] == "闲聊结束"
+
+
+def test_finish_rejects_missing_deliverables(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "finish",
+        {
+            "summary": "已汇总成表",
+            "deliverables": ["工作成果/产品汇总.xlsx"],
+        },
+    )
+    assert result["ok"] is False
+    assert "工作成果/产品汇总.xlsx" in str(result.get("error") or "")
+    assert result.get("finished") is not True
+
+
+def test_finish_accepts_existing_nonempty_deliverables(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    out = ws / "工作成果"
+    out.mkdir()
+    target = out / "产品汇总.xlsx"
+    target.write_bytes(b"PK\x03\x04fake-xlsx")
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "finish",
+        {
+            "summary": "已写入 `工作成果/产品汇总.xlsx`",
+            "deliverables": ["工作成果/产品汇总.xlsx"],
+        },
+    )
+    assert result["ok"] is True
+    assert result["finished"] is True
+    assert result["deliverables"] == ["工作成果/产品汇总.xlsx"]
+
+
+def test_finish_rejects_empty_deliverable_file(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    out = ws / "工作成果"
+    out.mkdir()
+    (out / "空表.xlsx").write_bytes(b"")
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "finish",
+        {"summary": "好了", "deliverables": ["工作成果/空表.xlsx"]},
+    )
+    assert result["ok"] is False
+    assert "空" in str(result.get("error") or "") or "empty" in str(result.get("error") or "").lower()

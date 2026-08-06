@@ -511,4 +511,57 @@ class ToolExecutor:
         return {"ok": True, "pending": True, "question": q, "prompt": q}
 
     def _finish(self, args: dict) -> dict:
-        return {"ok": True, "finished": True, "summary": str(args.get("summary", ""))}
+        summary = str(args.get("summary", ""))
+        raw = args.get("deliverables")
+        if raw is None:
+            return {"ok": True, "finished": True, "summary": summary}
+        if not isinstance(raw, list):
+            return {
+                "ok": False,
+                "error": "deliverables 须为字符串路径列表",
+                "summary": summary,
+            }
+        paths: list[str] = []
+        for item in raw:
+            rel = _normalize_rel(str(item or "").strip())
+            if not rel:
+                continue
+            paths.append(rel)
+        if not paths:
+            return {
+                "ok": False,
+                "error": "deliverables 为空；有文件产出时须列出工作成果路径",
+                "summary": summary,
+            }
+        missing: list[str] = []
+        empty: list[str] = []
+        for rel in paths:
+            try:
+                path = self.workspace.resolve(rel)
+            except SandboxError:
+                missing.append(rel)
+                continue
+            if not path.is_file():
+                missing.append(rel)
+                continue
+            if path.stat().st_size <= 0:
+                empty.append(rel)
+        if missing or empty:
+            parts: list[str] = []
+            if missing:
+                parts.append("缺失: " + ", ".join(missing))
+            if empty:
+                parts.append("空文件: " + ", ".join(empty))
+            return {
+                "ok": False,
+                "error": "交付物校验失败（" + "；".join(parts) + "）。请先写出文件再 finish。",
+                "summary": summary,
+                "missing": missing,
+                "empty": empty,
+            }
+        return {
+            "ok": True,
+            "finished": True,
+            "summary": summary,
+            "deliverables": paths,
+        }

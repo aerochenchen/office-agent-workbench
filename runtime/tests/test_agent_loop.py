@@ -169,12 +169,43 @@ def test_system_prompt_ask_user_priority():
     assert "needs_user 澄清（若本轮 ask_user 已用则留待下一轮）" in text
 
 
+def test_system_prompt_doc_to_sheet_not_sheet_to_brief():
+    """从文稿摘字段做成表 ≠ 表格成文；禁止误路由到 sheet-to-brief + cells。"""
+    text = _build_system_prompt([])
+    assert "sheet-to-brief" in text
+    assert "做成表" in text or "摘成表" in text or "汇总成" in text
+    assert "不是 sheet-to-brief" in text or "≠ sheet-to-brief" in text or "不要用 sheet-to-brief" in text
+    assert "workspace_list" in text
+    assert "任意" in text or "这个文件夹" in text
+
+
+def test_system_prompt_forbid_ask_path_when_folder_suffices():
+    text = _build_system_prompt([])
+    assert "禁止" in text
+    assert "workspace_list" in text
+    # 用户已指文件夹/任意格式时不要 ask_user 要文件名
+    assert "文件名" in text
+    assert ("这个文件夹" in text) or ("任意格式" in text) or ("任选" in text)
+
+
 def test_ask_user_schema_description_allows_plan_confirmation():
     ask_schema = next(s for s in TOOL_SCHEMAS if s["function"]["name"] == "ask_user")
     desc = ask_schema["function"]["description"]
     assert "工作计划" in desc or "确认" in desc
     assert "整轮最多" in desc
     assert "执行工具" in desc
+    assert "workspace_list" in desc
+    assert "禁止" in desc or "不要" in desc
+
+
+def test_finish_schema_accepts_deliverables():
+    finish_schema = next(s for s in TOOL_SCHEMAS if s["function"]["name"] == "finish")
+    props = finish_schema["function"]["parameters"]["properties"]
+    assert "summary" in props
+    assert "deliverables" in props
+    desc = finish_schema["function"]["description"]
+    assert "工作成果" in desc
+    assert "deliverables" in desc or "交付" in desc
 
 
 def test_system_prompt_requires_reading_skill_body(tmp_path: Path, monkeypatch):
@@ -250,6 +281,42 @@ def test_finish_tool_ends_with_summary(tmp_path: Path, monkeypatch):
     assert result.final_text == "任务完成"
     assert len(result.tool_events) == 1
     assert result.tool_events[0]["name"] == "finish"
+
+
+def test_finish_with_missing_deliverables_does_not_end_turn(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "ws").mkdir()
+    executor = ToolExecutor(Workspace(tmp_path / "ws"), SkillRegistry(), permission_mode="trust")
+    gateway = FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[
+                    _tool_call(
+                        "c1",
+                        "finish",
+                        {
+                            "summary": "已汇总",
+                            "deliverables": ["工作成果/产品汇总.xlsx"],
+                        },
+                    )
+                ],
+            ),
+            _completion(content="继续写出表格后再结束"),
+        ]
+    )
+    result = run_agent(
+        user_message="汇总成表",
+        attached_paths=[],
+        gateway=gateway,
+        tools=executor,
+        catalog=[],
+        max_steps=5,
+    )
+    assert result.tool_events[0]["name"] == "finish"
+    assert result.tool_events[0]["result"]["ok"] is False
+    assert len(gateway.chat_calls) == 2
+    assert "继续写出" in result.final_text
 
 
 def test_ask_user_pauses_for_answer(tmp_path: Path, monkeypatch):

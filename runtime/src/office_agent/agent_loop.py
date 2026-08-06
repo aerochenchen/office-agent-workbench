@@ -74,8 +74,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "PDF 仅支持有文本层的数字稿；扫描/纯图页会 warning，不做 OCR。"
                 "不要用 workspace_read 读这些二进制格式。"
                 "docx 可用 granularity=paragraph 按段抽取（校对/定位）；默认 section 按章节。"
-                "xlsx 可用 granularity=cells 按单元格抽取（表格成文）；默认按行块。"
-                "pdf 默认按页；granularity=paragraph 按页内文本行块；不支持 cells。"
+                "xlsx 可用 granularity=cells 按单元格抽取（仅表格成文 sheet-to-brief）；默认按行块。"
+                "pdf 默认按页；granularity=paragraph 按页内文本行块；不支持 cells（传 cells 会回退）。"
+                "从 PDF/Word/PPT 摘字段做成新表时：用 section/paragraph 抽取即可，不要用 cells，也不要走 sheet-to-brief。"
             ),
             "parameters": {
                 "type": "object",
@@ -346,8 +347,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "ask_user",
             "description": (
-                "向用户提一个问题。整轮最多一次；允许用于：缺少关键路径/文件名、"
+                "向用户提一个问题。整轮最多一次；允许用于：真正缺少关键路径/文件名、"
                 "工作计划确认关、needs_user 步骤需澄清。"
+                "若用户已说「这个文件夹」「任意格式」「内容一样」等，禁止再问文件名/路径，"
+                "须先 workspace_list 自行定位材料。"
                 "用户回答后必须执行工具，禁止继续追问同一事项。"
             ),
             "parameters": {
@@ -364,10 +367,26 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "finish",
-            "description": "结束当前任务并给出面向用户的总结（提及成果在 工作成果/ 下的路径）",
+            "description": (
+                "结束当前任务并给出面向用户的总结。"
+                "凡声称已产出文件（Excel/Word/PDF 等），必须在 summary 中写明 "
+                "`工作成果/...` 路径，并填写 deliverables 列出这些相对路径；"
+                "运行时会校验文件存在且非空，校验失败则不得结束，须继续写出后再 finish。"
+                "无文件交付的闲聊/问答可不填 deliverables。"
+            ),
             "parameters": {
                 "type": "object",
-                "properties": {"summary": {"type": "string"}},
+                "properties": {
+                    "summary": {"type": "string"},
+                    "deliverables": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "本任务最终交付文件的工作区内相对路径列表，"
+                            "如 [\"工作成果/产品汇总.xlsx\"]；有文件产出时必填"
+                        ),
+                    },
+                },
                 "required": ["summary"],
             },
         },
@@ -435,6 +454,10 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "- 校对/术语/红笔优先按 doc-proofread；抽取定位用 workspace_extract 且 granularity=paragraph；\n"
         "- 会议纪要/待办/催办优先按 meeting-followup；文件夹摸底与缺料按 material-gap；\n"
         "- 表格写说明/结论/填报优先按 sheet-to-brief，xlsx 抽取用 granularity=cells；\n"
+        "- 重要反向：从 PDF/Word/PPT 等文稿摘产品字段、汇总成 Excel/新表"
+        "（「摘成表」「做成表」「汇总成表」）不要用 sheet-to-brief，也不是 granularity=cells；"
+        "应 workspace_list 定位材料 → workspace_extract（pdf/docx 用 section 或 paragraph）"
+        "→ 用脚本写出 `工作成果/*.xlsx` → finish 并带 deliverables；\n"
         "- 一文三用（报告/提纲/答问）优先按 one-to-three；\n"
         "- 汇报提纲/演示文稿/汇报稿优先按 brief-deck（pptx 用其 build_pptx.py）；\n"
         "- PPT 正式配色/换皮仍按 office-visual-design；\n"
@@ -447,11 +470,17 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "- 禁止让用户去终端/命令行自行运行 python、bash 或其它命令；你必须用工具代为执行；\n"
         "- 用户已给出足够信息时，立即调用工具执行，不要反复确认；\n"
         "- 若历史里用户已回答过你的问题，直接执行，禁止再次用 ask_user 问同一问题；\n"
-        "- ask_user 整轮最多使用一次；允许用于：缺少关键路径/文件名、"
+        "- 用户说「这个文件夹」「任意格式」「内容一样」「任选一份」时，"
+        "禁止再用 ask_user 追问文件名或路径；必须先 workspace_list，"
+        "优先取 .pdf/.docx/.pptx/.doc 中任一份可用材料继续；\n"
+        "- ask_user 整轮最多使用一次；允许用于：真正缺少关键路径/文件名"
+        "（且无法用 workspace_list 自行定位）、"
         "工作计划确认关、needs_user 步骤需澄清；"
         "同轮优先级：缺路径/文件名（须在 plan_create 前问清）> 工作计划确认（占本轮 ask_user）> "
         "needs_user 澄清（若本轮 ask_user 已用则留待下一轮）；\n"
         "- 可用 workspace_list 自行查找材料文件，而不是不停问用户。\n"
+        "- 声称已产出文件时：finish 的 summary 须含 `工作成果/...` 路径，"
+        "并填写 deliverables；校验失败须继续写出，禁止口头宣布完成。\n"
         "工作计划纪律：\n"
         "- 任务复杂、涉及多文件/多步骤、批量处理，或用户明确要求分步推进时，"
         "先调用 plan_create 制定工作计划；\n"
@@ -617,7 +646,11 @@ def args_summary(name: str, args: dict[str, Any]) -> str:
         q = str(args.get("question") or args.get("prompt") or "")
         return q[:80]
     if name == "finish":
-        return str(args.get("summary") or "")[:80]
+        summary = str(args.get("summary") or "")[:60]
+        dels = args.get("deliverables") or []
+        if isinstance(dels, list) and dels:
+            return f"{summary} · {len(dels)} 个交付".strip(" ·")
+        return summary
     if name == "plan_get":
         return "当前计划"
     if name == "plan_create":

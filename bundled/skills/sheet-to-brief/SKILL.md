@@ -25,7 +25,8 @@ target_file_type: .xlsx
 ## 何时用 / 不用
 
 - **用**：用表写情况说明；解读表写结论；按空白表从文件夹材料填报。
-- **不用**：公文红头排版（走 `government-document-format`）；纯 Word 校对（走 `doc-proofread`）。
+- **不用**：公文红头排版（走 `government-document-format`）；纯 Word 校对（走 `doc-proofread`）；
+  从 PDF/Word/PPT 等文稿摘字段做成**新表**（走 `workspace_extract` + 脚本写 xlsx，不要本技能）。
 
 ## 输入与产出
 
