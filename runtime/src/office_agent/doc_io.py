@@ -643,6 +643,7 @@ def extract_pdf(
     total_chars = 0
     truncated = False
     unit_i = 0
+    no_text_pages: list[int] = []
 
     def _append(kind: str, locator: str, text: str, meta: dict[str, Any]) -> bool:
         nonlocal unit_i, total_chars, truncated
@@ -673,8 +674,32 @@ def extract_pdf(
         total_chars += len(text)
         return truncated
 
+    def _append_body(page_no: int, body: str) -> None:
+        if gran == "paragraph":
+            blocks = [b.strip() for b in body.split("\n") if b.strip()]
+            for bi, block in enumerate(blocks, start=1):
+                if _append(
+                    "paragraph",
+                    f"第{page_no}页@块{bi}",
+                    block,
+                    {
+                        "page": page_no,
+                        "block": bi,
+                        "granularity": "paragraph",
+                    },
+                ):
+                    break
+        elif body:
+            _append(
+                "page",
+                f"第{page_no}页",
+                body,
+                {"page": page_no, "granularity": "section"},
+            )
+
     with pdfplumber.open(str(path)) as pdf:
         for page_no, page in enumerate(pdf.pages, start=1):
+            page_units_start = len(units)
             table_objs = []
             try:
                 table_objs = page.find_tables() or []
@@ -707,32 +732,11 @@ def extract_pdf(
                 body = page.extract_text() or ""
 
             body = (body or "").strip()
-            if not _pdf_page_has_text_layer(page):
-                warnings.append(
-                    f"第{page_no}页: 无文本层（疑似扫描或纯图，暂不支持 OCR）"
-                )
-            elif gran == "paragraph":
-                blocks = [b.strip() for b in body.split("\n") if b.strip()]
-                for bi, block in enumerate(blocks, start=1):
-                    if _append(
-                        "paragraph",
-                        f"第{page_no}页@块{bi}",
-                        block,
-                        {
-                            "page": page_no,
-                            "block": bi,
-                            "granularity": "paragraph",
-                        },
-                    ):
-                        break
-            elif body:
-                if _append(
-                    "page",
-                    f"第{page_no}页",
-                    body,
-                    {"page": page_no, "granularity": "section"},
-                ):
-                    pass
+            has_text_layer = _pdf_page_has_text_layer(page)
+            if not has_text_layer:
+                no_text_pages.append(page_no)
+            else:
+                _append_body(page_no, body)
 
             for ti, tobj in enumerate(table_objs, start=1):
                 try:
@@ -766,10 +770,47 @@ def extract_pdf(
                     },
                 ):
                     break
-            if truncated or len(units) >= max_units:
+
+            if (
+                len(units) == page_units_start
+                and table_objs
+                and not body
+                and has_text_layer
+                and not truncated
+            ):
+                fallback_body = (page.extract_text() or "").strip()
+                _append_body(page_no, fallback_body)
+
+            page.flush_cache()
+            if len(units) >= max_units:
+                truncated = True
+                break
+            if truncated:
                 break
 
-    if not units and not any("无文本层" in w for w in warnings):
+    if no_text_pages:
+        ranges: list[str] = []
+        range_start = range_end = no_text_pages[0]
+        for page_no in no_text_pages[1:]:
+            if page_no == range_end + 1:
+                range_end = page_no
+                continue
+            ranges.append(
+                str(range_start)
+                if range_start == range_end
+                else f"{range_start}–{range_end}"
+            )
+            range_start = range_end = page_no
+        ranges.append(
+            str(range_start)
+            if range_start == range_end
+            else f"{range_start}–{range_end}"
+        )
+        warnings.append(
+            f"第{'、'.join(ranges)}页等共{len(no_text_pages)}页无文本层"
+            "（疑似扫描或纯图，暂不支持 OCR）"
+        )
+    if not units and not no_text_pages:
         warnings.append("pdf 未解析到文本或表格")
     return units, truncated, warnings
 

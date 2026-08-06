@@ -52,7 +52,7 @@ def _write_xls(path: Path) -> None:
 
 def _write_pdf_pages(path: Path, page_texts: list[str | None]) -> None:
     """Write a minimal multi-page PDF. None = empty content (no text layer)."""
-    reportlab = pytest.importorskip("reportlab")
+    pytest.importorskip("reportlab")
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
 
@@ -71,7 +71,7 @@ def _write_pdf_pages(path: Path, page_texts: list[str | None]) -> None:
 
 def _write_pdf_table_lines_only(path: Path) -> None:
     """PDF page with drawn grid lines but no text layer (triggers find_tables)."""
-    reportlab = pytest.importorskip("reportlab")
+    pytest.importorskip("reportlab")
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
 
@@ -93,7 +93,7 @@ def _write_pdf_table_lines_only(path: Path) -> None:
 
 
 def _write_pdf_with_table(path: Path) -> None:
-    reportlab = pytest.importorskip("reportlab")
+    pytest.importorskip("reportlab")
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -299,6 +299,24 @@ def test_extract_pdf_pages_and_empty_warning(tmp_path: Path):
     assert not any(u.kind == "table" for u in result.units)
 
 
+def test_extract_pdf_max_units_sets_truncated(tmp_path: Path):
+    src = tmp_path / "many_pages.pdf"
+    _write_pdf_pages(src, ["Page one", "Page two", "Page three"])
+    result = extract_file(src, tmp_path, max_units=1)
+    assert result.ok is True
+    assert len(result.units) == 1
+    assert result.truncated is True
+
+
+def test_extract_pdf_aggregates_empty_page_warnings(tmp_path: Path):
+    src = tmp_path / "empty_pages.pdf"
+    _write_pdf_pages(src, [None] * 12)
+    result = extract_file(src, tmp_path)
+    no_text_warnings = [w for w in result.warnings if "无文本层" in w]
+    assert len(no_text_warnings) == 1
+    assert "共12页" in no_text_warnings[0]
+
+
 def test_extract_pdf_table_lines_no_text_warns(tmp_path: Path):
     """Grid-only page: find_tables may fire but chars are empty — must still warn."""
     src = tmp_path / "grid_only.pdf"
@@ -322,6 +340,7 @@ def test_extract_pdf_skips_empty_cell_table_rows(tmp_path: Path, monkeypatch):
 
     class _FakePage:
         chars: list[dict[str, str]] = []
+        cache_flushed = False
 
         def find_tables(self):
             return [_FakeTable()]
@@ -331,6 +350,9 @@ def test_extract_pdf_skips_empty_cell_table_rows(tmp_path: Path, monkeypatch):
 
         def extract_text(self):
             return ""
+
+        def flush_cache(self):
+            self.cache_flushed = True
 
     class _FakePdf:
         pages = [_FakePage()]
@@ -347,6 +369,54 @@ def test_extract_pdf_skips_empty_cell_table_rows(tmp_path: Path, monkeypatch):
     )
     assert not units
     assert any("无文本层" in w for w in warnings)
+    assert _FakePdf.pages[0].cache_flushed is True
+
+
+def test_extract_pdf_falls_back_when_table_filter_loses_page_text(
+    tmp_path: Path, monkeypatch
+):
+    import pdfplumber
+
+    class _FakeTable:
+        bbox = (0.0, 0.0, 100.0, 100.0)
+
+        def extract(self):
+            return [["", ""]]
+
+    class _FilteredPage:
+        def extract_text(self):
+            return ""
+
+    class _FakePage:
+        chars = [{"text": "Recovered"}]
+
+        def find_tables(self):
+            return [_FakeTable()]
+
+        def filter(self, _pred):
+            return _FilteredPage()
+
+        def extract_text(self):
+            return "Recovered body"
+
+        def flush_cache(self):
+            pass
+
+    class _FakePdf:
+        pages = [_FakePage()]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(pdfplumber, "open", lambda _path: _FakePdf())
+    units, truncated, _warnings = extract_pdf(
+        tmp_path / "fake.pdf", "abc123", max_chars=8000, max_units=50
+    )
+    assert truncated is False
+    assert any(unit.text == "Recovered body" for unit in units)
 
 
 def test_extract_pdf_table_unit(tmp_path: Path):
