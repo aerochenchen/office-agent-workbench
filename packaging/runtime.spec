@@ -43,6 +43,9 @@ hiddenimports: list = list(
         "pptx",
         "openpyxl",
         "xlrd",
+        "pdfplumber",
+        "pdfminer",
+        "pypdfium2",
     ]
 )
 
@@ -60,6 +63,10 @@ for pkg in (
     "multipart",
     "openpyxl",
     "xlrd",
+    "pdfplumber",
+    "pdfminer",
+    "pypdfium2",
+    "PIL",
 ):
     try:
         d, b, h = collect_all(pkg)
