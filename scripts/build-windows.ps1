@@ -14,6 +14,7 @@
   under packaging/msix-payload and runs `winapp cert generate` + `winapp pack`
   to produce packaging/msix-out/*.msix for the sideload spike. Mutually
   exclusive with -MicrosoftStore.
+  -MsixStore creates a Store-identity MSIX from Package.store.appxmanifest.
 
 .NOTES
   Requires: Python 3.11+, Node.js/npm, Rust toolchain, WebView2 SDK bits via Tauri.
@@ -26,11 +27,22 @@ param(
     [switch]$SkipTauri,
     [switch]$Clean,
     [switch]$MicrosoftStore,
-    [switch]$Msix
+    [switch]$Msix,
+    [switch]$MsixStore,
+    [string]$StorePackageName = "",
+    [string]$StorePublisher = "",
+    [string]$StorePublisherDisplayName = "",
+    [string]$StoreVersion = "0.1.0.0"
 )
 
 if ($MicrosoftStore -and $Msix) {
     throw "-Msix cannot be combined with -MicrosoftStore"
+}
+if ($MsixStore -and $Msix) {
+    throw "-MsixStore cannot be combined with -Msix"
+}
+if ($MsixStore -and $MicrosoftStore) {
+    throw "-MsixStore cannot be combined with -MicrosoftStore"
 }
 
 $ErrorActionPreference = "Stop"
@@ -186,18 +198,9 @@ function Build-Tauri {
     }
 }
 
-function Build-Msix {
-    Write-Step "Stage MSIX payload + winapp pack"
+function Stage-MsixPayload {
+    Write-Step "Stage MSIX payload"
 
-    $winapp = Get-Command winapp -ErrorAction SilentlyContinue
-    if (-not $winapp) {
-        throw "winapp CLI not found on PATH. Install it with: winget install microsoft.winappcli"
-    }
-
-    $manifest = Join-Path $SrcTauri "Package.appxmanifest"
-    if (-not (Test-Path $manifest)) {
-        throw "Package.appxmanifest missing at $manifest"
-    }
     $assetsDir = Join-Path $SrcTauri "Assets"
     if (-not (Test-Path $assetsDir)) {
         throw "Assets directory missing at $assetsDir"
@@ -282,14 +285,60 @@ function Build-Msix {
             Remove-Item -LiteralPath $_.FullName -Force
         }
 
-    # Manifest + Assets stay at package root (winapp / MakeAppx convention).
-    Copy-Item -Path $manifest -Destination (Join-Path $MsixPayloadDir "Package.appxmanifest") -Force
+    # Assets stay at package root (winapp / MakeAppx convention).
     Copy-Item -Path $assetsDir -Destination (Join-Path $MsixPayloadDir "Assets") -Recurse -Force
 
     $stagedRuntimeExe = Join-Path $appDir "resources\runtime\office-agent-runtime.exe"
     if (-not (Test-Path $stagedRuntimeExe)) {
         throw "MSIX payload missing sidecar: $stagedRuntimeExe"
     }
+}
+
+function Invoke-WinappPack([string]$DevCert, [string]$MsixOutFile) {
+    Write-Step "winapp pack"
+    # Explicit ASCII --output avoids DisplayName-derived paths; collect into msix-out/.
+    Push-Location $MsixPayloadDir
+    try {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & winapp pack . --cert $DevCert --output $MsixOutFile
+        $packExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
+        if ($packExit -ne 0) { throw "winapp pack failed with exit $packExit" }
+
+        Get-ChildItem -Path . -Filter "*.msix" -ErrorAction SilentlyContinue | ForEach-Object {
+            Move-Item -Path $_.FullName -Destination $MsixOutDir -Force
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    $msixFiles = Get-ChildItem -Path $MsixOutDir -Filter "*.msix" -ErrorAction SilentlyContinue
+    if (-not $msixFiles) {
+        throw "winapp pack reported success but no .msix found in $MsixOutDir"
+    }
+    foreach ($f in $msixFiles) {
+        Write-Host ("MSIX package: " + $f.FullName) -ForegroundColor Green
+    }
+}
+
+function Build-Msix {
+    Write-Step "Build MSIX sideload spike"
+
+    $winapp = Get-Command winapp -ErrorAction SilentlyContinue
+    if (-not $winapp) {
+        throw "winapp CLI not found on PATH. Install it with: winget install microsoft.winappcli"
+    }
+
+    $manifest = Join-Path $SrcTauri "Package.appxmanifest"
+    if (-not (Test-Path $manifest)) {
+        throw "Package.appxmanifest missing at $manifest"
+    }
+    Stage-MsixPayload
+
+    # Manifest stays at package root (winapp / MakeAppx convention).
+    Copy-Item -Path $manifest -Destination (Join-Path $MsixPayloadDir "Package.appxmanifest") -Force
 
     $devCert = Join-Path $MsixOutDir "devcert.pfx"
     $msixOutFile = Join-Path $MsixOutDir "Wenshutong_0.1.0.0_x64.msix"
@@ -311,33 +360,74 @@ function Build-Msix {
         Pop-Location
     }
 
-    Write-Step "winapp pack"
-    # Explicit ASCII --output avoids DisplayName-derived paths; collect into msix-out/.
+    Invoke-WinappPack $devCert $msixOutFile
+    Write-Host ("Dev cert: " + $devCert) -ForegroundColor Green
+}
+
+function Build-MsixStore {
+    Write-Step "Build Store-identity MSIX"
+
+    foreach ($field in @(
+        @{ Name = "StorePackageName"; Value = $StorePackageName },
+        @{ Name = "StorePublisher"; Value = $StorePublisher },
+        @{ Name = "StorePublisherDisplayName"; Value = $StorePublisherDisplayName },
+        @{ Name = "StoreVersion"; Value = $StoreVersion }
+    )) {
+        if ([string]::IsNullOrWhiteSpace($field.Value)) {
+            throw "$($field.Name) must not be empty when using -MsixStore"
+        }
+    }
+    if ($StoreVersion -notmatch '^\d+\.\d+\.\d+\.0$') {
+        throw "StoreVersion must match x.y.z.0 (for example 0.1.0.0)"
+    }
+
+    $winapp = Get-Command winapp -ErrorAction SilentlyContinue
+    if (-not $winapp) {
+        throw "winapp CLI not found on PATH. Install it with: winget install microsoft.winappcli"
+    }
+
+    $storeManifest = Join-Path $SrcTauri "Package.store.appxmanifest"
+    if (-not (Test-Path $storeManifest)) {
+        throw "Package.store.appxmanifest missing at $storeManifest"
+    }
+    Stage-MsixPayload
+
+    $manifestText = Get-Content -Path $storeManifest -Raw
+    $manifestText = $manifestText.
+        Replace("__STORE_PACKAGE_NAME__", $StorePackageName).
+        Replace("__STORE_PUBLISHER__", $StorePublisher).
+        Replace("__STORE_PUBLISHER_DISPLAY_NAME__", $StorePublisherDisplayName).
+        Replace("__STORE_VERSION__", $StoreVersion)
+    if ($manifestText.Contains("__STORE_")) {
+        throw "Store manifest still contains unresolved __STORE_ placeholder(s)"
+    }
+    Set-Content -Path (Join-Path $MsixPayloadDir "Package.appxmanifest") -Value $manifestText -Encoding utf8
+
+    Write-Host "Store Identity Name: $StorePackageName"
+    Write-Host "Store Identity Publisher: $StorePublisher"
+    Write-Host "Store Identity Version: $StoreVersion"
+
+    $devCert = Join-Path $MsixOutDir "store-devcert.pfx"
+    $msixOutFile = Join-Path $MsixOutDir ("Wenshutong_{0}_x64.msix" -f $StoreVersion)
+
+    # Generate from the substituted manifest, allowing winapp to derive the
+    # exact Store Publisher instead of using the spike certificate subject.
+    Write-Step "winapp cert generate"
     Push-Location $MsixPayloadDir
     try {
         $prevEap = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
-        & winapp pack . --cert $devCert --output $msixOutFile
-        $packExit = $LASTEXITCODE
+        & winapp cert generate --if-exists skip --output $devCert
+        $certExit = $LASTEXITCODE
         $ErrorActionPreference = $prevEap
-        if ($packExit -ne 0) { throw "winapp pack failed with exit $packExit" }
-
-        Get-ChildItem -Path . -Filter "*.msix" -ErrorAction SilentlyContinue | ForEach-Object {
-            Move-Item -Path $_.FullName -Destination $MsixOutDir -Force
-        }
+        if ($certExit -ne 0) { throw "winapp cert generate failed with exit $certExit" }
     }
     finally {
         Pop-Location
     }
 
-    $msixFiles = Get-ChildItem -Path $MsixOutDir -Filter "*.msix" -ErrorAction SilentlyContinue
-    if (-not $msixFiles) {
-        throw "winapp pack reported success but no .msix found in $MsixOutDir"
-    }
-    foreach ($f in $msixFiles) {
-        Write-Host ("MSIX package: " + $f.FullName) -ForegroundColor Green
-    }
-    Write-Host ("Dev cert: " + $devCert) -ForegroundColor Green
+    Invoke-WinappPack $devCert $msixOutFile
+    Write-Host ("Store dev cert: " + $devCert) -ForegroundColor Green
 }
 
 Ensure-Python
@@ -360,4 +450,7 @@ else {
 
 if ($Msix) {
     Build-Msix
+}
+if ($MsixStore) {
+    Build-MsixStore
 }
