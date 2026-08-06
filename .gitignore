@@ -44,3 +44,6 @@ optional-skills/gongwen-rag-writing/models/bge-small-zh-v1.5/
 .env
 .env.*
 !.env.example
+
+# Local git worktrees (SDD / agent isolation)
+.worktrees/
