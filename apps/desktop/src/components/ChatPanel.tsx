@@ -13,9 +13,6 @@ import {
   parsePastedPaths,
   pickFiles,
 } from "../lib/tauri";
-import AiContentReportModal, {
-  type AiContentReportTarget,
-} from "./AiContentReportModal";
 import MarkdownMessage from "./MarkdownMessage";
 import "./ChatPanel.css";
 
@@ -117,13 +114,11 @@ function Bubble({
   now,
   workspacePath,
   onToggleSteps,
-  onReport,
 }: {
   message: ChatMessage;
   now: number;
   workspacePath: string | null;
   onToggleSteps?: (messageId: string) => void;
-  onReport?: (message: ChatMessage) => void;
 }) {
   const roleClass =
     message.role === "user"
@@ -144,8 +139,6 @@ function Bubble({
     message.phase === "done" &&
     stepCount > 0 &&
     Boolean(message.stepsExpanded);
-  const canReport =
-    message.role === "assistant" && message.phase === "done" && Boolean(onReport);
 
   return (
     <div className={`message-row message-row--${message.role}`}>
@@ -159,27 +152,14 @@ function Bubble({
         )}
       </div>
 
-      {(canReport || showCollapsed) && (
-        <div className="message-actions">
-          {canReport && (
-            <button
-              type="button"
-              className="steps-toggle"
-              onClick={() => onReport?.(message)}
-            >
-              举报
-            </button>
-          )}
-          {showCollapsed && (
-            <button
-              type="button"
-              className="steps-toggle"
-              onClick={() => onToggleSteps?.(message.id)}
-            >
-              已完成 {stepCount} 步 · 点击展开
-            </button>
-          )}
-        </div>
+      {showCollapsed && (
+        <button
+          type="button"
+          className="steps-toggle"
+          onClick={() => onToggleSteps?.(message.id)}
+        >
+          已完成 {stepCount} 步 · 点击展开
+        </button>
       )}
 
       {showExpandedDone && (
@@ -233,8 +213,6 @@ export default function ChatPanel({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteDraft, setPasteDraft] = useState("");
   const [now, setNow] = useState(() => Date.now());
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportTarget, setReportTarget] = useState<AiContentReportTarget | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const hasPending = useMemo(
     () => messages.some((m) => m.phase === "pending" || m.phase === "live"),
@@ -398,22 +376,9 @@ export default function ChatPanel({
             now={now}
             workspacePath={workspacePath}
             onToggleSteps={onToggleSteps}
-            onReport={(msg) => {
-              setReportTarget({ assistantExcerpt: msg.content });
-              setReportOpen(true);
-            }}
           />
         ))}
       </div>
-
-      <AiContentReportModal
-        open={reportOpen}
-        target={reportTarget}
-        onClose={() => {
-          setReportOpen(false);
-          setReportTarget(null);
-        }}
-      />
 
       <div className="chat-composer">
         {attachedPaths.length > 0 && (
