@@ -104,10 +104,15 @@ Display name:
 - Reserved Store name includes CJK corner quotes: 「文书通」 (U+300C / U+300D), because the unquoted name was unavailable.
 
 Testing:
-- No test account required.
+- No test account required (no sign-in).
 - Contact: wenshutongapp@163.com
 - Generative AI reporting (Store 11.16): In the chat, open any completed assistant reply and click 「举报」; or Settings → 关于 → 「举报不当 AI 内容」. This opens the system mail client to wenshutongapp@163.com with a prefilled report.
-- Suggested path: launch → set model → send one chat → on the assistant reply click 「举报」 (cancel after mail opens) → open a folder → run one skill → open a PDF in workspace and extract/summarize.
+- Model configuration for certification (Settings → 模型):
+  - 选用模型 / Model: deepseek-v4-flash
+  - API Base: https://api.deepseek.com
+  - API Key: __CERT_TEST_API_KEY__
+  - Save, then send one short chat (e.g. “你好”) to verify generative output before testing 「举报」.
+- Suggested path: launch → set model as above → send one chat → on the assistant reply click 「举报」 (cancel after mail opens) → open a folder → run one skill → open a PDF in workspace and extract/summarize.
 ```
 
 ## 7. 失败时

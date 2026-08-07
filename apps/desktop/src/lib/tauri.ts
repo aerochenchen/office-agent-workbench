@@ -101,12 +101,14 @@ export async function openPath(path: string): Promise<void> {
 
 /**
  * Open a mailto: URL with the OS default mail client.
- * Uses plugin-opener in Tauri; falls back to assigning location in browser/dev.
+ * Prefer a real string mailto for Tauri opener (never pass a URL object — IPC can
+ * serialize it as {} and open a blank compose window).
  */
 export async function openMailto(mailtoUrl: string): Promise<void> {
   if (!mailtoUrl.startsWith("mailto:")) {
     throw new Error("无效的邮件链接");
   }
+  // Keep a plain string; do not wrap in `new URL(...)` before invoke.
   if (isTauriRuntime()) {
     const { openUrl } = await import("@tauri-apps/plugin-opener");
     await openUrl(mailtoUrl);

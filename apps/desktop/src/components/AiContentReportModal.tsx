@@ -1,6 +1,9 @@
 import { useEffect, useId, useState } from "react";
 import { APP_VERSION, SUPPORT_EMAIL } from "../lib/brand";
-import { buildAiContentReportMailto } from "../lib/aiContentReport";
+import {
+  buildAiContentReportBody,
+  buildAiContentReportMailto,
+} from "../lib/aiContentReport";
 import { openMailto } from "../lib/tauri";
 import "./AiContentReportModal.css";
 
@@ -37,16 +40,31 @@ export default function AiContentReportModal({ open, target, onClose }: Props) {
     setBusy(true);
     setError(null);
     setStatus(null);
+    const payload = {
+      userNote: note,
+      appVersion: APP_VERSION,
+      assistantExcerpt: target?.assistantExcerpt,
+    };
+    const body = buildAiContentReportBody(payload);
+    const url = buildAiContentReportMailto(payload);
+
     try {
-      const url = buildAiContentReportMailto({
-        userNote: note,
-        appVersion: APP_VERSION,
-        assistantExcerpt: target?.assistantExcerpt,
-      });
-      await openMailto(url);
-      setStatus("已打开邮件客户端，请发送后关闭此窗口。");
+      await navigator.clipboard.writeText(
+        `收件人：${SUPPORT_EMAIL}\n主题：文书通 AI 内容举报\n\n${body}`,
+      );
     } catch {
-      setError(`无法打开邮件客户端。请手动发信至 ${SUPPORT_EMAIL}`);
+      // Clipboard is best-effort; mail open still proceeds.
+    }
+
+    try {
+      await openMailto(url);
+      setStatus(
+        `已打开邮件客户端。收件人应为 ${SUPPORT_EMAIL}；若为空，请粘贴剪贴板内容或手动填写该邮箱后发送。`,
+      );
+    } catch {
+      setError(
+        `无法打开邮件客户端。请手动发信至 ${SUPPORT_EMAIL}（举报正文已尽量复制到剪贴板）。`,
+      );
     } finally {
       setBusy(false);
     }
@@ -67,6 +85,12 @@ export default function AiContentReportModal({ open, target, onClose }: Props) {
           <p className="ai-report-lead">
             若助手生成的内容不当、有害或违反使用规范，可通过邮件向开发者举报。我们会根据举报采取适当处理。
           </p>
+          <div className="ai-report-recipient">
+            <span className="field-label">举报邮箱</span>
+            <div className="ai-report-recipient-value" aria-label="举报邮箱">
+              {SUPPORT_EMAIL}
+            </div>
+          </div>
           <label className="field-label" htmlFor={noteId}>
             说明（可选）
           </label>
