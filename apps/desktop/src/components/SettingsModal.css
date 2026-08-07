@@ -306,6 +306,12 @@
   align-self: flex-start;
 }
 
+.settings-about-report {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
 .settings-notice-pane {
   flex: 1 1 auto;
   min-width: 0;

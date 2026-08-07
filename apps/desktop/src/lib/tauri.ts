@@ -99,6 +99,22 @@ export async function openPath(path: string): Promise<void> {
   await openNativePath(path);
 }
 
+/**
+ * Open a mailto: URL with the OS default mail client.
+ * Uses plugin-opener in Tauri; falls back to assigning location in browser/dev.
+ */
+export async function openMailto(mailtoUrl: string): Promise<void> {
+  if (!mailtoUrl.startsWith("mailto:")) {
+    throw new Error("无效的邮件链接");
+  }
+  if (isTauriRuntime()) {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(mailtoUrl);
+    return;
+  }
+  window.location.href = mailtoUrl;
+}
+
 /** Load bundled NOTICE text for the in-app read-only license viewer. */
 export async function readOssNoticeText(): Promise<string> {
   if (!isTauriRuntime()) {

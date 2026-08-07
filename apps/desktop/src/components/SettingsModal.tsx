@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { APP_NAME, APP_TAGLINE, APP_VERSION, OSS_CREDITS } from "../lib/brand";
+import { APP_NAME, APP_TAGLINE, APP_VERSION, OSS_CREDITS, SUPPORT_EMAIL } from "../lib/brand";
 import { GUIDE_PILLARS } from "../lib/guide";
 import type { PermissionMode, RuntimeConfig } from "../lib/types";
 import { readOssNoticeText } from "../lib/tauri";
@@ -15,6 +15,7 @@ import {
   type UiFontScale,
   type UiTheme,
 } from "../lib/uiPreferences";
+import AiContentReportModal from "./AiContentReportModal";
 import "./SettingsModal.css";
 
 interface Props {
@@ -82,6 +83,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   const [noticeBusy, setNoticeBusy] = useState(false);
   const [noticeError, setNoticeError] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -414,6 +416,21 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                   </button>
                   {noticeError ? <p className="field-error">{noticeError}</p> : null}
                 </div>
+
+                <div className="settings-about-report">
+                  <div className="settings-about-oss-label">生成式 AI 内容</div>
+                  <p className="settings-about-oss-lead">
+                    助手回复由您配置的模型生成。若内容不当或有害，可向开发者举报（
+                    {SUPPORT_EMAIL}）。
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn--ghost settings-about-notice-btn"
+                    onClick={() => setReportOpen(true)}
+                  >
+                    举报不当 AI 内容
+                  </button>
+                </div>
               </section>
             )}
           </div>
@@ -447,6 +464,11 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
           )}
         </div>
       </div>
+      <AiContentReportModal
+        open={reportOpen}
+        target={null}
+        onClose={() => setReportOpen(false)}
+      />
     </div>
   );
 }

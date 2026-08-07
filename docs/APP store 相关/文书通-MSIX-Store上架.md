@@ -28,7 +28,7 @@
 | 项 | 值 |
 |----|-----|
 | 隐私政策 | https://aerochenchen.github.io/wenshutong-privacy/ |
-| 支持邮箱 | wenshutong@163.com |
+| 支持邮箱 | wenshutongapp@163.com |
 | 类别 | Productivity |
 | 收集个人信息 | 是 |
 | 生成式 AI | 是 |
@@ -105,8 +105,9 @@ Display name:
 
 Testing:
 - No test account required.
-- Contact: wenshutong@163.com
-- Suggested path: launch → set model → send one chat → open a folder → run one skill → open a PDF in workspace and extract/summarize.
+- Contact: wenshutongapp@163.com
+- Generative AI reporting (Store 11.16): In the chat, open any completed assistant reply and click 「举报」; or Settings → 关于 → 「举报不当 AI 内容」. This opens the system mail client to wenshutongapp@163.com with a prefilled report.
+- Suggested path: launch → set model → send one chat → on the assistant reply click 「举报」 (cancel after mail opens) → open a folder → run one skill → open a PDF in workspace and extract/summarize.
 ```
 
 ## 7. 失败时

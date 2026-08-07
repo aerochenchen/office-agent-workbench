@@ -7,6 +7,9 @@ export const WINDOW_TITLE = APP_NAME;
 /** Shown in About; keep in sync with package.json / tauri.conf.json version. */
 export const APP_VERSION = "0.1.0";
 
+/** Support / AI-content report mailbox (Store 11.16). */
+export const SUPPORT_EMAIL = "wenshutongapp@163.com";
+
 /** Key OSS attributions for the in-app About block (full list ships as NOTICE). */
 export const OSS_CREDITS: ReadonlyArray<{ name: string; license: string }> = [
   { name: "Tauri", license: "Apache-2.0 / MIT" },

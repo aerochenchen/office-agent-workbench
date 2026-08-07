@@ -1,0 +1,39 @@
+.ai-report-overlay {
+  z-index: 60;
+}
+
+.ai-report-modal {
+  width: min(440px, 92vw);
+}
+
+.ai-report-lead {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.ai-report-note {
+  width: 100%;
+  resize: vertical;
+  min-height: 5.5rem;
+  margin-top: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.ai-report-note:focus {
+  outline: 2px solid var(--accent-teal);
+  outline-offset: 1px;
+}
+
+.ai-report-status {
+  margin: var(--space-2) 0 0;
+  color: var(--accent-teal);
+  font-size: 0.85rem;
+}
