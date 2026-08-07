@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Document I/O: normalize legacy Office formats and extract text units.
 
-- .doc  → .docx (soffice / textutil / optional Word COM later)
+- .doc  → .docx (soffice / textutil / Word COM on Windows)
 - .xls  → .xlsx (xlrd → openpyxl)
 - extract: .docx / .xlsx / .pdf → list of units with stable unit_id anchors
 """
@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import shutil
 import subprocess
@@ -224,6 +225,33 @@ def _which(names: list[str]) -> str | None:
     return None
 
 
+def _find_soffice() -> str | None:
+    """Locate LibreOffice soffice on PATH or common Windows install dirs."""
+    found = _which(["soffice", "libreoffice", "soffice.exe"])
+    if found:
+        return found
+    if not sys.platform.startswith("win"):
+        return None
+    program_files = [
+        os.environ.get("PROGRAMFILES"),
+        os.environ.get("PROGRAMFILES(X86)"),
+        os.environ.get("LOCALAPPDATA"),
+    ]
+    rels = [
+        Path("LibreOffice") / "program" / "soffice.exe",
+        Path("Programs") / "LibreOffice" / "program" / "soffice.exe",
+    ]
+    for root in program_files:
+        if not root:
+            continue
+        base = Path(root)
+        for rel in rels:
+            candidate = base / rel
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
 def _normalize_doc(src: Path, workspace_root: Path, *, force: bool) -> Path:
     dest = _target_normalized(src, workspace_root, ".docx")
     if dest.is_file() and not force and dest.stat().st_mtime >= src.stat().st_mtime:
@@ -232,7 +260,7 @@ def _normalize_doc(src: Path, workspace_root: Path, *, force: bool) -> Path:
 
     errors: list[str] = []
 
-    soffice = _which(["soffice", "libreoffice"])
+    soffice = _find_soffice()
     if soffice:
         try:
             _run_soffice_convert(soffice, src, dest)
@@ -269,7 +297,7 @@ def _normalize_doc(src: Path, workspace_root: Path, *, force: bool) -> Path:
     detail = "; ".join(errors) if errors else "no converter available"
     raise DocIOError(
         f"无法将 .doc 转为 .docx（{detail}）。"
-        "请安装 LibreOffice，或在本机将文件另存为 .docx 后重试。"
+        "请安装 LibreOffice 或 Microsoft Word，或在本机将文件另存为 .docx 后重试。"
     )
 
 
@@ -298,7 +326,13 @@ def _run_soffice_convert(soffice: str, src: Path, dest: Path) -> None:
 
 
 def _normalize_doc_win32(src: Path, dest: Path) -> bool:
-    """Best-effort Word COM conversion on Windows."""
+    """Best-effort Word COM conversion on Windows (pywin32, then PowerShell)."""
+    if _normalize_doc_win32_pywin32(src, dest):
+        return True
+    return _normalize_doc_win32_powershell(src, dest)
+
+
+def _normalize_doc_win32_pywin32(src: Path, dest: Path) -> bool:
     try:
         import win32com.client  # type: ignore
     except ImportError:
@@ -312,6 +346,37 @@ def _normalize_doc_win32(src: Path, dest: Path) -> bool:
         doc.Close(False)
     finally:
         word.Quit()
+    return dest.is_file()
+
+
+def _normalize_doc_win32_powershell(src: Path, dest: Path) -> bool:
+    """Drive Word.Application via PowerShell when pywin32 is unavailable."""
+    ps = shutil.which("powershell") or shutil.which("pwsh")
+    if not ps:
+        return False
+    # Pass paths via env to avoid quoting/encoding pitfalls with Chinese paths.
+    script = (
+        "$ErrorActionPreference = 'Stop'; "
+        "$src = $env:WST_DOC_SRC; $dest = $env:WST_DOC_DEST; "
+        "$word = New-Object -ComObject Word.Application; "
+        "$word.Visible = $false; $word.DisplayAlerts = 0; "
+        "try { "
+        "$doc = $word.Documents.Open($src, $false, $true); "
+        "try { $doc.SaveAs2([string]$dest, 16) } "
+        "finally { $doc.Close($false) } "
+        "} finally { $word.Quit() }"
+    )
+    env = os.environ.copy()
+    env["WST_DOC_SRC"] = str(src)
+    env["WST_DOC_DEST"] = str(dest)
+    subprocess.run(
+        [ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env=env,
+    )
     return dest.is_file()
 
 
@@ -611,6 +676,47 @@ def _pdf_page_has_text_layer(page: Any) -> bool:
         return bool((page.extract_text() or "").strip())
 
 
+def _pdf_extract_text_pdfium(path: Path, page_index: int, *, _doc_cache: dict[str, Any] | None = None) -> str:
+    """Fallback text extract via PDFium (often more robust for CJK encodings)."""
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return ""
+
+    cache_key = str(path.resolve())
+    owns_doc = False
+    doc = None
+    raw = ""
+    try:
+        if _doc_cache is not None and cache_key in _doc_cache:
+            doc = _doc_cache[cache_key]
+        else:
+            # Read bytes so non-ASCII Windows paths do not trip the native loader.
+            doc = pdfium.PdfDocument(path.read_bytes())
+            owns_doc = True
+            if _doc_cache is not None:
+                _doc_cache[cache_key] = doc
+                owns_doc = False
+        if page_index < 0 or page_index >= len(doc):
+            return ""
+        page = doc[page_index]
+        textpage = page.get_textpage()
+        try:
+            raw = textpage.get_text_bounded() or ""
+        finally:
+            textpage.close()
+            page.close()
+    except Exception:  # noqa: BLE001
+        return ""
+    finally:
+        if owns_doc and doc is not None:
+            try:
+                doc.close()
+            except Exception:  # noqa: BLE001
+                pass
+    return raw.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
 def extract_pdf(
     path: Path,
     doc_key: str,
@@ -644,6 +750,7 @@ def extract_pdf(
     truncated = False
     unit_i = 0
     no_text_pages: list[int] = []
+    pdfium_cache: dict[str, Any] = {}
 
     def _append(kind: str, locator: str, text: str, meta: dict[str, Any]) -> bool:
         nonlocal unit_i, total_chars, truncated
@@ -697,7 +804,8 @@ def extract_pdf(
                 {"page": page_no, "granularity": "section"},
             )
 
-    with pdfplumber.open(str(path)) as pdf:
+    # Prefer Path over str so Unicode paths stay intact on Windows.
+    with pdfplumber.open(path) as pdf:
         for page_no, page in enumerate(pdf.pages, start=1):
             page_units_start = len(units)
             table_objs = []
@@ -732,7 +840,17 @@ def extract_pdf(
                 body = page.extract_text() or ""
 
             body = (body or "").strip()
-            has_text_layer = _pdf_page_has_text_layer(page)
+            # Non-empty extract_text is sufficient proof of a text layer; page.chars
+            # can be empty for some CJK / custom-encoding digital PDFs.
+            has_text_layer = bool(body) or _pdf_page_has_text_layer(page)
+            if not has_text_layer:
+                pdfium_body = _pdf_extract_text_pdfium(
+                    path, page_no - 1, _doc_cache=pdfium_cache
+                )
+                if pdfium_body:
+                    body = pdfium_body
+                    has_text_layer = True
+
             if not has_text_layer:
                 no_text_pages.append(page_no)
             else:
@@ -779,6 +897,10 @@ def extract_pdf(
                 and not truncated
             ):
                 fallback_body = (page.extract_text() or "").strip()
+                if not fallback_body:
+                    fallback_body = _pdf_extract_text_pdfium(
+                        path, page_no - 1, _doc_cache=pdfium_cache
+                    )
                 _append_body(page_no, fallback_body)
 
             page.flush_cache()
@@ -787,6 +909,12 @@ def extract_pdf(
                 break
             if truncated:
                 break
+
+    for cached in pdfium_cache.values():
+        try:
+            cached.close()
+        except Exception:  # noqa: BLE001
+            pass
 
     if no_text_pages:
         ranges: list[str] = []

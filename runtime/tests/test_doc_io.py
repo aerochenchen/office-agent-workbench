@@ -225,8 +225,44 @@ def test_normalize_doc_fails_clearly_without_converter(tmp_path: Path):
     src.write_bytes(b"fake")
     with patch("office_agent.doc_io._which", return_value=None):
         with patch("office_agent.doc_io.shutil.which", return_value=None):
-            with pytest.raises(DocIOError, match="无法将 .doc"):
-                normalize_path(src, tmp_path, force=True)
+            with patch("office_agent.doc_io._find_soffice", return_value=None):
+                with patch(
+                    "office_agent.doc_io._normalize_doc_win32", return_value=False
+                ):
+                    with pytest.raises(DocIOError, match="无法将 .doc"):
+                        normalize_path(src, tmp_path, force=True)
+
+
+def test_find_soffice_checks_windows_install_paths(tmp_path: Path, monkeypatch):
+    fake = tmp_path / "LibreOffice" / "program" / "soffice.exe"
+    fake.parent.mkdir(parents=True)
+    fake.write_bytes(b"x")
+    monkeypatch.setattr("office_agent.doc_io.sys.platform", "win32")
+    monkeypatch.setenv("PROGRAMFILES", str(tmp_path))
+    monkeypatch.delenv("PROGRAMFILES(X86)", raising=False)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    with patch("office_agent.doc_io._which", return_value=None):
+        from office_agent.doc_io import _find_soffice
+
+        assert _find_soffice() == str(fake)
+
+
+def test_normalize_doc_uses_windows_word_com(tmp_path: Path, monkeypatch):
+    src = tmp_path / "old.doc"
+    src.write_bytes(b"fake-doc-bytes")
+    dest = tmp_path / ".office-agent" / "work" / "normalized" / "old.docx"
+
+    def fake_win32(src_path: Path, dest_path: Path) -> bool:
+        _write_docx(dest_path)
+        return True
+
+    monkeypatch.setattr("office_agent.doc_io.sys.platform", "win32")
+    with patch("office_agent.doc_io._find_soffice", return_value=None):
+        with patch("office_agent.doc_io._normalize_doc_win32", side_effect=fake_win32):
+            modern, fmt, _ = normalize_path(src, tmp_path, force=True)
+    assert fmt == "docx"
+    assert modern == dest
+    assert dest.is_file()
 
 
 def test_workspace_extract_tool(tmp_path: Path, monkeypatch):
@@ -469,3 +505,73 @@ def test_workspace_extract_pdf_tool(tmp_path: Path, monkeypatch):
     assert r["units"]
     assert r["units"][0]["unit_id"].startswith(r["doc_key"] + "#u")
     assert any("42" in u["text"] for u in r["units"])
+
+
+def test_extract_pdf_uses_body_even_if_chars_empty(tmp_path: Path, monkeypatch):
+    """pdfminer chars may be empty on some CJK PDFs while extract_text still works."""
+    import pdfplumber
+
+    class _FakePage:
+        chars: list[dict[str, str]] = []
+
+        def find_tables(self):
+            return []
+
+        def extract_text(self):
+            return "正文仍可读 128"
+
+        def flush_cache(self):
+            pass
+
+    class _FakePdf:
+        pages = [_FakePage()]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(pdfplumber, "open", lambda _path: _FakePdf())
+    units, _truncated, warnings = extract_pdf(
+        tmp_path / "fake.pdf", "abc123", max_chars=8000, max_units=50
+    )
+    assert any("128" in u.text for u in units)
+    assert not any("无文本层" in w for w in warnings)
+
+
+def test_extract_pdf_falls_back_to_pdfium_when_pdfminer_empty(
+    tmp_path: Path, monkeypatch
+):
+    """When pdfminer sees no text layer, try pypdfium2 before calling it a scan."""
+    import pdfplumber
+
+    src = tmp_path / "fallback.pdf"
+    _write_pdf_pages(src, ["PDFium recovered text 99"])
+
+    class _FakePage:
+        chars: list[dict[str, str]] = []
+
+        def find_tables(self):
+            return []
+
+        def extract_text(self):
+            return ""
+
+        def flush_cache(self):
+            pass
+
+    class _FakePdf:
+        pages = [_FakePage()]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(pdfplumber, "open", lambda _path: _FakePdf())
+    result = extract_file(src, tmp_path)
+    assert result.ok is True
+    assert any("99" in u.text for u in result.units)
+    assert not any("无文本层" in w for w in result.warnings)
