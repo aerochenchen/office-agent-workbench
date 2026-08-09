@@ -137,6 +137,16 @@
   background: transparent;
 }
 
+.btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  line-height: 0;
+}
+
 .btn--full {
   width: 100%;
   justify-content: center;

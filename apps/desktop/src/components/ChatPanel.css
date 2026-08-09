@@ -574,12 +574,18 @@
 .chat-input {
   flex: 1 1 auto;
   min-width: 0;
+  box-sizing: border-box;
+  /* 静息约 2 行；长文自动增高，最多约 8 行后内部滚动 */
+  min-height: calc(3em + 2 * var(--space-2));
+  max-height: min(calc(12em + 2 * var(--space-2)), 36vh);
+  overflow-y: auto;
   resize: none;
   border: none;
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-2) var(--space-2) 0;
   background: transparent;
   color: var(--ink-0);
+  font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 

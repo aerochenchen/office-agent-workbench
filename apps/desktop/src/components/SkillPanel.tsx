@@ -40,6 +40,10 @@ export default function SkillPanel({
     [],
   );
   const [openBranches, setOpenBranches] = useState<Set<string>>(defaultOpen);
+  const enabledCount = useMemo(
+    () => skills.filter((s) => s.enabled).length,
+    [skills],
+  );
 
   function toggleBranch(id: string) {
     setOpenBranches((prev) => {
@@ -107,6 +111,10 @@ export default function SkillPanel({
         </div>
 
         <div className="skill-panel-footer">
+          <div className="skill-panel-footer-label">技能</div>
+          <div className="skill-panel-footer-meta">
+            {enabledCount > 0 ? `已启用 ${enabledCount} 项` : "暂无启用"}
+          </div>
           <button
             type="button"
             className="btn btn--ghost btn--full"

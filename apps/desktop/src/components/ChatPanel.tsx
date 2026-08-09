@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, LiveStep } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
 import {
@@ -239,6 +239,13 @@ export default function ChatPanel({
     });
   }
 
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
+
   useEffect(() => {
     if (!draftPrefill) return;
     applyPrefill(draftPrefill);
@@ -477,7 +484,7 @@ export default function ChatPanel({
               }
               value={draft}
               disabled={disabled}
-              rows={2}
+              rows={1}
               onChange={(e) => setDraft(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {

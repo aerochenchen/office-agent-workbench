@@ -603,10 +603,33 @@ function App() {
           </button>
           <button
             type="button"
-            className="btn btn--ghost"
+            className="btn btn--ghost btn--icon"
             onClick={() => setSkillsCollapsed((v) => !v)}
+            aria-label={skillsCollapsed ? "展开办事能力" : "收起办事能力"}
+            title={skillsCollapsed ? "展开办事能力" : "收起办事能力"}
+            aria-pressed={!skillsCollapsed}
           >
-            {skillsCollapsed ? "展开办事能力" : "收起办事能力"}
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+              <rect
+                x="1.5"
+                y="2.5"
+                width="13"
+                height="11"
+                rx="1"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.1"
+              />
+              <path
+                d="M10.5 2.5v11"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.1"
+              />
+              {!skillsCollapsed ? (
+                <rect x="11" y="3.5" width="2.5" height="9" fill="currentColor" opacity="0.35" />
+              ) : null}
+            </svg>
           </button>
           <button type="button" className="btn btn--ghost" onClick={() => setSettingsOpen(true)}>
             设置

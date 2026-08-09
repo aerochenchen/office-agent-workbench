@@ -162,6 +162,24 @@
   flex: 0 0 auto;
   border-top: 1px solid var(--line-0);
   padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--paper-1);
+}
+
+.skill-panel-footer-label {
+  font-size: var(--font-size-xs);
+  color: var(--ink-2);
+}
+
+.skill-panel-footer-meta {
+  font-size: var(--font-size-xs);
+  color: var(--ink-1);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .skill-card {
