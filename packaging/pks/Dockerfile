@@ -8,7 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl xz-utils build-essential pkg-config \
     libwebkit2gtk-4.1-dev librsvg2-dev patchelf \
     libssl-dev libgtk-3-dev libayatana-appindicator3-dev \
-    python3 python3-pip python3-venv \
+    software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv python3.11-dev \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Ubuntu 22.04 apt node is <18; install Node 20 LTS official binary (arm64).

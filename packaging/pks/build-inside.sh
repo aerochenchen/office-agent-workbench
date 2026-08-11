@@ -13,7 +13,10 @@ OUT="${PACKAGING}/dist/pks/out"
 mkdir -p "${OUT}" "${PACKAGING}/dist"
 
 echo "==> Python venv + runtime deps"
-python3 -m venv "${VENV}"
+PYTHON="${PYTHON:-python3.11}"
+"${PYTHON}" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' \
+  || { echo "Python 3.11+ required (set PYTHON=... if needed)." >&2; exit 1; }
+"${PYTHON}" -m venv "${VENV}"
 # shellcheck disable=SC1091
 source "${VENV}/bin/activate"
 pip install -U pip wheel
