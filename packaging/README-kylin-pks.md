@@ -55,6 +55,7 @@ packaging/dist/pks/wenshutong-pks-<version>-aarch64/
 ├── install-offline.sh
 ├── deps.manifest
 ├── deps/              # 若有预下载 .deb
+├── fixtures/          # 若 packaging/pks/fixtures 存在则自动拷入
 └── README-安装说明.txt
 ```
 
@@ -64,13 +65,7 @@ packaging/dist/pks/wenshutong-pks-<version>-aarch64/
 
 ## 验收样例材料
 
-出包后，请将仓库内样例一并放入分发目录（便于 U 盘携带）：
-
-```bash
-VERSION=$(python3 -c "import json;print(json.load(open('apps/desktop/src-tauri/tauri.conf.json'))['version'])")
-BUNDLE="packaging/dist/pks/wenshutong-pks-${VERSION}-aarch64"
-cp -r packaging/pks/fixtures "${BUNDLE}/fixtures"
-```
+`./scripts/build-kylin-pks.sh` 组装 USB 包时，若存在 `packaging/pks/fixtures/`，会自动拷入分发目录的 `fixtures/`（无需手动 `cp`）。
 
 | 文件 | 用途 |
 |------|------|

@@ -47,6 +47,11 @@ cp -f "${PKS}/deps.manifest" "${BUNDLE_DIR}/"
 if compgen -G "${PKS}/deps/*.deb" > /dev/null; then
   cp -f "${PKS}/deps/"*.deb "${BUNDLE_DIR}/deps/"
 fi
+# copy acceptance fixtures if present
+if [[ -d "${PKS}/fixtures" ]]; then
+  rm -rf "${BUNDLE_DIR}/fixtures"
+  cp -R "${PKS}/fixtures" "${BUNDLE_DIR}/fixtures"
+fi
 cat > "${BUNDLE_DIR}/README-安装说明.txt" <<EOF
 文书通 PKS 离线安装（银河麒麟 V10 SP1 aarch64）
 
