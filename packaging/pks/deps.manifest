@@ -1,0 +1,4 @@
+# Offline system .deb packages for 银河麒麟 V10 SP1 aarch64.
+# One package name per line. Filled after first failed install / ldd on device.
+# Example (do not assume these exact names until verified):
+# libwebkit2gtk-4.1-0
