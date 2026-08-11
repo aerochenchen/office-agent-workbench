@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "build-kylin-pks.sh"
+KYLIN_CONF = ROOT / "apps" / "desktop" / "src-tauri" / "tauri.kylin.conf.json"
 
 
 def test_build_kylin_pks_script_exists_and_is_executable_bit_friendly():
@@ -17,3 +18,10 @@ def test_build_kylin_pks_script_exists_and_is_executable_bit_friendly():
     assert "packaging/pks" in text or "packaging/pks/" in text
     assert "wenshutong-pks" in text
     assert "install-offline.sh" in text
+
+
+def test_tauri_kylin_conf_targets_deb():
+    import json
+
+    data = json.loads(KYLIN_CONF.read_text(encoding="utf-8"))
+    assert "deb" in data["bundle"]["targets"]
