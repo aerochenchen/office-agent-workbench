@@ -5,6 +5,7 @@
 // 2. Auto-start the local Python runtime on 127.0.0.1:8765:
 //    - Release: packaged onedir sidecar under resources/runtime/
 //    - Debug / fallback: repo `runtime/.venv` (dev workflow)
+// 3. Stop owned runtime on Exit / ExitRequested; reclaim stale 8765 on launch.
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -12,13 +13,15 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::path::BaseDirectory;
 use tauri::{Manager, RunEvent};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
@@ -29,10 +32,17 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// be terminated when the app exits.
 struct RuntimeProcess(Mutex<Option<Child>>);
 
+/// Windows Job Object: closing this handle kills assigned sidecar processes.
+#[cfg(windows)]
+struct RuntimeJob(Mutex<Option<windows_sys::Win32::Foundation::HANDLE>>);
+
 /// True only when this launch attempted to spawn a runtime child (not when
-/// skipping because 8765 was already up). Used on Exit as a race fallback
-/// when the Child handle is not yet stored in `RuntimeProcess`.
+/// skipping because 8765 was already up and accepted our token). Used on Exit
+/// as a race fallback when the Child handle is not yet stored in `RuntimeProcess`.
 static ATTEMPTED_RUNTIME_SPAWN: AtomicBool = AtomicBool::new(false);
+
+/// Idempotent guard so ExitRequested + Exit only stop once.
+static RUNTIME_CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
 /// Per-launch API token shared with the spawned runtime and the webview.
 struct RuntimeAuthToken(Mutex<String>);
@@ -157,6 +167,42 @@ fn runtime_already_up() -> bool {
     .is_ok()
 }
 
+/// True when something on 8765 accepts `GET /config` with this Bearer token.
+fn runtime_accepts_token(token: &str) -> bool {
+    let Ok(mut stream) = TcpStream::connect_timeout(
+        &"127.0.0.1:8765".parse().unwrap(),
+        Duration::from_millis(500),
+    ) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+    let req = format!(
+        "GET /config HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
+    );
+    if stream.write_all(req.as_bytes()).is_err() {
+        return false;
+    }
+    let mut buf = [0u8; 256];
+    let n = stream.read(&mut buf).unwrap_or(0);
+    if n == 0 {
+        return false;
+    }
+    let head = String::from_utf8_lossy(&buf[..n]);
+    head.starts_with("HTTP/1.1 200") || head.starts_with("HTTP/1.0 200")
+}
+
+fn wait_runtime_port_free(timeout: Duration) -> bool {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if !runtime_already_up() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(80));
+    }
+    !runtime_already_up()
+}
+
 fn request_runtime_shutdown() {
     if let Ok(mut stream) =
         TcpStream::connect_timeout(&"127.0.0.1:8765".parse().unwrap(), Duration::from_millis(500))
@@ -180,6 +226,27 @@ fn stop_child(child: &mut Child) {
             let _ = child.wait();
         }
     }
+}
+
+/// Stop the runtime we own this launch. Idempotent across ExitRequested + Exit.
+fn stop_owned_runtime(app: &tauri::AppHandle) {
+    if RUNTIME_CLEANUP_DONE.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    log_line("[office-agent] stop_owned_runtime: cleaning up");
+    if let Some(state) = app.try_state::<RuntimeProcess>() {
+        if let Ok(mut guard) = state.0.lock() {
+            if let Some(mut child) = guard.take() {
+                stop_child(&mut child);
+                return;
+            }
+        }
+    }
+    if ATTEMPTED_RUNTIME_SPAWN.load(Ordering::SeqCst) {
+        // Spawn raced ahead of Mutex store — shut down our child.
+        request_runtime_shutdown();
+    }
+    // Else: skipped spawn (external runtime accepted our token) — leave 8765 alone.
 }
 
 fn sidecar_exe_name() -> &'static str {
@@ -252,6 +319,61 @@ fn find_bundled_dir(app: &tauri::AppHandle, sidecar: &Path) -> Option<PathBuf> {
     }
     candidates.into_iter().find(|p| p.is_dir())
 }
+
+#[cfg(windows)]
+fn assign_child_to_kill_job(app: &tauri::AppHandle, child: &Child) {
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    let Some(job_state) = app.try_state::<RuntimeJob>() else {
+        return;
+    };
+    let Ok(mut guard) = job_state.0.lock() else {
+        return;
+    };
+
+    unsafe {
+        if guard.is_none() {
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if job.is_null() {
+                log_line("[office-agent] CreateJobObjectW failed");
+                return;
+            }
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            let ok = SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const _,
+                std::mem::size_of_val(&info) as u32,
+            );
+            if ok == 0 {
+                log_line("[office-agent] SetInformationJobObject failed");
+                CloseHandle(job);
+                return;
+            }
+            *guard = Some(job);
+            log_line("[office-agent] created Job Object (KILL_ON_JOB_CLOSE)");
+        }
+
+        let Some(job) = *guard else {
+            return;
+        };
+        let process: HANDLE = child.as_raw_handle() as HANDLE;
+        if AssignProcessToJobObject(job, process) == 0 {
+            log_line("[office-agent] AssignProcessToJobObject failed (sidecar may orphan on hard kill)");
+        } else {
+            log_line("[office-agent] sidecar assigned to Job Object");
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn assign_child_to_kill_job(_app: &tauri::AppHandle, _child: &Child) {}
 
 /// Production path: onedir sidecar staged under Tauri resources.
 fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
@@ -357,8 +479,17 @@ fn try_spawn_venv(api_token: &str) -> Option<Child> {
 /// user starts it manually (see README).
 fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
     if runtime_already_up() {
-        log_line("[office-agent] runtime already listening on 127.0.0.1:8765 — skip auto-start");
-        return None;
+        if runtime_accepts_token(api_token) {
+            log_line("[office-agent] runtime already listening on 127.0.0.1:8765 — skip auto-start");
+            return None;
+        }
+        log_line(
+            "[office-agent] stale runtime on 127.0.0.1:8765 (token rejected) — reclaiming",
+        );
+        request_runtime_shutdown();
+        if !wait_runtime_port_free(Duration::from_secs(3)) {
+            log_line("[office-agent] port 8765 still busy after reclaim shutdown; spawn may fail");
+        }
     }
 
     // Mark ownership before spawn so Exit can shut down even if the Child
@@ -366,14 +497,21 @@ fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
     ATTEMPTED_RUNTIME_SPAWN.store(true, Ordering::SeqCst);
 
     // Release builds prefer the packaged sidecar; debug keeps the fast venv loop.
-    if !cfg!(debug_assertions) {
+    let child = if !cfg!(debug_assertions) {
         if let Some(child) = try_spawn_sidecar(app, api_token) {
-            return Some(child);
+            Some(child)
+        } else {
+            log_line("[office-agent] sidecar unavailable — trying local .venv fallback");
+            try_spawn_venv(api_token)
         }
-        log_line("[office-agent] sidecar unavailable — trying local .venv fallback");
-    }
+    } else {
+        try_spawn_venv(api_token)
+    };
 
-    try_spawn_venv(api_token)
+    if let Some(ref c) = child {
+        assign_child_to_kill_job(app, c);
+    }
+    child
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -391,6 +529,10 @@ pub fn run() {
             let api_token = generate_runtime_token();
             app.manage(RuntimeAuthToken(Mutex::new(api_token.clone())));
             app.manage(RuntimeProcess(Mutex::new(None)));
+            #[cfg(windows)]
+            {
+                app.manage(RuntimeJob(Mutex::new(None)));
+            }
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let child = try_spawn_runtime(&handle, &api_token);
@@ -407,18 +549,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            if let RunEvent::Exit = event {
-                if let Some(state) = app_handle.try_state::<RuntimeProcess>() {
-                    if let Ok(mut guard) = state.0.lock() {
-                        if let Some(mut child) = guard.take() {
-                            stop_child(&mut child);
-                        } else if ATTEMPTED_RUNTIME_SPAWN.load(Ordering::SeqCst) {
-                            // Spawn raced ahead of Mutex store — shut down our child.
-                            request_runtime_shutdown();
-                        }
-                        // Else: skipped spawn (runtime already up) — leave 8765 alone.
-                    }
+            match event {
+                RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+                    stop_owned_runtime(app_handle);
                 }
+                _ => {}
             }
         });
 }
