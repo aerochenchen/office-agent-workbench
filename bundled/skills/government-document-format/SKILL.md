@@ -1,6 +1,6 @@
 ---
 name: government-document-format
-display_name: 公文格式排版
+display_name: 公文排版
 description: 对工作区内 .docx 按 GB/T 9704-2012 做党政机关公文排版（结构角色需先判定）。
 version: 2.1.1
 tier: light
@@ -22,7 +22,7 @@ target_file_type: .docx
 required_tools: python-docx
 ---
 
-# 公文格式排版
+# 公文排版
 
 依据 GB/T 9704-2012。**禁止**跳过结构分析直接跑排版脚本：层次标号与字体绑定靠语义判断，脚本只按已标注角色施加样式。
 

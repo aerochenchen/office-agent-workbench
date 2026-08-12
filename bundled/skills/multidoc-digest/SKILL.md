@@ -1,6 +1,6 @@
 ---
 name: multidoc-digest
-display_name: 批量文档整理
+display_name: 多份汇总
 description: 把几十份 Word 材料汇总成一份带出处的报告。
 version: 1.1.0
 tier: light
@@ -12,6 +12,7 @@ shared_scripts:
   - format_gongwen
 category: productivity
 trigger_phrases:
+  - 多份汇总
   - 批量文档整理
   - 汇总报告
   - 材料汇总
@@ -25,7 +26,7 @@ target_file_type: .docx
 required_tools: python-docx
 ---
 
-# 批量文档整理
+# 多份汇总
 
 面向 **30～50 份** `.docx` 素材：用脚本完成确定性重活（分块、聚类、审计），LLM 只做逐份摘要（map）与主题归并（reduce）。**不改 Runtime**；每脚本调用计 1 步工具、最长 600s。
 

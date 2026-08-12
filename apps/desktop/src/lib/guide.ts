@@ -86,7 +86,7 @@ export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
     children: [
       {
         id: "format-gongwen",
-        label: "公文格式排版",
+        label: "公文排版",
         saying: "把这份稿按公文格式排好",
       },
       {
@@ -187,6 +187,11 @@ export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
         id: "form-fill",
         label: "按表填报",
         saying: "按这个空白表，用文件夹里的材料填好",
+      },
+      {
+        id: "chart-generation",
+        label: "图表生成",
+        saying: "把这张表做成最合适的图表，方便汇报展示",
       },
     ],
   },

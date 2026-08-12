@@ -53,6 +53,7 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
         "sheet-to-brief",
         "one-to-three",
         "brief-deck",
+        "chart-generation",
         "skill-builder",
     }
     skills: list = []
@@ -71,12 +72,12 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     ids = {s["id"] for s in skills}
     assert expected.issubset(ids)
     gongwen = next(s for s in skills if s["id"] == "government-document-format")
-    assert gongwen["name"] == "公文格式排版"
-    assert gongwen.get("display_name") == "公文格式排版"
+    assert gongwen["name"] == "公文排版"
+    assert gongwen.get("display_name") == "公文排版"
     digest = next(s for s in skills if s["id"] == "multidoc-digest")
-    assert digest.get("display_name") == "批量文档整理"
+    assert digest.get("display_name") == "多份汇总"
     visual = next(s for s in skills if s["id"] == "office-visual-design")
-    assert visual.get("display_name") == "办公视觉设计"
+    assert visual.get("display_name") == "正式配色"
     proof = next(s for s in skills if s["id"] == "doc-proofread")
     assert proof.get("display_name") == "通篇校对"
     diff_review = next(s for s in skills if s["id"] == "doc-diff-review")
@@ -91,6 +92,8 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert one.get("display_name") == "一文三用"
     deck = next(s for s in skills if s["id"] == "brief-deck")
     assert deck.get("display_name") == "汇报成套"
+    chart = next(s for s in skills if s["id"] == "chart-generation")
+    assert chart.get("display_name") == "图表生成"
     assert (tmp_path / "shared-scripts" / "format_gongwen.py").is_file()
     assert (tmp_path / "shared-scripts" / "docx_diff.py").is_file()
     assert (tmp_path / "skills" / "government-document-format" / "SKILL.md").is_file()
@@ -103,6 +106,10 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert (tmp_path / "skills" / "sheet-to-brief" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "one-to-three" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "brief-deck" / "scripts" / "build_pptx.py").is_file()
+    assert (tmp_path / "skills" / "chart-generation" / "SKILL.md").is_file()
+    assert (
+        tmp_path / "skills" / "chart-generation" / "references" / "chart-catalog.md"
+    ).is_file()
 
 
 def test_seed_does_not_clobber_user_skill(tmp_path: Path, monkeypatch):

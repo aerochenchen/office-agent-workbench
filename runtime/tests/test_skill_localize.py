@@ -42,7 +42,7 @@ def test_needs_zh_display_false_when_chinese_name():
         id="government-document-format",
         name="government-document-format",
         description="公文排版",
-        display_name="公文格式排版",
+        display_name="公文排版",
     )
     assert needs_zh_display(meta) is False
 

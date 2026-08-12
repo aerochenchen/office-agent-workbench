@@ -18,7 +18,7 @@
 - [ ] 安装目录中的 `文书通.exe` 显示同一套图标
 - [ ] 首次启动后 `http://127.0.0.1:8765/health` 返回 `{"ok":true}`（或 UI 显示 Runtime 在线）
 - [ ] 能打开工作区、发送一条对话（需已配置内网模型网关）
-- [ ] Skill 列表含 `government-document-format`、`meeting-followup`、`material-gap`、`sheet-to-brief`、`one-to-three`、`brief-deck`、`doc-proofread` 等预置技能（bundled seed）
+- [ ] Skill 列表含 `government-document-format`、`meeting-followup`、`material-gap`、`sheet-to-brief`、`one-to-three`、`brief-deck`、`chart-generation`、`doc-proofread` 等预置技能（bundled seed）
 - [ ] `%USERPROFILE%\.office-agent\` 已创建
 
 ## 卸载

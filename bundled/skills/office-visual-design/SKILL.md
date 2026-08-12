@@ -1,6 +1,6 @@
 ---
 name: office-visual-design
-display_name: 办公视觉设计
+display_name: 正式配色
 description: 为机关企事业 PPT 按场合选配色，或按单位主色生成方案并套用。
 version: 1.0.0
 tier: light
@@ -9,6 +9,7 @@ permissions:
   - workspace_write
 category: productivity
 trigger_phrases:
+  - 正式配色
   - 办公视觉设计
   - PPT配色
   - 汇报配色
@@ -19,9 +20,9 @@ trigger_phrases:
 target_file_type: .pptx
 ---
 
-# 办公视觉设计
+# 正式配色
 
-面向机关企事业单位工作人员，为 **PPT 汇报材料**选定或生成一套正式、可读、宜投影的中文视觉方案，并套用到幻灯片。不管红头公文版式（走「公文格式排版」）。
+面向机关企事业单位工作人员，为 **PPT 汇报材料**选定或生成一套正式、可读、宜投影的中文视觉方案，并套用到幻灯片。不管红头公文版式（走「公文排版」）。
 
 ## 何时用 / 何时不用
 

@@ -460,6 +460,7 @@ def _build_system_prompt(catalog: list[dict[str, Any]]) -> str:
         "→ 用脚本写出 `工作成果/*.xlsx` → finish 并带 deliverables；\n"
         "- 一文三用（报告/提纲/答问）优先按 one-to-three；\n"
         "- 汇报提纲/演示文稿/汇报稿优先按 brief-deck（pptx 用其 build_pptx.py）；\n"
+        "- 表格/CSV/Excel/数字转图表、换图型优先按 chart-generation；\n"
         "- PPT 正式配色/换皮仍按 office-visual-design；\n"
         "- 若工作区存在 `.office-agent/glossary.md`，校对、术语统一与起草前应先读取，口径与之对齐；\n"
         "- 读取 .docx/.doc/.xlsx/.xls/.pdf 请用 workspace_extract"

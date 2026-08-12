@@ -9,6 +9,7 @@ export const BUNDLED_SKILL_IDS: ReadonlySet<string> = new Set([
   "sheet-to-brief",
   "one-to-three",
   "brief-deck",
+  "chart-generation",
   "skill-builder",
 ]);
 

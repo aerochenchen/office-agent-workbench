@@ -8,7 +8,7 @@
 |------|------|
 | `apps/desktop/` | Tauri 2 + React 工作台（工作区、对话、Skill 面板） |
 | `runtime/` | 本地 Python Runtime（FastAPI，127.0.0.1），轻量 `requirements.txt` |
-| `bundled/skills/` | 预置轻量 Skill（`tier: light`）：`government-document-format` 公文排版、`multidoc-digest` 批量文档整理、`office-visual-design` 办公视觉设计、`doc-proofread` 通篇校对、`doc-diff-review` 文稿对照、`meeting-followup` 会议督办、`material-gap` 材料摸底、`sheet-to-brief` 表格成文、`one-to-three` 一文三用、`brief-deck` 汇报成套、`skill-builder` 创建技能 |
+| `bundled/skills/` | 预置轻量 Skill（`tier: light`）：`government-document-format` 公文排版、`multidoc-digest` 多份汇总、`office-visual-design` 正式配色、`doc-proofread` 通篇校对、`doc-diff-review` 文稿对照、`meeting-followup` 会议督办、`material-gap` 材料摸底、`sheet-to-brief` 表格成文、`one-to-three` 一文三用、`brief-deck` 汇报成套、`chart-generation` 图表生成、`skill-builder` 创建技能 |
 | `bundled/shared-scripts/` | 共享脚本：`format_gongwen`（排版）、`docx_diff`（两版段落对比） |
 
 标准包**不包含** `optional-skills/gongwen-rag-writing/`、离线 embedding 模型或 Torch 运行时。

@@ -26,17 +26,17 @@ def test_scan_prefers_display_name(tmp_path: Path, monkeypatch):
     skill = tmp_path / "skills" / "government-document-format"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text(
-        "---\nname: government-document-format\ndisplay_name: 公文格式排版\n"
+        "---\nname: government-document-format\ndisplay_name: 公文排版\n"
         "description: 公文排版\ntier: light\n---\n\n# Demo\n",
         encoding="utf-8",
     )
     meta = SkillRegistry().scan()[0]
     assert meta.name == "government-document-format"
-    assert meta.display_name == "公文格式排版"
-    assert meta.ui_name == "公文格式排版"
+    assert meta.display_name == "公文排版"
+    assert meta.ui_name == "公文排版"
     payload = SkillRegistry().meta_payload(meta)
-    assert payload["name"] == "公文格式排版"
-    assert payload["display_name"] == "公文格式排版"
+    assert payload["name"] == "公文排版"
+    assert payload["display_name"] == "公文排版"
 
 
 def test_install_zip_heavy_tier(tmp_path: Path, monkeypatch):
