@@ -24,7 +24,10 @@ pip install -e "${ROOT}/runtime[packaging]"
 
 echo "==> PyInstaller onedir"
 rm -rf "${DIST_RUNTIME}"
-pyinstaller "${PACKAGING}/runtime.spec" --noconfirm --clean
+(
+  cd "${PACKAGING}"
+  python -m PyInstaller "${PACKAGING}/runtime.spec" --noconfirm --clean
+)
 test -x "${DIST_RUNTIME}/office-agent-runtime"
 
 echo "==> Stage resources"
