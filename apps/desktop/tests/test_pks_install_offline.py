@@ -19,3 +19,16 @@ def test_install_offline_script_is_airgap_safe():
     assert "wget " not in lower
     assert "apt-get update" not in lower
     assert "deps" in text
+    assert "dpkg --configure -a" in text
+    assert "sudo dpkg -i" in text
+
+
+def test_rewrite_deb_package_name_script_exists():
+    script = ROOT / "packaging" / "pks" / "rewrite-deb-package-name.sh"
+    text = script.read_text(encoding="utf-8")
+    assert text.startswith("#!")
+    assert "Package:" in text
+    assert "wenshutong" in text
+    assert "dpkg-deb" in text
+    assert "Icon=desktop" in text
+    assert "desktop.png" in text

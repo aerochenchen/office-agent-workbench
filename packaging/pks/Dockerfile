@@ -1,25 +1,35 @@
 # syntax=docker/dockerfile:1
-FROM --platform=linux/arm64 ubuntu:22.04
+# PKS / 银河麒麟 V10 SP1 基线：Ubuntu 20.04 (glibc 2.31) + WebKitGTK 4.0
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    PATH=/root/.cargo/bin:/usr/local/bin:$PATH
+    PATH=/root/.cargo/bin:/usr/local/bin:$PATH \
+    HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= NO_PROXY=* no_proxy=*
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl xz-utils gnupg \
-    build-essential pkg-config \
-    libwebkit2gtk-4.1-dev librsvg2-dev patchelf \
-    libssl-dev libgtk-3-dev libayatana-appindicator3-dev \
-    && mkdir -p /etc/apt/keyrings \
-    && curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF23C5A6CF475977595C89F51BA6932366A755776" \
-      | gpg --batch --yes --dearmor -o /etc/apt/keyrings/deadsnakes.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/deadsnakes.gpg] https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy main" \
-      > /etc/apt/sources.list.d/deadsnakes.list \
-    && apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 python3.11-venv python3.11-dev \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+RUN apt-get update \
+    && for attempt in 1 2 3 4 5; do \
+         apt-get install -y --no-install-recommends --fix-missing -o Acquire::Retries=5 \
+           ca-certificates curl xz-utils gnupg \
+           build-essential pkg-config \
+           libwebkit2gtk-4.0-dev librsvg2-dev patchelf \
+           libssl-dev libgtk-3-dev libappindicator3-dev \
+           libsoup2.4-dev \
+         && break; \
+         echo "apt attempt ${attempt} failed; retrying..." >&2; \
+         apt-get update; \
+         sleep 15; \
+       done \
     && rm -rf /var/lib/apt/lists/*
 
-# Ubuntu 22.04 apt node is <18; install Node 20 LTS official binary (arm64).
+# Standalone CPython 3.11 (arm64) — deadsnakes no longer publishes 3.11 for focal.
+ARG PYTHON_STANDALONE=cpython-3.11.12+20250409-aarch64-unknown-linux-gnu-install_only.tar.gz
+RUN curl -fsSL "https://github.com/astral-sh/python-build-standalone/releases/download/20250409/${PYTHON_STANDALONE}" \
+    | tar -xz -C /opt \
+    && ln -sfn /opt/python /install \
+    && ln -sf /opt/python/bin/python3.11 /usr/local/bin/python3.11 \
+    && ln -sf /opt/python/bin/python3.11 /usr/local/bin/python3 \
+    && /usr/local/bin/python3.11 -c "import encodings; print('python ok')"
+
 ARG NODE_VERSION=20.18.1
 RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.xz" \
     | tar -xJ -C /usr/local --strip-components=1 \

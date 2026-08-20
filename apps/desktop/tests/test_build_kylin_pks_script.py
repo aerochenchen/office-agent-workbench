@@ -25,3 +25,5 @@ def test_tauri_kylin_conf_targets_deb():
 
     data = json.loads(KYLIN_CONF.read_text(encoding="utf-8"))
     assert "deb" in data["bundle"]["targets"]
+    assert data.get("mainBinaryName") == "wenshutong"
+    assert "wenshutong.desktop" in data["bundle"]["linux"]["deb"]["desktopTemplate"]

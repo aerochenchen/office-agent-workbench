@@ -1,4 +1,12 @@
-# Offline system .deb packages for 银河麒麟 V10 SP1 aarch64.
-# One package name per line. Filled after first failed install / ldd on device.
-# Example (do not assume these exact names until verified):
-# libwebkit2gtk-4.1-0
+# Offline system .deb packages for 银河麒麟 V10 SP1 aarch64
+# Source: Ubuntu focal-updates arm64 (http://ports.ubuntu.com/ubuntu-ports)
+# Fetched by packaging/pks/fetch-kylin-deps.sh
+#
+# Runtime target: WebKitGTK 4.0 2.38.x (matches Ubuntu 20.04 PKS builder).
+# Required: webkit_uri_scheme_response_set_http_headers (since 2.36).
+libwebkit2gtk-4.0-37
+libjavascriptcoregtk-4.0-18
+libsoup2.4-1
+# Optional helpers if missing on target (webkit 2.38 Depends):
+bubblewrap
+xdg-dbus-proxy

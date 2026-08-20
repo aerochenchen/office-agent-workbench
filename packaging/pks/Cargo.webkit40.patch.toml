@@ -1,0 +1,12 @@
+# Appended to apps/desktop/src-tauri/Cargo.toml during PKS builds only.
+# Forces WebKitGTK 4.0 + libsoup2 (银河麒麟 V10 SP1 / Ubuntu 20.04).
+
+[patch.crates-io]
+webkit2gtk-sys = { path = "../../../packaging/pks/webkit40-vendor/webkit2gtk-sys" }
+webkit2gtk = { path = "../../../packaging/pks/webkit40-vendor/webkit2gtk" }
+javascriptcore-rs-sys = { path = "../../../packaging/pks/webkit40-vendor/javascriptcore-rs-sys" }
+javascriptcore-rs = { path = "../../../packaging/pks/webkit40-vendor/javascriptcore-rs" }
+wry = { path = "../../../packaging/pks/webkit40-vendor/wry" }
+soup3 = { path = "../../../packaging/pks/webkit40-vendor/soup2" }
+soup3-sys = { path = "../../../packaging/pks/webkit40-vendor/soup2-sys" }
+tauri-runtime-wry = { path = "../../../packaging/pks/webkit40-vendor/tauri-runtime-wry" }

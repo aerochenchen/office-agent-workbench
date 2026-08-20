@@ -514,8 +514,24 @@ fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
     child
 }
 
+/// Phytium / 银河麒麟: WebKitGTK hardware compositing often leaves a process
+/// with no visible window. Prefer software compositing + X11 unless the user
+/// already set overrides.
+#[cfg(target_os = "linux")]
+fn apply_linux_display_defaults() {
+    if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    }
+    if std::env::var_os("GDK_BACKEND").is_none() {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    apply_linux_display_defaults();
+
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
