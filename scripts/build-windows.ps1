@@ -233,7 +233,19 @@ function Build-Tauri {
     Write-Step "Done"
     if (Test-Path $nsisDir) {
         Get-ChildItem $nsisDir -Filter "*.exe" | ForEach-Object {
-            Write-Host ("Installer: " + $_.FullName) -ForegroundColor Green
+            $exe = $_
+            if ($LocalDeploy) {
+                $newName = $exe.Name -replace '^文书通_', '文书通_本地部署_'
+                if ($newName -eq $exe.Name) {
+                    $newName = "文书通_本地部署_" + $exe.Name
+                }
+                $dest = Join-Path $exe.DirectoryName $newName
+                if ($dest -ne $exe.FullName) {
+                    Move-Item -LiteralPath $exe.FullName -Destination $dest -Force
+                    $exe = Get-Item -LiteralPath $dest
+                }
+            }
+            Write-Host ("Installer: " + $exe.FullName) -ForegroundColor Green
         }
     }
     else {

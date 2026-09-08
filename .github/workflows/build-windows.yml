@@ -1,10 +1,16 @@
 # Manual Windows NSIS installer build (文书通_*-setup.exe).
 # Trigger: Actions → Build Windows Installer → Run workflow
 # Download: run summary → Artifacts → wenshutong-windows-nsis
+# 本地部署: 勾选 local_deploy，产物为 文书通_本地部署_*-setup.exe
 name: Build Windows Installer
 
 on:
   workflow_dispatch:
+    inputs:
+      local_deploy:
+        description: "打本地部署版本（禁公网模型，deployment-profile=local）"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -51,12 +57,17 @@ jobs:
 
       - name: Build Windows NSIS installer
         shell: pwsh
-        run: .\scripts\build-windows.ps1
+        run: |
+          if ("${{ inputs.local_deploy }}" -eq "true") {
+            .\scripts\build-windows.ps1 -LocalDeploy
+          } else {
+            .\scripts\build-windows.ps1
+          }
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wenshutong-windows-nsis
+          name: ${{ inputs.local_deploy && 'wenshutong-windows-nsis-local' || 'wenshutong-windows-nsis' }}
           path: apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 14
