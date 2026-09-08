@@ -32,9 +32,20 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// be terminated when the app exits.
 struct RuntimeProcess(Mutex<Option<Child>>);
 
+/// Windows Job Object handle. HANDLE is a raw pointer and is not Send/Sync;
+/// the job is only used from the desktop process and closed on process exit.
+#[cfg(windows)]
+#[derive(Clone, Copy)]
+struct JobHandle(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+unsafe impl Send for JobHandle {}
+#[cfg(windows)]
+unsafe impl Sync for JobHandle {}
+
 /// Windows Job Object: closing this handle kills assigned sidecar processes.
 #[cfg(windows)]
-struct RuntimeJob(Mutex<Option<windows_sys::Win32::Foundation::HANDLE>>);
+struct RuntimeJob(Mutex<Option<JobHandle>>);
 
 /// True only when this launch attempted to spawn a runtime child (not when
 /// skipping because 8765 was already up and accepted our token). Used on Exit
@@ -235,7 +246,7 @@ fn stop_owned_runtime(app: &tauri::AppHandle) {
     }
     log_line("[office-agent] stop_owned_runtime: cleaning up");
     if let Some(state) = app.try_state::<RuntimeProcess>() {
-        if let Ok(mut guard) = state.0.lock() {
+        if let Ok(mut guard) = state.inner().0.lock() {
             if let Some(mut child) = guard.take() {
                 stop_child(&mut child);
                 return;
@@ -332,7 +343,7 @@ fn assign_child_to_kill_job(app: &tauri::AppHandle, child: &Child) {
     let Some(job_state) = app.try_state::<RuntimeJob>() else {
         return;
     };
-    let Ok(mut guard) = job_state.0.lock() else {
+    let Ok(mut guard) = job_state.inner().0.lock() else {
         return;
     };
 
@@ -356,11 +367,11 @@ fn assign_child_to_kill_job(app: &tauri::AppHandle, child: &Child) {
                 CloseHandle(job);
                 return;
             }
-            *guard = Some(job);
+            *guard = Some(JobHandle(job));
             log_line("[office-agent] created Job Object (KILL_ON_JOB_CLOSE)");
         }
 
-        let Some(job) = *guard else {
+        let Some(JobHandle(job)) = *guard else {
             return;
         };
         let process: HANDLE = child.as_raw_handle() as HANDLE;
@@ -596,7 +607,7 @@ pub fn run() {
             std::thread::spawn(move || {
                 let child = try_spawn_runtime(&handle, &api_token);
                 if let Some(state) = handle.try_state::<RuntimeProcess>() {
-                    if let Ok(mut guard) = state.0.lock() {
+                    if let Ok(mut guard) = state.inner().0.lock() {
                         *guard = child;
                     }
                 }
