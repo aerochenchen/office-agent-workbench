@@ -220,6 +220,17 @@ function Build-Tauri {
             Write-Host "Microsoft Store mode: merging $storeConf"
             $tauriArgs += @("--config", "src-tauri/tauri.microsoftstore.conf.json")
         }
+        elseif ($LocalDeploy) {
+            # Intranet/air-gap: embed full WebView2 offline installer (~127MB).
+            # embedBootstrapper still needs Microsoft CDN at install time.
+            $localConf = Join-Path $SrcTauri "tauri.localdeploy.conf.json"
+            if (-not (Test-Path $localConf)) {
+                $ErrorActionPreference = $prevEap
+                throw "Local deploy config missing: $localConf"
+            }
+            Write-Host "Local deploy mode: merging $localConf (offline WebView2)"
+            $tauriArgs += @("--config", "src-tauri/tauri.localdeploy.conf.json")
+        }
         & npx --yes @tauriArgs
         $tauriExit = $LASTEXITCODE
         $ErrorActionPreference = $prevEap
