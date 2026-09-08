@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlparse
 
 from office_agent.config import AppConfig
+from office_agent.deployment import (
+    PROFILE_LOCAL,
+    is_intranet_model_host,
+    model_host_from_api_base,
+)
 
 
 class GatewayError(ValueError):
@@ -28,10 +32,20 @@ class ModelGateway:
         )
 
     def assert_allowed(self) -> None:
-        host = urlparse(self._cfg.api_base).hostname
-        if host is None or host not in self._cfg.allowed_hosts:
+        api_base = (self._cfg.api_base or "").strip()
+        if not api_base:
+            raise GatewayError("未配置模型地址，请在设置中填写后再试")
+        host = model_host_from_api_base(api_base)
+        if host is None or host == "":
+            raise GatewayError("模型地址无效，无法解析主机名")
+        if host not in self._cfg.allowed_hosts:
             raise GatewayError(
                 f"api host not allowlisted: {host!r} (allowed: {self._cfg.allowed_hosts})"
+            )
+        if self._cfg.resolved_profile() == PROFILE_LOCAL and not is_intranet_model_host(host):
+            raise GatewayError(
+                "本地部署版本仅允许本机或内网模型地址，"
+                f"拒绝公网主机 {host!r}"
             )
 
     def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None):

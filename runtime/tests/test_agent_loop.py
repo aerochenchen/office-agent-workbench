@@ -13,6 +13,7 @@ from office_agent.agent_loop import (
     _build_onboarding_system_prompt,
     _build_system_prompt,
     run_agent,
+    tool_schemas_for,
 )
 from office_agent.skills import SkillRegistry
 from office_agent.tools import ToolExecutor
@@ -106,6 +107,20 @@ def test_tool_schema_names_match_executor():
         "finish",
     }
     assert names == expected
+
+
+def test_workspace_script_tool_omitted_when_disabled():
+    names = {s["function"]["name"] for s in tool_schemas_for(allow_workspace_scripts=False)}
+    assert "run_workspace_script" not in names
+    names_on = {s["function"]["name"] for s in tool_schemas_for(allow_workspace_scripts=True)}
+    assert "run_workspace_script" in names_on
+
+
+def test_system_prompt_disables_workspace_scripts_by_default():
+    text = _build_system_prompt([])
+    assert "工作区自定义脚本已关闭" in text
+    enabled = _build_system_prompt([], allow_workspace_scripts=True)
+    assert "用 run_workspace_script 执行" in enabled
 
 
 def test_onboarding_prompt_local_colleague_tone_and_boundaries():
@@ -256,6 +271,7 @@ def test_read_skill_returns_body_to_model(tmp_path: Path, monkeypatch):
     # The workflow body must reach the model on the follow-up request.
     tool_msg = next(m for m in gateway.chat_calls[1]["messages"] if m["role"] == "tool")
     assert "三步纪律" in tool_msg["content"]
+    assert "untrusted_workspace_data" in tool_msg["content"]
 
 
 def test_finish_tool_ends_with_summary(tmp_path: Path, monkeypatch):

@@ -18,6 +18,7 @@ def test_run_workspace_script(tmp_path: Path, monkeypatch):
         SkillRegistry(),
         permission_mode="trust",
         audit=AuditLog(tmp_path / "db" / "a.sqlite"),
+        allow_workspace_scripts=True,
     )
     # Bare name at root is relocated to .office-agent/work/
     result = ex.execute("run_workspace_script", {"path": "hello.py", "args": []})

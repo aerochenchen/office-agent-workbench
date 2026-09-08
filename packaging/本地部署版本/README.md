@@ -1,0 +1,46 @@
+# 文书通 · 本地部署版本
+
+面向**单位内网、断公网**环境的封装路径。与标准安装包共用同一套代码，启动时读取 `deployment-profile=local`，强制下列约束：
+
+- 模型地址只能是本机或内网（拒绝 DeepSeek / OpenAI 等公网 API）
+- 未配置模型前不能对话
+- 默认谨慎模式；工作区自定义脚本不可开启
+- 脚本子进程在 Linux/macOS 上进入无网命名空间（`unshare --net` / `sandbox-exec`）；Windows 上截断输出、缩短超时，并用文件系统狱限制 `open()`
+
+标准（可连公网模型）安装包仍然可用；本目录只用于打「本地部署」安装包。
+
+## 构建
+
+**Windows NSIS**
+
+```powershell
+.\scripts\build-windows.ps1 -LocalDeploy
+```
+
+产物与标准包相同路径（`apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe`），但安装目录 `resources/deployment-profile` 内容为 `local`。桌面壳启动 sidecar 时会设置 `OFFICE_AGENT_DEPLOYMENT=local`。
+
+**macOS DMG**
+
+```bash
+./scripts/build-macos.sh --local-deploy
+```
+
+建议安装包文件名自行加后缀，例如 `文书通_本地部署_1.5.0.dmg`，避免与标准包混淆。
+
+## 安装后
+
+1. 打开设置 → 模型，填写**内网或本机** OpenAI 兼容地址（如 `http://127.0.0.1:8000/v1`）及密钥。
+2. 公网地址会被运行时拒绝，界面会提示「本地部署版本仅允许本机或内网模型地址」。
+3. Windows 上如需进一步禁止脚本进程出站，以管理员运行 `apply-windows-firewall.ps1`（可选；主进程仍需能访问内网模型）。
+4. 银河麒麟可用 `linux-unshare-wrapper.sh` 核验系统是否支持用户命名空间。
+
+## 与标准包的差异（安全）
+
+| 项 | 标准包 | 本地部署版本 |
+|---|---|---|
+| 默认模型 | DeepSeek 公网（须用户改） | 空，必须配内网/本机 |
+| 公网模型 | 允许（用户配置） | 拒绝 |
+| `/chat` 危险工具 | 拒绝（409） | 同左 |
+| 未附加文件读取 | 需确认 | 同左 |
+| 工作区自定义脚本 | 默认关，设置中可开 | 不可开 |
+| 脚本 OS 网络隔离 | 尽力 | 要求（非 Windows） |

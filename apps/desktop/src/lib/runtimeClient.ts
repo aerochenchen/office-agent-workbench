@@ -230,6 +230,8 @@ export function createSseDispatcher(handlers: ChatStreamHandlers): {
           tool: String(data.tool ?? ""),
           summary: String(data.summary ?? ""),
           session_id: String(data.session_id ?? ""),
+          destination: typeof data.destination === "string" ? data.destination : undefined,
+          path: typeof data.path === "string" ? data.path : undefined,
         } satisfies PermissionRequestEvent);
         break;
       case "final":

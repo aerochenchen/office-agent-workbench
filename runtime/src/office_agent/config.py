@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from office_agent.deployment import PROFILE_STANDARD, resolve_deployment_profile
+
 LOCAL_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
 
 
@@ -14,6 +16,12 @@ class AppConfig:
     allowed_hosts: list[str]
     permission_mode: str = "standard"
     max_tool_steps: int = 40
+    deployment_profile: str = PROFILE_STANDARD
+    allow_workspace_scripts: bool = False
+    require_script_sandbox: bool = False
+
+    def resolved_profile(self) -> str:
+        return resolve_deployment_profile(self.deployment_profile)
 
 
 def merge_allowed_hosts(api_base: str, current: list[str] | None = None) -> list[str]:

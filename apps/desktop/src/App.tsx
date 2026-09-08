@@ -37,6 +37,8 @@ const DEFAULT_CONFIG: RuntimeConfig = {
   model: "deepseek-v4-flash",
   allowed_hosts: ["api.deepseek.com", "127.0.0.1", "localhost"],
   permission_mode: "standard",
+  deployment_profile: "standard",
+  allow_workspace_scripts: false,
 };
 
 let messageSeq = 0;
@@ -138,6 +140,9 @@ function App() {
           model: cfg.model,
           allowed_hosts: cfg.allowed_hosts,
           permission_mode: cfg.permission_mode ?? "standard",
+          deployment_profile: cfg.deployment_profile ?? "standard",
+          allow_workspace_scripts: Boolean(cfg.allow_workspace_scripts),
+          require_script_sandbox: Boolean(cfg.require_script_sandbox),
         });
       } catch {
         // keep defaults — still mark ready so UI can show「待配置」

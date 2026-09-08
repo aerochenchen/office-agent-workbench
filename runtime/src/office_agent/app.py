@@ -23,9 +23,22 @@ from office_agent.audit import AuditLog
 from office_agent.bundled_seed import seed_bundled_assets
 from office_agent.cancel import CancelToken
 from office_agent.config import AppConfig, merge_allowed_hosts
+from office_agent.deployment import (
+    PROFILE_LOCAL,
+    PROFILE_STANDARD,
+    is_intranet_model_host,
+    is_known_public_ai_host,
+    is_local_profile,
+    model_host_from_api_base,
+    resolve_deployment_profile,
+)
 from office_agent.gateway import GatewayError, ModelGateway
 from office_agent.paths import app_data_dir
-from office_agent.permissions import PermissionGate, PermissionRequest
+from office_agent.permissions import (
+    NeedsInteractivePermission,
+    PermissionGate,
+    PermissionRequest,
+)
 from office_agent.session_store import SessionStore, history_to_ui_messages
 from office_agent.skill_localize import needs_zh_display, try_localize_installed_skill
 from office_agent.skill_validate import validate_skill_dir
@@ -35,12 +48,30 @@ from office_agent.workspace import SandboxError, Workspace
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG = AppConfig(
-    api_base="https://api.deepseek.com",
-    api_key="",
-    model="deepseek-v4-flash",
-    allowed_hosts=["api.deepseek.com", "127.0.0.1", "localhost"],
-)
+def _default_config() -> AppConfig:
+    if is_local_profile():
+        return AppConfig(
+            api_base="",
+            api_key="",
+            model="",
+            allowed_hosts=["127.0.0.1", "localhost"],
+            permission_mode="cautious",
+            deployment_profile=PROFILE_LOCAL,
+            allow_workspace_scripts=False,
+            require_script_sandbox=True,
+        )
+    return AppConfig(
+        api_base="https://api.deepseek.com",
+        api_key="",
+        model="deepseek-v4-flash",
+        allowed_hosts=["api.deepseek.com", "127.0.0.1", "localhost"],
+        deployment_profile=PROFILE_STANDARD,
+        allow_workspace_scripts=False,
+        require_script_sandbox=False,
+    )
+
+
+DEFAULT_CONFIG = _default_config()
 
 # When False (tests), /shutdown returns ok but does not terminate the process.
 ALLOW_PROCESS_EXIT = True
@@ -70,13 +101,29 @@ def load_config() -> AppConfig:
     data = json.loads(path.read_text(encoding="utf-8-sig"))
     api_base = str(data.get("api_base", DEFAULT_CONFIG.api_base))
     allowed = list(data.get("allowed_hosts", DEFAULT_CONFIG.allowed_hosts))
+    profile = resolve_deployment_profile(str(data.get("deployment_profile", DEFAULT_CONFIG.deployment_profile)))
+    allow_scripts = bool(data.get("allow_workspace_scripts", DEFAULT_CONFIG.allow_workspace_scripts))
+    require_sandbox = bool(data.get("require_script_sandbox", DEFAULT_CONFIG.require_script_sandbox))
+    if profile == PROFILE_LOCAL:
+        allow_scripts = False
+        require_sandbox = True
+        host = model_host_from_api_base(api_base)
+        if host and is_known_public_ai_host(host):
+            api_base = ""
+            allowed = ["127.0.0.1", "localhost"]
+    permission_mode = str(data.get("permission_mode", DEFAULT_CONFIG.permission_mode))
+    if profile == PROFILE_LOCAL and permission_mode == "standard" and "permission_mode" not in data:
+        permission_mode = "cautious"
     return AppConfig(
         api_base=api_base,
         api_key=str(data.get("api_key", DEFAULT_CONFIG.api_key)),
         model=str(data.get("model", DEFAULT_CONFIG.model)),
         allowed_hosts=merge_allowed_hosts(api_base, allowed),
-        permission_mode=str(data.get("permission_mode", DEFAULT_CONFIG.permission_mode)),
+        permission_mode=permission_mode,
         max_tool_steps=int(data.get("max_tool_steps", DEFAULT_CONFIG.max_tool_steps)),
+        deployment_profile=profile,
+        allow_workspace_scripts=allow_scripts,
+        require_script_sandbox=require_sandbox,
     )
 
 
@@ -88,6 +135,9 @@ def save_config(cfg: AppConfig) -> None:
         "allowed_hosts": cfg.allowed_hosts,
         "permission_mode": cfg.permission_mode,
         "max_tool_steps": cfg.max_tool_steps,
+        "deployment_profile": cfg.resolved_profile(),
+        "allow_workspace_scripts": cfg.allow_workspace_scripts,
+        "require_script_sandbox": cfg.require_script_sandbox,
     }
     _config_path().write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -153,6 +203,7 @@ class ConfigBody(BaseModel):
     api_key: str | None = None
     model: str | None = None
     permission_mode: str | None = None
+    allow_workspace_scripts: bool | None = None
 
 
 class ChatBody(BaseModel):
@@ -231,6 +282,9 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             "allowed_hosts": cfg.allowed_hosts,
             "permission_mode": cfg.permission_mode,
             "max_tool_steps": cfg.max_tool_steps,
+            "deployment_profile": cfg.resolved_profile(),
+            "allow_workspace_scripts": cfg.allow_workspace_scripts,
+            "require_script_sandbox": cfg.require_script_sandbox,
         }
 
     @app.post("/workspace/open")
@@ -401,7 +455,15 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     @app.post("/config")
     def update_config(body: ConfigBody) -> dict[str, Any]:
         if body.api_base is not None:
-            office.config.api_base = body.api_base
+            new_base = body.api_base.strip()
+            if office.config.resolved_profile() == PROFILE_LOCAL and new_base:
+                host = model_host_from_api_base(new_base)
+                if not is_intranet_model_host(host):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="本地部署版本仅允许本机或内网模型地址",
+                    )
+            office.config.api_base = new_base
         if body.allowed_hosts is not None:
             office.config.allowed_hosts = body.allowed_hosts
         if body.api_base is not None:
@@ -422,6 +484,13 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     detail="permission_mode must be cautious|standard|trust_workspace",
                 )
             office.config.permission_mode = mode
+        if body.allow_workspace_scripts is not None:
+            if office.config.resolved_profile() == PROFILE_LOCAL and body.allow_workspace_scripts:
+                raise HTTPException(
+                    status_code=400,
+                    detail="本地部署版本不允许启用工作区自定义脚本",
+                )
+            office.config.allow_workspace_scripts = bool(body.allow_workspace_scripts)
         save_config(office.config)
         return {"ok": True}
 
@@ -515,8 +584,12 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         except GatewayError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
-        gate = PermissionGate(office.config.permission_mode)
-        gate.set_auto(None if interactive else True)
+        gate = PermissionGate(
+            office.config.permission_mode,
+            destination_host=model_host_from_api_base(office.config.api_base),
+        )
+        gate.set_auto(None if interactive else False)
+        attached = _validate_attached_paths(ws, body.attached_paths)
         tools = ToolExecutor(
             ws,
             office.registry,
@@ -524,10 +597,14 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             audit=office.audit,
             gate=gate,
             turn_id=turn_id,
+            attached_paths=attached,
+            allow_workspace_scripts=office.config.allow_workspace_scripts,
+            require_script_sandbox=office.config.require_script_sandbox
+            or office.config.resolved_profile() == PROFILE_LOCAL,
+            destination_host=model_host_from_api_base(office.config.api_base),
         )
         catalog = office.registry.enabled_catalog()
         history = office.sessions.get_messages(session_id)
-        attached = _validate_attached_paths(ws, body.attached_paths)
         return (
             session_id,
             gateway,
@@ -561,6 +638,16 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
         try:
             result = await asyncio.to_thread(_run)
+        except NeedsInteractivePermission as e:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "needs_interactive_permission",
+                    "tool": e.tool,
+                    "summary": e.summary,
+                    "hint": "use POST /chat/stream and confirm via /chat/permissions/{id}",
+                },
+            ) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"agent error: {e}") from e
 
@@ -603,6 +690,8 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                         "tool": req.tool,
                         "summary": req.summary,
                         "session_id": session_id,
+                        "destination": req.destination,
+                        "path": req.path,
                     },
                 )
 

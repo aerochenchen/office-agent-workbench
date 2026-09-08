@@ -16,22 +16,41 @@ class PermissionDenied(Exception):
     """Raised when a tool call is blocked by the permission gate or skill ACL."""
 
 
+class NeedsInteractivePermission(Exception):
+    """Raised when a non-interactive /chat turn hits a tool that requires confirmation."""
+
+    def __init__(self, tool: str, args: dict, summary: str) -> None:
+        self.tool = tool
+        self.args = dict(args)
+        self.summary = summary
+        super().__init__(f"needs interactive permission: {tool}")
+
+
 @dataclass
 class PermissionRequest:
     id: str
     tool: str
     summary: str
     args: dict
+    destination: str = ""
+    path: str = ""
 
 
 READ_ONLY_TOOLS = frozenset(
     {
         "workspace_list",
-        "workspace_read",
         "read_skill",
         "plan_get",
         "ask_user",
         "finish",
+    }
+)
+
+# File contents leave the machine toward the configured model host.
+SENSITIVE_READ_TOOLS = frozenset(
+    {
+        "workspace_read",
+        "workspace_extract",
     }
 )
 
@@ -49,10 +68,21 @@ RISKY_TOOLS = frozenset(
     }
 )
 
+GATED_TOOLS = RISKY_TOOLS | SENSITIVE_READ_TOOLS
+
 _TRUST_MODES = frozenset({"trust", "trust_workspace"})
 
 
+def _normalize_rel(rel: str) -> str:
+    normalized = str(rel or "").replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.strip()
+
+
 def _summarize(tool: str, args: dict) -> str:
+    if tool == "workspace_read":
+        return f"read {args.get('path', '')}"
     if tool == "workspace_write":
         return f"write {args.get('path', '')}"
     if tool == "workspace_extract":
@@ -75,10 +105,12 @@ def _summarize(tool: str, args: dict) -> str:
 
 
 class PermissionGate:
-    def __init__(self, mode: str = "standard") -> None:
+    def __init__(self, mode: str = "standard", *, destination_host: str = "") -> None:
         self.mode = mode or "standard"
+        self.destination_host = destination_host
         self._auto: bool | None = None
         self._remembered: set[str] = set()
+        self._read_allowlist: set[str] = set()
         self._lock = threading.Lock()
         self._pending: dict[str, threading.Event] = {}
         self._decisions: dict[str, bool] = {}
@@ -91,25 +123,41 @@ class PermissionGate:
         """None = interactive waiter; True/False = auto allow/deny for tests."""
         self._auto = allow
 
+    def allow_read_path(self, rel: str) -> None:
+        normalized = _normalize_rel(rel)
+        if normalized:
+            self._read_allowlist.add(normalized)
+
     def remember_key(self, tool: str, args: dict) -> str:
         if tool == "run_shared_script":
             return f"{tool}:{args.get('name', '')}"
         if tool == "run_skill_script":
             return f"{tool}:{args.get('skill_id', '')}:{args.get('script', '')}"
-        if tool in ("run_workspace_script", "workspace_write", "workspace_extract"):
+        if tool in (
+            "run_workspace_script",
+            "workspace_write",
+            "workspace_extract",
+            "workspace_read",
+        ):
             return f"{tool}:{args.get('path', '')}"
         return f"{tool}"
 
+    def _read_allowed(self, args: dict) -> bool:
+        path = _normalize_rel(str(args.get("path") or ""))
+        return bool(path) and path in self._read_allowlist
+
     def check(self, tool: str, args: dict) -> None:
-        """Raise PermissionDenied or block until allow. No-op for read-only tools."""
-        if tool in READ_ONLY_TOOLS or tool not in RISKY_TOOLS:
+        """Raise PermissionDenied / NeedsInteractivePermission or block until allow."""
+        if tool in READ_ONLY_TOOLS or tool not in GATED_TOOLS:
+            return
+        if tool in SENSITIVE_READ_TOOLS and self._read_allowed(args):
             return
         if self.mode in _TRUST_MODES:
             return
         if self._auto is True:
             return
         if self._auto is False:
-            raise PermissionDenied(f"auto-denied: {tool}")
+            raise NeedsInteractivePermission(tool, args, _summarize(tool, args))
 
         key = self.remember_key(tool, args)
         if self.mode == "standard" and key in self._remembered:
@@ -120,6 +168,8 @@ class PermissionGate:
             tool=tool,
             summary=_summarize(tool, args),
             args=dict(args),
+            destination=self.destination_host,
+            path=_normalize_rel(str(args.get("path") or "")),
         )
         event = threading.Event()
         with self._lock:

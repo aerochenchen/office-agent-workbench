@@ -176,9 +176,29 @@
 }
 
 .field-label {
+  display: block;
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--ink-0);
+}
+
+.field--checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.field--checkbox .field-label {
+  flex: 1;
+}
+
+.field--checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .field-input {

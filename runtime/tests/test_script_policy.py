@@ -104,7 +104,9 @@ def test_run_workspace_script_rejects_outside_argv(tmp_path: Path, monkeypatch: 
     (work / "runner.py").write_text("import sys\nprint('ran', sys.argv[1:])\n", encoding="utf-8")
     outside = tmp_path / "outside.docx"
     outside.write_bytes(b"PK")
-    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    ex = ToolExecutor(
+        Workspace(ws), SkillRegistry(), permission_mode="trust", allow_workspace_scripts=True
+    )
     result = ex.execute(
         "run_workspace_script",
         {"path": "runner.py", "args": [str(outside)]},
@@ -122,7 +124,9 @@ def test_run_workspace_script_allows_in_workspace_argv(tmp_path: Path, monkeypat
     (work / "runner.py").write_text("import sys\nprint('ok', sys.argv[1])\n", encoding="utf-8")
     target = ws / "notes.txt"
     target.write_text("data\n", encoding="utf-8")
-    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    ex = ToolExecutor(
+        Workspace(ws), SkillRegistry(), permission_mode="trust", allow_workspace_scripts=True
+    )
     result = ex.execute(
         "run_workspace_script",
         {"path": "runner.py", "args": ["notes.txt"]},

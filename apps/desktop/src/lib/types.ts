@@ -135,6 +135,7 @@ export interface SessionUiMessage {
 }
 
 export type PermissionMode = "cautious" | "standard" | "trust_workspace";
+export type DeploymentProfile = "standard" | "local";
 
 export interface RuntimeConfig {
   api_base: string;
@@ -145,6 +146,9 @@ export interface RuntimeConfig {
   model: string;
   allowed_hosts: string[];
   permission_mode: PermissionMode;
+  deployment_profile?: DeploymentProfile;
+  allow_workspace_scripts?: boolean;
+  require_script_sandbox?: boolean;
 }
 
 export interface PermissionRequestEvent {
@@ -152,6 +156,8 @@ export interface PermissionRequestEvent {
   tool: string;
   summary: string;
   session_id: string;
+  destination?: string;
+  path?: string;
 }
 
 export interface ChatStreamHandlers {

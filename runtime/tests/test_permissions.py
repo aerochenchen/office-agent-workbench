@@ -4,6 +4,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from office_agent.permissions import PermissionGate
 from office_agent.skills import SkillRegistry
 from office_agent.tools import ToolExecutor
@@ -163,3 +165,53 @@ def test_skill_missing_run_python_denied(tmp_path: Path, monkeypatch) -> None:
     assert result["ok"] is False
     assert "permission denied" in result["error"].lower()
     assert "should-not-run" not in str(result)
+
+
+def test_unattached_read_blocked_without_interactive_gate(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "secret.txt").write_text("nope", encoding="utf-8")
+    from office_agent.permissions import NeedsInteractivePermission, PermissionGate
+
+    gate = PermissionGate(mode="cautious")
+    gate.set_auto(False)
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="cautious", gate=gate)
+    with pytest.raises(NeedsInteractivePermission):
+        ex.execute("workspace_read", {"path": "secret.txt"})
+
+
+def test_attached_read_skips_confirmation(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "doc.txt").write_text("ok", encoding="utf-8")
+    from office_agent.permissions import PermissionGate
+
+    gate = PermissionGate(mode="cautious")
+    gate.set_auto(False)
+    ex = ToolExecutor(
+        Workspace(ws),
+        SkillRegistry(),
+        permission_mode="cautious",
+        gate=gate,
+        attached_paths=["doc.txt"],
+    )
+    result = ex.execute("workspace_read", {"path": "doc.txt"})
+    assert result["ok"] is True
+    assert result["content"] == "ok"
+
+
+def test_workspace_script_denied_by_default(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    work = ws / ".office-agent" / "work"
+    work.mkdir(parents=True)
+    (work / "p.py").write_text("print('x')\n", encoding="utf-8")
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute("run_workspace_script", {"path": "p.py", "args": []})
+    assert result["ok"] is False
+    assert "disabled" in result["error"].lower()

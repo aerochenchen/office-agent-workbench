@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import os
-import runpy
 import sys
 
 
@@ -44,17 +43,6 @@ def assert_bind_safety(host: str, token: str | None) -> None:
     raise SystemExit(2)
 
 
-def _run_script(script: str, script_args: list[str]) -> None:
-    """Execute a workspace/skill script using the frozen interpreter's stdlib."""
-    path = os.path.abspath(script)
-    if not os.path.isfile(path):
-        print(f"script not found: {script}", file=sys.stderr)
-        raise SystemExit(2)
-    # Mimic ``python script.py args...`` so scripts see the expected argv.
-    sys.argv = [path, *script_args]
-    runpy.run_path(path, run_name="__main__")
-
-
 def main(argv: list[str] | None = None) -> None:
     argv = list(sys.argv[1:] if argv is None else argv)
 
@@ -62,10 +50,9 @@ def main(argv: list[str] | None = None) -> None:
     #   office-agent-runtime.exe --run-script path.py [args...]
     # because sys.executable is the sidecar itself, not CPython.
     if argv and argv[0] == "--run-script":
-        if len(argv) < 2:
-            print("usage: --run-script SCRIPT [ARGS...]", file=sys.stderr)
-            raise SystemExit(2)
-        _run_script(argv[1], argv[2:])
+        from office_agent.script_jail_main import main as jail_main
+
+        jail_main(argv[1:])
         return
 
     parser = argparse.ArgumentParser(description="Office Agent Runtime (local FastAPI)")

@@ -26,6 +26,7 @@ param(
     [switch]$SkipSidecar,
     [switch]$SkipTauri,
     [switch]$Clean,
+    [switch]$LocalDeploy,
     [switch]$MicrosoftStore,
     [switch]$Msix,
     [switch]$MsixStore,
@@ -172,6 +173,21 @@ function Stage-Resources {
         throw "NOTICE missing at $noticeSrc — run scripts/generate_notice.sh before packaging"
     }
     Copy-Item -Path $noticeSrc -Destination (Join-Path $ResourcesDir "NOTICE") -Force
+
+    $profileName = if ($LocalDeploy) { "local" } else { "standard" }
+    $profileSrc = Join-Path $RepoRoot "packaging\本地部署版本\profile"
+    $profileDst = Join-Path $ResourcesDir "deployment-profile"
+    if ($LocalDeploy) {
+        if (-not (Test-Path $profileSrc)) {
+            throw "Local deploy profile missing at $profileSrc"
+        }
+        Copy-Item -Path $profileSrc -Destination $profileDst -Force
+        Write-Host "Staged local deployment profile -> $profileDst"
+    }
+    else {
+        Set-Content -Path $profileDst -Value $profileName -Encoding ascii -NoNewline
+        Write-Host "Staged standard deployment profile -> $profileDst"
+    }
 
     $stagedExe = Join-Path $StagedRuntime "office-agent-runtime.exe"
     if (-not (Test-Path $stagedExe)) {

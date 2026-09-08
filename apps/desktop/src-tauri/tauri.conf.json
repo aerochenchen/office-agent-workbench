@@ -41,7 +41,8 @@
     "resources": [
       "resources/runtime/**/*",
       "resources/bundled/**/*",
-      "resources/NOTICE"
+      "resources/NOTICE",
+      "resources/deployment-profile"
     ],
     "windows": {
       "webviewInstallMode": {

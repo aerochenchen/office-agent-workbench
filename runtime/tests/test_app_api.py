@@ -692,10 +692,10 @@ def test_post_config_permission_mode(client: TestClient, app_state: ProcessState
     assert got.json()["permission_mode"] == "cautious"
 
 
-def test_sync_chat_cautious_auto_allows_risky_tool(
+def test_sync_chat_cautious_rejects_risky_tool(
     client: TestClient, tmp_path: Path, app_state: ProcessState
 ):
-    """Sync /chat uses non-interactive gate; cautious + workspace_write completes without hanging."""
+    """Sync /chat is fail-closed: cautious + workspace_write returns 409 and does not write."""
     ws = tmp_path / "ws"
     ws.mkdir()
     client.post("/workspace/open", json={"path": str(ws)})
@@ -716,14 +716,12 @@ def test_sync_chat_cautious_auto_allows_risky_tool(
         ]
     )
 
-    start = time.time()
     r = client.post("/chat", json={"message": "写个文件"})
-    elapsed = time.time() - start
-
-    assert r.status_code == 200
-    assert elapsed < 5.0
-    assert r.json()["reply"] == "已写入 notes.txt"
-    assert (ws / "notes.txt").read_text(encoding="utf-8") == "hello\n"
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "needs_interactive_permission"
+    assert detail["tool"] == "workspace_write"
+    assert not (ws / "notes.txt").exists()
 
 
 def test_chat_stream_permission_request_then_allow(
@@ -786,3 +784,105 @@ def test_chat_stream_permission_request_then_allow(
     assert "event: final" in text
     assert "已写入 notes.txt" in text
     assert (ws / "notes.txt").read_text(encoding="utf-8") == "hello\n"
+    assert "destination" in text
+
+
+def test_sync_chat_allows_list_and_attached_read(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "doc.txt").write_text("hello-attach", encoding="utf-8")
+    client.post("/workspace/open", json={"path": str(ws)})
+    app_state.config.permission_mode = "cautious"
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[
+                    _tool_call("c1", "workspace_read", {"path": "doc.txt"}),
+                ]
+            ),
+            _completion(content="已读附件"),
+        ]
+    )
+    r = client.post(
+        "/chat",
+        json={"message": "读这个", "attached_paths": ["doc.txt"]},
+    )
+    assert r.status_code == 200
+    assert r.json()["reply"] == "已读附件"
+
+
+def test_sync_chat_rejects_unattached_read(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "secret.txt").write_text("classified", encoding="utf-8")
+    client.post("/workspace/open", json={"path": str(ws)})
+    app_state.config.permission_mode = "cautious"
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[
+                    _tool_call("c1", "workspace_read", {"path": "secret.txt"}),
+                ]
+            ),
+            _completion(content="已读"),
+        ]
+    )
+    r = client.post("/chat", json={"message": "读全部"})
+    assert r.status_code == 409
+    assert r.json()["detail"]["tool"] == "workspace_read"
+
+
+def test_workspace_scripts_disabled_on_chat(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    work = ws / ".office-agent" / "work"
+    work.mkdir(parents=True)
+    (work / "p.py").write_text("print('ran')\n", encoding="utf-8")
+    client.post("/workspace/open", json={"path": str(ws)})
+    app_state.config.permission_mode = "trust_workspace"
+    app_state.config.allow_workspace_scripts = False
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[
+                    _tool_call("c1", "run_workspace_script", {"path": "p.py", "args": []}),
+                ]
+            ),
+            _completion(content="跑完了"),
+        ]
+    )
+    r = client.post("/chat", json={"message": "跑脚本"})
+    # trust_workspace still cannot run workspace scripts unless explicitly enabled.
+    assert r.status_code == 200
+    events = r.json()["tool_events"]
+    assert events[0]["result"]["ok"] is False
+    assert "disabled" in events[0]["result"]["error"].lower()
+
+
+def test_local_profile_rejects_enabling_workspace_scripts(
+    client: TestClient, app_state: ProcessState
+):
+    app_state.config.deployment_profile = "local"
+    r = client.post("/config", json={"allow_workspace_scripts": True})
+    assert r.status_code == 400
+
+
+def test_local_profile_rejects_public_api_base(client: TestClient, app_state: ProcessState):
+    app_state.config.deployment_profile = "local"
+    r = client.post("/config", json={"api_base": "https://api.deepseek.com"})
+    assert r.status_code == 400
+    r2 = client.post("/config", json={"api_base": "http://10.0.0.8:8000/v1"})
+    assert r2.status_code == 200
+
+
+def test_get_config_includes_deployment_fields(client: TestClient):
+    body = client.get("/config").json()
+    assert "deployment_profile" in body
+    assert "allow_workspace_scripts" in body
+    assert body["allow_workspace_scripts"] is False

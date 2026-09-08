@@ -12,6 +12,7 @@
 #   ./scripts/build-macos.sh --clean
 #   ./scripts/build-macos.sh --skip-sidecar
 #   ./scripts/build-macos.sh --skip-tauri
+#   ./scripts/build-macos.sh --local-deploy
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -30,12 +31,14 @@ SIDECAR_NAME="office-agent-runtime"
 SKIP_SIDECAR=0
 SKIP_TAURI=0
 CLEAN=0
+LOCAL_DEPLOY=0
 
 for arg in "$@"; do
   case "${arg}" in
     --skip-sidecar) SKIP_SIDECAR=1 ;;
     --skip-tauri) SKIP_TAURI=1 ;;
     --clean) CLEAN=1 ;;
+    --local-deploy) LOCAL_DEPLOY=1 ;;
     -h|--help)
       sed -n '2,20p' "$0"
       exit 0
@@ -121,6 +124,13 @@ stage_resources() {
     exit 1
   fi
   cp -f "${ROOT}/NOTICE" "${RESOURCES}/NOTICE"
+  if [[ "${LOCAL_DEPLOY}" -eq 1 ]]; then
+    cp -f "${ROOT}/packaging/本地部署版本/profile" "${RESOURCES}/deployment-profile"
+    echo "Staged local deployment profile"
+  else
+    printf 'standard' > "${RESOURCES}/deployment-profile"
+    echo "Staged standard deployment profile"
+  fi
   if [[ ! -x "${STAGED_RUNTIME}/${SIDECAR_NAME}" ]]; then
     echo "Staged sidecar missing: ${STAGED_RUNTIME}/${SIDECAR_NAME}" >&2
     exit 1

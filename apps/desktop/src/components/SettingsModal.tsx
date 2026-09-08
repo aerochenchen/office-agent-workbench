@@ -36,9 +36,9 @@ const SETTINGS_TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
 ];
 
 const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; hint: string }[] = [
-  { value: "cautious", label: "谨慎", hint: "每次写入/跑脚本都需确认" },
+  { value: "cautious", label: "谨慎", hint: "每次写入、跑脚本、读取未附加文件都需确认" },
   { value: "standard", label: "标准（默认）", hint: "首次确认后，同会话同操作可记住" },
-  { value: "trust_workspace", label: "信任此文件夹", hint: "本会话内自动允许写入与跑脚本" },
+  { value: "trust_workspace", label: "信任此文件夹", hint: "本会话内自动允许写入与跑技能脚本；工作区自定义脚本仍需单独开启" },
 ];
 
 /** Common OpenAI-compatible model ids; unknown values fall back to「自定义」. */
@@ -61,7 +61,8 @@ const MODEL_FIELD_HINTS = {
     "访问该服务的密钥，仅保存在本机。DeepSeek：登录开放平台 → API Keys → 创建并复制后粘贴到此处。具体菜单名称与路径以官网为准。",
 } as const;
 
-function resolveModelPreset(modelName: string): string {
+function resolveModelPreset(modelName: string, localDeploy: boolean): string {
+  if (localDeploy) return MODEL_CUSTOM;
   const trimmed = modelName.trim();
   if (MODEL_PRESETS.some((p) => p.id === trimmed)) return trimmed;
   return MODEL_CUSTOM;
@@ -72,9 +73,15 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   const [apiBase, setApiBase] = useState(initial.api_base);
   const [apiKey, setApiKey] = useState(initial.api_key);
   const [model, setModel] = useState(initial.model);
-  const [modelPreset, setModelPreset] = useState(() => resolveModelPreset(initial.model));
+  const isLocalDeploy = initial.deployment_profile === "local";
+  const [modelPreset, setModelPreset] = useState(() =>
+    resolveModelPreset(initial.model, initial.deployment_profile === "local"),
+  );
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(
     initial.permission_mode ?? "standard",
+  );
+  const [allowWorkspaceScripts, setAllowWorkspaceScripts] = useState(
+    Boolean(initial.allow_workspace_scripts),
   );
   const [fontScale, setFontScale] = useState<UiFontScale>(() => readUiFontScale());
   const [uiTheme, setUiTheme] = useState<UiTheme>(() => readUiTheme());
@@ -91,8 +98,9 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setApiBase(initial.api_base);
       setApiKey(initial.api_key);
       setModel(initial.model);
-      setModelPreset(resolveModelPreset(initial.model));
+      setModelPreset(resolveModelPreset(initial.model, initial.deployment_profile === "local"));
       setPermissionMode(initial.permission_mode ?? "standard");
+      setAllowWorkspaceScripts(Boolean(initial.allow_workspace_scripts));
       setFontScale(readUiFontScale());
       setUiTheme(readUiTheme());
       setError(null);
@@ -164,6 +172,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
         api_base: apiBase.trim(),
         model: model.trim(),
         permission_mode: permissionMode,
+        allow_workspace_scripts: allowWorkspaceScripts,
       };
       const trimmedKey = apiKey.trim();
       if (trimmedKey) {
@@ -266,28 +275,34 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 <h3 id="settings-model-title" className="settings-section-title">
                   模型
                 </h3>
-                <p className="settings-callout">{MODEL_TAB_INTRO}</p>
+                <p className="settings-callout">
+                  {initial.deployment_profile === "local"
+                    ? "本地部署版本只连接本机或单位内网的模型服务。请填写内网地址（如 http://127.0.0.1:8000/v1），公网 DeepSeek/OpenAI 等会被拒绝。"
+                    : MODEL_TAB_INTRO}
+                </p>
 
-                <div className="settings-field-block">
-                  <label className="field">
-                    <span className="field-label">选用模型</span>
-                    <select
-                      className="field-input"
-                      value={modelPreset}
-                      onChange={(e) => handleModelPresetChange(e.currentTarget.value)}
-                    >
-                      {MODEL_PRESETS.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.label}
-                        </option>
-                      ))}
-                      <option value={MODEL_CUSTOM}>自定义…</option>
-                    </select>
-                  </label>
-                  <p className="settings-field-hint">{MODEL_FIELD_HINTS.model}</p>
-                </div>
+                {!isLocalDeploy && (
+                  <div className="settings-field-block">
+                    <label className="field">
+                      <span className="field-label">选用模型</span>
+                      <select
+                        className="field-input"
+                        value={modelPreset}
+                        onChange={(e) => handleModelPresetChange(e.currentTarget.value)}
+                      >
+                        {MODEL_PRESETS.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.label}
+                          </option>
+                        ))}
+                        <option value={MODEL_CUSTOM}>自定义…</option>
+                      </select>
+                    </label>
+                    <p className="settings-field-hint">{MODEL_FIELD_HINTS.model}</p>
+                  </div>
+                )}
 
-                {modelPreset === MODEL_CUSTOM && (
+                {(isLocalDeploy || modelPreset === MODEL_CUSTOM) && (
                   <div className="settings-field-block">
                     <label className="field">
                       <span className="field-label">模型名称</span>
@@ -295,9 +310,12 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                         className="field-input"
                         value={model}
                         onChange={(e) => setModel(e.currentTarget.value)}
-                        placeholder="例如 deepseek-v4-flash"
+                        placeholder={isLocalDeploy ? "内网服务提供的模型名" : "例如 deepseek-v4-flash"}
                       />
                     </label>
+                    {isLocalDeploy && (
+                      <p className="settings-field-hint">填写内网或本机 OpenAI 兼容服务给出的模型名。</p>
+                    )}
                   </div>
                 )}
 
@@ -311,10 +329,18 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                         className="field-input"
                         value={apiBase}
                         onChange={(e) => setApiBase(e.currentTarget.value)}
-                        placeholder="https://api.deepseek.com"
+                        placeholder={
+                          initial.deployment_profile === "local"
+                            ? "http://127.0.0.1:8000/v1"
+                            : "https://api.deepseek.com"
+                        }
                       />
                     </label>
-                    <p className="settings-field-hint">{MODEL_FIELD_HINTS.apiBase}</p>
+                    <p className="settings-field-hint">
+                      {isLocalDeploy
+                        ? "填写本机或单位内网地址（如 http://127.0.0.1:8000/v1）。公网 DeepSeek/OpenAI 等会被拒绝。"
+                        : MODEL_FIELD_HINTS.apiBase}
+                    </p>
                   </div>
 
                   <div className="settings-field-block">
@@ -332,7 +358,11 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                         }
                       />
                     </label>
-                    <p className="settings-field-hint">{MODEL_FIELD_HINTS.apiKey}</p>
+                    <p className="settings-field-hint">
+                      {isLocalDeploy
+                        ? "内网服务的密钥仅保存在本机。若服务不校验密钥，可填任意占位。"
+                        : MODEL_FIELD_HINTS.apiKey}
+                    </p>
                   </div>
                 </div>
 
@@ -360,6 +390,23 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                   </select>
                 </label>
                 <p className="settings-permission-hint">{permissionHint}</p>
+                {initial.deployment_profile === "local" && (
+                  <p className="settings-permission-hint">
+                    当前为本地部署版本：仅允许本机或内网模型地址，工作区自定义脚本已关闭，脚本在隔离进程中运行。
+                  </p>
+                )}
+                <label className="field field--checkbox">
+                  <span className="field-label">允许运行工作区内的自定义脚本</span>
+                  <input
+                    type="checkbox"
+                    checked={allowWorkspaceScripts}
+                    disabled={initial.deployment_profile === "local"}
+                    onChange={(e) => setAllowWorkspaceScripts(e.currentTarget.checked)}
+                  />
+                </label>
+                <p className="settings-permission-hint">
+                  默认关闭。开启后，模型可执行工作区里的 .py（仍受确认策略约束）。技能自带脚本不受此项影响。
+                </p>
               </section>
             )}
 

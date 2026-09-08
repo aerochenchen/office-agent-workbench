@@ -4,6 +4,7 @@
 !.gitignore
 !README.md
 !NOTICE
+!deployment-profile
 !runtime/
 !runtime/.keep
 !bundled/

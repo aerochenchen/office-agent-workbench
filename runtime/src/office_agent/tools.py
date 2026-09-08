@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,8 +23,16 @@ from office_agent.plan_store import (
     set_plan_status,
 )
 from office_agent.script_policy import assert_argv_within_roots, build_script_env
+from office_agent.script_sandbox import (
+    SCRIPT_TIMEOUT_SEC,
+    preexec_isolate,
+    sandbox_available,
+    truncate_output,
+    wrap_isolated_cmd,
+)
 from office_agent.permissions import (
-    RISKY_TOOLS,
+    GATED_TOOLS,
+    NeedsInteractivePermission,
     PermissionDenied,
     PermissionGate,
 )
@@ -90,6 +100,10 @@ class ToolExecutor:
         turn_id: str | None = None,
         python_bin: str | None = None,
         gate: PermissionGate | None = None,
+        attached_paths: list[str] | None = None,
+        allow_workspace_scripts: bool = False,
+        require_script_sandbox: bool = False,
+        destination_host: str = "",
     ) -> None:
         self.workspace = workspace
         self.skills = skills
@@ -98,12 +112,19 @@ class ToolExecutor:
         self.turn_id = turn_id
         self.python_bin = python_bin or sys.executable
         self._app_data = app_data_dir()
+        self.allow_workspace_scripts = allow_workspace_scripts
+        self.require_script_sandbox = require_script_sandbox
+        self.destination_host = destination_host
         if gate is not None:
             self.gate = gate
         else:
-            # Default auto-allow keeps headless / existing tests green.
-            self.gate = PermissionGate(permission_mode)
-            self.gate.set_auto(True)
+            # Fail-closed: tests that need auto-allow must pass a gate or use trust mode.
+            self.gate = PermissionGate(permission_mode, destination_host=destination_host)
+            self.gate.set_auto(False)
+        if destination_host and not self.gate.destination_host:
+            self.gate.destination_host = destination_host
+        for rel in attached_paths or []:
+            self.gate.allow_read_path(rel)
 
     def execute(self, name: str, args: dict) -> dict:
         handlers = {
@@ -130,7 +151,9 @@ class ToolExecutor:
 
         try:
             self._enforce_skill_permissions(name, args)
-            if self.gate is not None and name in RISKY_TOOLS:
+            if name == "run_workspace_script" and not self.allow_workspace_scripts:
+                raise PermissionDenied("workspace scripts are disabled")
+            if self.gate is not None and name in GATED_TOOLS:
                 self.gate.check(name, args)
             result = handlers[name](args)
             ok = bool(result.get("ok", True))
@@ -139,6 +162,8 @@ class ToolExecutor:
             )[:500]
             self._audit(name, args, ok, detail)
             return result
+        except NeedsInteractivePermission:
+            raise
         except PermissionDenied as e:
             result = {"ok": False, "error": f"permission denied: {e}"}
             self._audit(name, args, False, str(result["error"])[:500])
@@ -353,35 +378,89 @@ class ToolExecutor:
         *,
         allowed_roots: list[Path] | None = None,
     ) -> dict:
-        roots = [self.workspace.root.resolve()]
+        argv_roots = [self.workspace.root.resolve()]
+        jail_roots = [self.workspace.root.resolve(), self._app_data.resolve()]
+        tmp = Path(tempfile.gettempdir()).resolve()
+        if tmp not in jail_roots:
+            jail_roots.append(tmp)
         if allowed_roots:
-            seen = {roots[0]}
+            seen_argv = {argv_roots[0]}
+            seen_jail = set(jail_roots)
             for root in allowed_roots:
                 resolved = Path(root).resolve()
-                if resolved not in seen:
-                    roots.append(resolved)
-                    seen.add(resolved)
-        assert_argv_within_roots(argv, roots)
+                if resolved not in seen_argv:
+                    argv_roots.append(resolved)
+                    seen_argv.add(resolved)
+                if resolved not in seen_jail:
+                    jail_roots.append(resolved)
+                    seen_jail.add(resolved)
+        assert_argv_within_roots(argv, argv_roots)
         env = build_script_env()
+        script_home = self.workspace.root / AGENT_WORK_REL / "script-home"
+        script_home.mkdir(parents=True, exist_ok=True)
+        env["HOME"] = str(script_home)
+        env["USERPROFILE"] = str(script_home)
+        env["OFFICE_AGENT_SCRIPT_JAIL"] = "1"
+        src_root = Path(__file__).resolve().parent.parent
+        existing_pp = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            str(src_root)
+            if not existing_pp
+            else str(src_root) + os.pathsep + existing_pp
+        )
         # PyInstaller sidecar: sys.executable is office-agent-runtime.exe.
         # Re-enter via --run-script so scripts get a real interpreter context.
+        jail_args: list[str] = []
+        for root in jail_roots:
+            jail_args.extend(["--jail-root", str(Path(root).resolve())])
         if getattr(sys, "frozen", False):
-            cmd = [self.python_bin, "--run-script", str(script), *argv]
+            cmd = [self.python_bin, "--run-script", *jail_args, "--", str(script), *argv]
         else:
-            cmd = [self.python_bin, str(script), *argv]
-        proc = subprocess.run(
-            cmd,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            timeout=600,
-            env=env,
-        )
+            cmd = [
+                self.python_bin,
+                "-m",
+                "office_agent.script_jail_main",
+                *jail_args,
+                "--",
+                str(script),
+                *argv,
+            ]
+        isolate = bool(self.require_script_sandbox)
+        if isolate and not sandbox_available() and sys.platform != "win32":
+            raise ToolError(
+                "本地部署要求脚本在隔离进程中运行，当前系统缺少 unshare/sandbox-exec"
+            )
+        if isolate and sandbox_available():
+            cmd = wrap_isolated_cmd(cmd, workspace=self.workspace.root)
+        run_kwargs: dict = {
+            "cwd": str(cwd),
+            "capture_output": True,
+            "text": True,
+            "timeout": SCRIPT_TIMEOUT_SEC,
+            "env": env,
+        }
+        if os.name == "posix" and isolate:
+            run_kwargs["preexec_fn"] = preexec_isolate
+        try:
+            proc = subprocess.run(cmd, **run_kwargs)
+        except subprocess.TimeoutExpired as e:
+            stdout, _ = truncate_output(e.stdout if isinstance(e.stdout, str) else "")
+            stderr, _ = truncate_output(e.stderr if isinstance(e.stderr, str) else "")
+            return {
+                "ok": False,
+                "exit_code": -1,
+                "stdout": stdout,
+                "stderr": (stderr + "\nscript timed out").strip(),
+                "error": f"script timed out after {SCRIPT_TIMEOUT_SEC}s",
+            }
+        stdout, out_cut = truncate_output(proc.stdout)
+        stderr, err_cut = truncate_output(proc.stderr)
         return {
             "ok": proc.returncode == 0,
             "exit_code": proc.returncode,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr,
+            "stdout": stdout,
+            "stderr": stderr,
+            "truncated": out_cut or err_cut,
         }
 
     def _plan_path(self) -> Path:

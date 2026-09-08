@@ -375,6 +375,43 @@ fn assign_child_to_kill_job(app: &tauri::AppHandle, child: &Child) {
 #[cfg(not(windows))]
 fn assign_child_to_kill_job(_app: &tauri::AppHandle, _child: &Child) {}
 
+fn apply_deployment_profile_env(cmd: &mut Command, app: &tauri::AppHandle, sidecar: &Path) {
+    if let Ok(existing) = std::env::var("OFFICE_AGENT_DEPLOYMENT") {
+        if !existing.trim().is_empty() {
+            cmd.env("OFFICE_AGENT_DEPLOYMENT", existing);
+            log_line("[office-agent] OFFICE_AGENT_DEPLOYMENT from environment");
+            return;
+        }
+    }
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(runtime_dir) = sidecar.parent() {
+        if let Some(resources) = runtime_dir.parent() {
+            candidates.push(resources.join("deployment-profile"));
+        }
+    }
+    if let Ok(rd) = app.path().resource_dir() {
+        candidates.push(rd.join("deployment-profile"));
+        candidates.push(rd.join("resources").join("deployment-profile"));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("resources").join("deployment-profile"));
+        }
+    }
+    for path in candidates {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            let profile = text.trim().to_ascii_lowercase();
+            if profile == "local" || profile == "standard" {
+                cmd.env("OFFICE_AGENT_DEPLOYMENT", &profile);
+                log_line(&format!(
+                    "[office-agent] OFFICE_AGENT_DEPLOYMENT={profile} from {path:?}"
+                ));
+                return;
+            }
+        }
+    }
+}
+
 /// Production path: onedir sidecar staged under Tauri resources.
 fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
     let sidecar = find_sidecar_exe(app)?;
@@ -389,6 +426,7 @@ fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
         cmd.env("OFFICE_AGENT_BUNDLED", b);
         log_line(&format!("[office-agent] OFFICE_AGENT_BUNDLED={b:?}"));
     }
+    apply_deployment_profile_env(&mut cmd, app, &sidecar);
     cmd.env("OFFICE_AGENT_API_TOKEN", api_token);
 
     // Keep logs for packaged installs (stderr was previously discarded).
@@ -450,6 +488,11 @@ fn try_spawn_venv(api_token: &str) -> Option<Child> {
     .stderr(Stdio::null());
     if let Some(b) = bundled {
         cmd.env("OFFICE_AGENT_BUNDLED", b);
+    }
+    if let Ok(profile) = std::env::var("OFFICE_AGENT_DEPLOYMENT") {
+        if !profile.trim().is_empty() {
+            cmd.env("OFFICE_AGENT_DEPLOYMENT", profile);
+        }
     }
     cmd.env("OFFICE_AGENT_API_TOKEN", api_token);
 

@@ -1,0 +1,10 @@
+{
+  "api_base": "",
+  "api_key": "",
+  "model": "",
+  "allowed_hosts": ["127.0.0.1", "localhost"],
+  "permission_mode": "cautious",
+  "deployment_profile": "local",
+  "allow_workspace_scripts": false,
+  "require_script_sandbox": true
+}
