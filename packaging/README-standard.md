@@ -50,7 +50,7 @@
 | `-Clean` | 清掉 packaging venv / PyInstaller 中间产物后重打 |
 | `-SkipSidecar` | 跳过 PyInstaller（需已有 staged `src-tauri/resources/runtime`） |
 | `-SkipTauri` | 只打 sidecar 并 stage resources，不跑 `tauri build` |
-| `-LocalDeploy` | 打 [本地部署版本](./本地部署版本/README.md)：禁公网模型、强制脚本隔离、**离线 WebView2** |
+| `-LocalDeploy` | 打 [本地部署版本](./本地部署版本/README.md)：禁公网模型、强制脚本隔离、**Fixed Version WebView2** |
 
 产物路径：
 

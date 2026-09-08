@@ -19,7 +19,7 @@
 
 产物与标准包相同路径（`apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe`），但安装目录 `resources/deployment-profile` 内容为 `local`。桌面壳启动 sidecar 时会设置 `OFFICE_AGENT_DEPLOYMENT=local`。
 
-本地部署包会合并 `tauri.localdeploy.conf.json`，将 WebView2 改为 **offlineInstaller**（安装包内嵌完整运行时安装器，约增大 120MB+），**安装时不需要访问微软公网**。标准包仍用 `embedBootstrapper`（体积小，但安装时需能访问微软 CDN）。
+本地部署包会合并 `tauri.localdeploy.conf.json`，将 WebView2 改为 **fixedRuntime**（把 Fixed Version 运行时打进安装目录，约再增大 ~180–250MB）。安装时**不会**调用系统 WebView2 / Edge Update 安装器，可避开内网常见的 `0xA043050D`（`-1606220531`）。标准包仍用 `embedBootstrapper`（体积小，但安装时需能访问微软 CDN）。构建前脚本 `scripts/fetch-webview2-fixed.ps1` 会自动下载并解压固定版本运行时。
 
 **macOS DMG**
 
@@ -46,4 +46,4 @@
 | 未附加文件读取 | 需确认 | 同左 |
 | 工作区自定义脚本 | 默认关，设置中可开 | 不可开 |
 | 脚本 OS 网络隔离 | 尽力 | 要求（非 Windows） |
-| WebView2 | 嵌入引导程序（安装时可能需联网） | 离线安装器（内网可装） |
+| WebView2 | 嵌入引导程序（安装时可能需联网） | Fixed Version 随包（不跑系统安装器） |

@@ -85,7 +85,7 @@ jobs:
           if ("${{ inputs.local_deploy }}" -eq "true") {
             $tag = "windows-local-deploy-$stamp"
             $title = "文书通 本地部署 Windows 安装包 ($stamp)"
-            $notes = "内网/断公网封装：禁公网模型，deployment-profile=local。安装后请在设置中填写本机或内网模型地址。"
+            $notes = "内网/断公网封装：禁公网模型，deployment-profile=local；WebView2 使用 Fixed Version（安装时不调用 Edge Update，可避开 0xA043050D）。安装后请在设置中填写本机或内网模型地址。"
           } else {
             $tag = "windows-nsis-$stamp"
             $title = "文书通 Windows 安装包 ($stamp)"

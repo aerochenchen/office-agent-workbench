@@ -2,7 +2,11 @@
   "bundle": {
     "windows": {
       "webviewInstallMode": {
-        "type": "offlineInstaller"
+        "type": "fixedRuntime",
+        "path": "./webview2-runtime/Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64"
+      },
+      "nsis": {
+        "installMode": "both"
       }
     }
   }

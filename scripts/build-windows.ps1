@@ -221,14 +221,30 @@ function Build-Tauri {
             $tauriArgs += @("--config", "src-tauri/tauri.microsoftstore.conf.json")
         }
         elseif ($LocalDeploy) {
-            # Intranet/air-gap: embed full WebView2 offline installer (~127MB).
-            # embedBootstrapper still needs Microsoft CDN at install time.
+            # Intranet/air-gap: bundle Fixed Version WebView2 next to the app.
+            # Evergreen offlineInstaller still hits Edge Update and can fail with
+            # 0xA043050D (-1606220531) on locked-down Win10.
+            $fetchScript = Join-Path $RepoRoot "scripts\fetch-webview2-fixed.ps1"
+            if (-not (Test-Path $fetchScript)) {
+                $ErrorActionPreference = $prevEap
+                throw "Missing $fetchScript"
+            }
+            & $fetchScript
+            if (-not $?) {
+                $ErrorActionPreference = $prevEap
+                throw "fetch-webview2-fixed.ps1 failed"
+            }
             $localConf = Join-Path $SrcTauri "tauri.localdeploy.conf.json"
             if (-not (Test-Path $localConf)) {
                 $ErrorActionPreference = $prevEap
                 throw "Local deploy config missing: $localConf"
             }
-            Write-Host "Local deploy mode: merging $localConf (offline WebView2)"
+            $fixedMarker = Join-Path $SrcTauri "webview2-runtime\Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64\msedgewebview2.exe"
+            if (-not (Test-Path $fixedMarker)) {
+                $ErrorActionPreference = $prevEap
+                throw "Fixed WebView2 runtime missing at $fixedMarker"
+            }
+            Write-Host "Local deploy mode: merging $localConf (fixed WebView2 runtime)"
             $tauriArgs += @("--config", "src-tauri/tauri.localdeploy.conf.json")
         }
         & npx --yes @tauriArgs
