@@ -612,15 +612,6 @@ pub fn run() {
                     }
                 }
             });
-            // If the frontend never calls show() (IPC missing / hung WebView),
-            // do not leave the window invisible forever.
-            let show_handle = app.handle().clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_secs(8));
-                if let Some(win) = show_handle.get_webview_window("main") {
-                    let _ = win.show();
-                }
-            });
             Ok(())
         });
 

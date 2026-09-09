@@ -21,29 +21,26 @@ describe("boot experience wiring", () => {
     expect(app).toContain("dismissBootSplash");
   });
 
-  it("hides the main window until splash can paint", () => {
+  it("shows the window immediately with paper background", () => {
     const conf = JSON.parse(read("src-tauri/tauri.conf.json")) as {
       app: {
         withGlobalTauri?: boolean;
         windows: Array<{ visible?: boolean; backgroundColor?: string }>;
       };
     };
-    expect(conf.app.windows[0].visible).toBe(false);
+    expect(conf.app.windows[0].visible).not.toBe(false);
     expect(conf.app.windows[0].backgroundColor).toBe("#f3f4f1");
-    expect(conf.app.withGlobalTauri).toBe(true);
+    expect(conf.app.withGlobalTauri).not.toBe(true);
   });
 
-  it("allows the frontend to show the window", () => {
-    const caps = JSON.parse(read("src-tauri/capabilities/default.json")) as {
-      permissions: unknown[];
-    };
-    expect(caps.permissions).toContain("core:window:allow-show");
+  it("does not defer production CSS with print media", () => {
+    expect(read("vite.config.ts")).not.toContain("deferRenderBlockingStyles");
+    expect(read("vite.config.ts")).not.toContain("media=\"print\"");
   });
 
-  it("reveals the window from the inline splash script", () => {
+  it("keeps paper-colored html/body behind the splash", () => {
     const html = read("index.html");
-    expect(html).toContain("__TAURI__");
-    expect(html).toMatch(/getCurrentWindow\(\)\.show\(\)/);
     expect(html).toMatch(/html,\s*body[\s\S]*background:\s*#f3f4f1/);
+    expect(html).toContain("正在启动本地运行组件");
   });
 });
