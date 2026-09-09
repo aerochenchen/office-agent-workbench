@@ -1,18 +1,17 @@
 //! Windows-only native splash shown before WebView2 paints.
-//! Runs a dedicated UI thread so the spinner keeps moving while Tauri boots.
+//! Uses pre-rendered BGRA frames (logo + short arc spinner) so GDI never draws spokes.
 
 #![cfg(windows)]
 
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    AngleArc, BeginPaint, CreateFontW, CreatePen, CreateSolidBrush, DeleteObject, EndPaint,
-    FillRect, GetStockObject, GetTextExtentPoint32W, InvalidateRect, SelectObject, SetBkMode,
-    SetTextColor, TextOutW, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, FW_SEMIBOLD,
-    HBRUSH, HFONT, NULL_BRUSH, OUT_TT_PRECIS, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
+    BeginPaint, BitBlt, CreateCompatibleDC, CreateDIBSection, CreateSolidBrush, DeleteDC,
+    DeleteObject, EndPaint, FillRect, GetDC, InvalidateRect, ReleaseDC, SelectObject, BITMAPINFO,
+    BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP, HBRUSH, PAINTSTRUCT, SRCCOPY,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -24,53 +23,124 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 
 const TIMER_ID: usize = 1;
-const SPINNER_TICK_MS: u32 = 50;
+const SPINNER_TICK_MS: u32 = 70;
 const WINDOW_W: i32 = 420;
 const WINDOW_H: i32 = 280;
+const FRAME_COUNT: usize = 12;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static HWND_RAW: AtomicIsize = AtomicIsize::new(0);
-static ANGLE: AtomicU32 = AtomicU32::new(0);
+static FRAME_IDX: AtomicUsize = AtomicUsize::new(0);
+
+/// Each blob: u32le width, u32le height, then top-down BGRA pixels.
+static FRAME_BGRAS: [&[u8]; FRAME_COUNT] = [
+    include_bytes!("../icons/splash/frame_00.bgra"),
+    include_bytes!("../icons/splash/frame_01.bgra"),
+    include_bytes!("../icons/splash/frame_02.bgra"),
+    include_bytes!("../icons/splash/frame_03.bgra"),
+    include_bytes!("../icons/splash/frame_04.bgra"),
+    include_bytes!("../icons/splash/frame_05.bgra"),
+    include_bytes!("../icons/splash/frame_06.bgra"),
+    include_bytes!("../icons/splash/frame_07.bgra"),
+    include_bytes!("../icons/splash/frame_08.bgra"),
+    include_bytes!("../icons/splash/frame_09.bgra"),
+    include_bytes!("../icons/splash/frame_10.bgra"),
+    include_bytes!("../icons/splash/frame_11.bgra"),
+];
+
+struct SplashBitmaps {
+    frames: Vec<(HBITMAP, i32, i32)>,
+}
+
+impl SplashBitmaps {
+    fn load() -> Option<Self> {
+        let mut frames = Vec::with_capacity(FRAME_COUNT);
+        for blob in FRAME_BGRAS {
+            let (hbmp, w, h) = bgra_to_hbitmap(blob)?;
+            frames.push((hbmp, w, h));
+        }
+        Some(Self { frames })
+    }
+}
+
+impl Drop for SplashBitmaps {
+    fn drop(&mut self) {
+        for (hbmp, _, _) in &self.frames {
+            unsafe {
+                DeleteObject(*hbmp as _);
+            }
+        }
+    }
+}
 
 fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// windows-sys does not export the Win32 `RGB` macro.
-fn rgb(r: u8, g: u8, b: u8) -> COLORREF {
-    (r as COLORREF) | ((g as COLORREF) << 8) | ((b as COLORREF) << 16)
+fn paper_color() -> u32 {
+    // COLORREF BGR for #f3f4f1
+    0x00f1_f4_f3
 }
 
-fn paper_color() -> COLORREF {
-    rgb(0xf3, 0xf4, 0xf1)
-}
+fn bgra_to_hbitmap(blob: &[u8]) -> Option<(HBITMAP, i32, i32)> {
+    if blob.len() < 8 {
+        return None;
+    }
+    let width = i32::from_le_bytes(blob[0..4].try_into().ok()?);
+    let height = i32::from_le_bytes(blob[4..8].try_into().ok()?);
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+    let expected = 8 + (width as usize) * (height as usize) * 4;
+    if blob.len() != expected {
+        return None;
+    }
+    let pixels = &blob[8..];
 
-fn ink_color() -> COLORREF {
-    rgb(0x1a, 0x1a, 0x1a)
-}
+    unsafe {
+        let mut bmi = std::mem::zeroed::<BITMAPINFO>();
+        bmi.bmiHeader = BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: width,
+            biHeight: -height, // top-down
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB,
+            biSizeImage: 0,
+            biXPelsPerMeter: 0,
+            biYPelsPerMeter: 0,
+            biClrUsed: 0,
+            biClrImportant: 0,
+        };
 
-fn muted_color() -> COLORREF {
-    rgb(0x4b, 0x55, 0x63)
-}
+        let hdc = GetDC(std::ptr::null_mut());
+        if hdc.is_null() {
+            return None;
+        }
+        let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
+        let hbmp = CreateDIBSection(
+            hdc,
+            &bmi,
+            DIB_RGB_COLORS,
+            &mut bits,
+            std::ptr::null_mut(),
+            0,
+        );
+        ReleaseDC(std::ptr::null_mut(), hdc);
+        if hbmp.is_null() || bits.is_null() {
+            return None;
+        }
 
-fn accent_color() -> COLORREF {
-    rgb(0x2f, 0x6f, 0x6a)
-}
-
-unsafe fn draw_centered_text(hdc: windows_sys::Win32::Graphics::Gdi::HDC, text: &str, y: i32, area: RECT) {
-    let wide = to_wide(text);
-    let len = (wide.len() - 1) as i32;
-    let mut size = SIZE { cx: 0, cy: 0 };
-    GetTextExtentPoint32W(hdc, wide.as_ptr(), len, &mut size);
-    let x = area.left + ((area.right - area.left) - size.cx) / 2;
-    TextOutW(hdc, x, y, wide.as_ptr(), len);
+        std::ptr::copy_nonoverlapping(pixels.as_ptr(), bits as *mut u8, pixels.len());
+        Some((hbmp, width, height))
+    }
 }
 
 unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_TIMER => {
             if wparam == TIMER_ID as WPARAM {
-                ANGLE.fetch_add(12, Ordering::Relaxed);
+                FRAME_IDX.fetch_add(1, Ordering::Relaxed);
                 InvalidateRect(hwnd, std::ptr::null(), 0);
             }
             0
@@ -94,6 +164,10 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
     }
 }
 
+thread_local! {
+    static BITMAPS: std::cell::RefCell<Option<SplashBitmaps>> = std::cell::RefCell::new(None);
+}
+
 unsafe fn paint(hwnd: HWND) {
     let mut ps = std::mem::zeroed::<PAINTSTRUCT>();
     let hdc = BeginPaint(hwnd, &mut ps);
@@ -108,69 +182,26 @@ unsafe fn paint(hwnd: HWND) {
         bottom: 0,
     };
     GetClientRect(hwnd, &mut rect);
-    let bg = CreateSolidBrush(paper_color());
-    FillRect(hdc, &rect, bg);
-    DeleteObject(bg as _);
 
-    SetBkMode(hdc, TRANSPARENT as _);
-
-    let yahei = to_wide("Microsoft YaHei UI");
-    let brand_font: HFONT = CreateFontW(
-        42,
-        0,
-        0,
-        0,
-        FW_SEMIBOLD as i32,
-        0,
-        0,
-        0,
-        DEFAULT_CHARSET as u32,
-        OUT_TT_PRECIS as u32,
-        CLIP_DEFAULT_PRECIS as u32,
-        CLEARTYPE_QUALITY as u32,
-        0,
-        yahei.as_ptr(),
-    );
-    let old_font = SelectObject(hdc, brand_font as _);
-    SetTextColor(hdc, ink_color());
-    draw_centered_text(hdc, "文书通", 56, rect);
-
-    let status_font: HFONT = CreateFontW(
-        18,
-        0,
-        0,
-        0,
-        400,
-        0,
-        0,
-        0,
-        DEFAULT_CHARSET as u32,
-        OUT_TT_PRECIS as u32,
-        CLIP_DEFAULT_PRECIS as u32,
-        CLEARTYPE_QUALITY as u32,
-        0,
-        yahei.as_ptr(),
-    );
-    SelectObject(hdc, status_font as _);
-    SetTextColor(hdc, muted_color());
-    draw_centered_text(hdc, "正在启动本地运行组件…", 118, rect);
-
-    let angle = (ANGLE.load(Ordering::Relaxed) % 360) as f32;
-    let cx = (rect.left + rect.right) / 2;
-    let cy = 200;
-    let r = 16u32;
-    let pen = CreatePen(PS_SOLID as i32, 3, accent_color());
-    let old_pen = SelectObject(hdc, pen as _);
-    let null_brush = GetStockObject(NULL_BRUSH as i32);
-    let old_brush = SelectObject(hdc, null_brush);
-    AngleArc(hdc, cx, cy, r, angle, 270.0);
-    SelectObject(hdc, old_brush);
-    SelectObject(hdc, old_pen);
-    DeleteObject(pen as _);
-
-    SelectObject(hdc, old_font);
-    DeleteObject(brand_font as _);
-    DeleteObject(status_font as _);
+    BITMAPS.with(|cell| {
+        let guard = cell.borrow();
+        let Some(bmps) = guard.as_ref() else {
+            let bg = CreateSolidBrush(paper_color());
+            FillRect(hdc, &rect, bg);
+            DeleteObject(bg as _);
+            return;
+        };
+        let idx = FRAME_IDX.load(Ordering::Relaxed) % bmps.frames.len();
+        let (hbmp, w, h) = bmps.frames[idx];
+        let mem = CreateCompatibleDC(hdc);
+        if mem.is_null() {
+            return;
+        }
+        let old = SelectObject(mem, hbmp as _);
+        BitBlt(hdc, 0, 0, w, h, mem, 0, 0, SRCCOPY);
+        SelectObject(mem, old);
+        DeleteDC(mem);
+    });
 
     EndPaint(hwnd, &ps);
 }
@@ -181,7 +212,17 @@ pub fn show() {
         return;
     }
 
+    FRAME_IDX.store(0, Ordering::Relaxed);
+
     thread::spawn(|| unsafe {
+        let Some(bitmaps) = SplashBitmaps::load() else {
+            RUNNING.store(false, Ordering::SeqCst);
+            return;
+        };
+        BITMAPS.with(|cell| {
+            *cell.borrow_mut() = Some(bitmaps);
+        });
+
         let instance = GetModuleHandleW(std::ptr::null());
         let class_name = to_wide("WenshutongNativeSplash");
         let wc = WNDCLASSW {
@@ -219,6 +260,9 @@ pub fn show() {
             std::ptr::null(),
         );
         if hwnd.is_null() {
+            BITMAPS.with(|cell| {
+                *cell.borrow_mut() = None;
+            });
             RUNNING.store(false, Ordering::SeqCst);
             return;
         }
@@ -241,6 +285,10 @@ pub fn show() {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+
+        BITMAPS.with(|cell| {
+            *cell.borrow_mut() = None;
+        });
     });
 
     // Brief yield so the splash thread can paint once before WebView work begins.

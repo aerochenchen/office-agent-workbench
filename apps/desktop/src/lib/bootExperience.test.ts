@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -31,7 +31,7 @@ describe("boot experience wiring", () => {
     expect(conf.app.windows[0].backgroundColor).toBe("#f3f4f1");
   });
 
-  it("wires a Windows native splash with spinner before WebView", () => {
+  it("wires a Windows native splash with prerendered spinner before WebView", () => {
     const lib = read("src-tauri/src/lib.rs");
     expect(lib).toContain("mod native_splash");
     expect(lib).toContain("native_splash::show");
@@ -39,9 +39,17 @@ describe("boot experience wiring", () => {
     expect(lib).toContain("PageLoadEvent::Finished");
 
     const splash = read("src-tauri/src/native_splash.rs");
-    expect(splash).toContain("正在启动本地运行组件");
-    expect(splash).toContain("AngleArc");
     expect(splash).toContain("文书通");
+    expect(splash).toContain("BitBlt");
+    expect(splash).toContain("frame_00.bgra");
+    expect(splash).toContain("include_bytes!");
+    expect(splash).not.toContain("AngleArc");
+
+    for (let i = 0; i < 12; i += 1) {
+      const stem = `frame_${String(i).padStart(2, "0")}`;
+      expect(existsSync(resolve(desktopRoot, `src-tauri/icons/splash/${stem}.png`))).toBe(true);
+      expect(existsSync(resolve(desktopRoot, `src-tauri/icons/splash/${stem}.bgra`))).toBe(true);
+    }
   });
 
   it("keeps paper-colored html/body behind the HTML splash", () => {
