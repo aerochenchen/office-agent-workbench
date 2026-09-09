@@ -13,7 +13,7 @@
 ## 2. 打出商店包
 
 1. Actions → **Build Windows MSIX Store** → Run workflow  
-2. 填入上一步三项身份 + 版本（默认 `0.1.0.0`，第 4 段必须为 0）  
+2. 填入上一步三项身份 + 版本（默认 `1.6.0.0`，第 4 段必须为 0）  
 3. 下载 Artifact：`wenshutong-windows-msix-store`
 
 ## 3. 提交前本机核对（Windows）

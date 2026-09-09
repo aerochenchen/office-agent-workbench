@@ -59,7 +59,7 @@ packaging/dist/pks/wenshutong-pks-<version>-aarch64/
 └── README-安装说明.txt
 ```
 
-版本示例：当前 `1.5.0` → `packaging/dist/pks/wenshutong-pks-1.5.0-aarch64/`。
+版本示例：当前 `1.6.0` → `packaging/dist/pks/wenshutong-pks-1.6.0-aarch64/`。
 
 构建成功时终端会打印：`USB bundle ready: .../wenshutong-pks-<version>-aarch64`。
 

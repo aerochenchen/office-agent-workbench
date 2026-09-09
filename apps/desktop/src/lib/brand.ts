@@ -4,8 +4,8 @@ export const APP_NAME = "文书通";
 export const APP_TAGLINE = "办公文书 · 智能通办";
 /** macOS / Windows window title — keep short to avoid duplicating the in-app brand block. */
 export const WINDOW_TITLE = APP_NAME;
-/** Shown in About. */
-export const APP_VERSION = "0.1.6";
+/** Shown in About; keep in sync with package.json / tauri.conf.json. */
+export const APP_VERSION = "1.6.0";
 
 /** Publisher shown under the product identity in About. */
 export const STUDIO_NAME = "立人达创新工作室";

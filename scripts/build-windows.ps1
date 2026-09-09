@@ -33,7 +33,7 @@ param(
     [string]$StorePackageName = "",
     [string]$StorePublisher = "",
     [string]$StorePublisherDisplayName = "",
-    [string]$StoreVersion = "0.1.0.0"
+    [string]$StoreVersion = "1.6.0.0"
 )
 
 if ($MicrosoftStore -and $Msix) {
@@ -64,7 +64,7 @@ function Assert-MsixStorePrerequisites {
         }
     }
     if ($StoreVersion -notmatch '^\d+\.\d+\.\d+\.0$') {
-        throw "StoreVersion must match x.y.z.0 (for example 0.1.0.0)"
+        throw "StoreVersion must match x.y.z.0 (for example 1.6.0.0)"
     }
 
     $winapp = Get-Command winapp -ErrorAction SilentlyContinue
@@ -423,7 +423,7 @@ function Build-Msix {
     Copy-Item -Path $manifest -Destination (Join-Path $MsixPayloadDir "Package.appxmanifest") -Force
 
     $devCert = Join-Path $MsixOutDir "devcert.pfx"
-    $msixOutFile = Join-Path $MsixOutDir "Wenshutong_0.1.0.0_x64.msix"
+    $msixOutFile = Join-Path $MsixOutDir "Wenshutong_1.6.0.0_x64.msix"
 
     # Same stderr-vs-Stop trap as Build-Sidecar / Build-Tauri: preview CLIs
     # often write progress to stderr; with $ErrorActionPreference=Stop that

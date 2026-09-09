@@ -27,7 +27,7 @@ Partner Center 的 EXE/MSI 产品需要填写**安装包下载 URL**：
 - URL 应按版本固定；**提交后该 URL 上的二进制不得再被覆盖**。
 - 新版本必须换新的版本化 URL，并更新商店提交。
 
-推荐：用 GitHub Release 的 Assets 链接（每个版本独立文件名，例如 `文书通_0.1.0_x64-setup.exe`）。
+推荐：用 GitHub Release 的 Assets 链接（每个版本独立文件名，例如 `文书通_1.6.0_x64-setup.exe`）。
 
 一期 CI 默认可能产出**未签名**包：上架前请先完成本机或 CI 签名，再上传到该 URL。
 

@@ -28,7 +28,7 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCT = "文书通"
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 SNAPSHOT_NAME = f"{PRODUCT}-{VERSION}-源代码检测快照.zip"
 BLACK = RGBColor(0x00, 0x00, 0x00)
 GRAY = RGBColor(0x33, 0x33, 0x33)

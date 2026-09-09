@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="1.5.0"
+VERSION="1.6.0"
 STAMP="$(date +%Y%m%d)"
 BUNDLE_DIR="文书通-${VERSION}-源代码复测快照"
 OUT_ROOT="${ROOT}/packaging/dist/security-review"

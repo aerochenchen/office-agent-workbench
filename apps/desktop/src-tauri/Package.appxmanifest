@@ -7,7 +7,7 @@
   <Identity
     Name="ChenZai.Wenshutong"
     Publisher="CN=ChenZai Wenshutong Spike"
-    Version="0.1.0.0" />
+    Version="1.6.0.0" />
   <Properties>
     <DisplayName>文书通</DisplayName>
     <PublisherDisplayName>ChenZai</PublisherDisplayName>
