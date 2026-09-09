@@ -485,11 +485,6 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 )
             office.config.permission_mode = mode
         if body.allow_workspace_scripts is not None:
-            if office.config.resolved_profile() == PROFILE_LOCAL and body.allow_workspace_scripts:
-                raise HTTPException(
-                    status_code=400,
-                    detail="本地部署版本不允许启用工作区自定义脚本",
-                )
             office.config.allow_workspace_scripts = bool(body.allow_workspace_scripts)
         save_config(office.config)
         return {"ok": True}

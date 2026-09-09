@@ -865,12 +865,17 @@ def test_workspace_scripts_disabled_on_chat(
     assert "disabled" in events[0]["result"]["error"].lower()
 
 
-def test_local_profile_rejects_enabling_workspace_scripts(
+def test_local_profile_allows_enabling_workspace_scripts(
     client: TestClient, app_state: ProcessState
 ):
+    """Local deploy defaults to off, but users may opt in explicitly."""
     app_state.config.deployment_profile = "local"
+    app_state.config.allow_workspace_scripts = False
     r = client.post("/config", json={"allow_workspace_scripts": True})
-    assert r.status_code == 400
+    assert r.status_code == 200
+    assert app_state.config.allow_workspace_scripts is True
+    r2 = client.get("/config")
+    assert r2.json()["allow_workspace_scripts"] is True
 
 
 def test_local_profile_rejects_public_api_base(client: TestClient, app_state: ProcessState):

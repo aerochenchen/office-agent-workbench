@@ -182,6 +182,14 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   }
 
   async function handleSave() {
+    if (allowWorkspaceScripts && !initial.allow_workspace_scripts) {
+      const ok = window.confirm(
+        "开启后，助手可在工作区编写并运行临时 Python 程序，可能改动其中的文件。\n\n确定开启吗？",
+      );
+      if (!ok) {
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     try {
@@ -413,7 +421,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 <p className="settings-permission-hint">{permissionHint}</p>
                 {initial.deployment_profile === "local" && (
                   <p className="settings-permission-hint">
-                    当前为本地部署版本：仅允许本机或内网模型地址，工作区自定义脚本已关闭，脚本在隔离进程中运行。
+                    本地部署版：模型地址限本机或内网；自定义脚本默认关闭，可手动开启。
                   </p>
                 )}
                 <label className="field field--checkbox">
@@ -421,12 +429,13 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                   <input
                     type="checkbox"
                     checked={allowWorkspaceScripts}
-                    disabled={initial.deployment_profile === "local"}
                     onChange={(e) => setAllowWorkspaceScripts(e.currentTarget.checked)}
                   />
                 </label>
                 <p className="settings-permission-hint">
-                  默认关闭。开启后，模型可执行工作区里的 .py（仍受确认策略约束）。技能自带脚本不受此项影响。
+                  {allowWorkspaceScripts
+                    ? "已开启：助手可在工作区写并运行临时脚本，能力更强，也可能改动工作区文件。技能脚本不受影响。"
+                    : "默认关闭：助手不能自写自跑工作区脚本，复杂自动化会弱一些。技能功能不受影响。"}
                 </p>
               </section>
             )}
