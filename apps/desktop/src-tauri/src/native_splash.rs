@@ -12,7 +12,7 @@ use windows_sys::Win32::Graphics::Gdi::{
     AngleArc, BeginPaint, CreateFontW, CreatePen, CreateSolidBrush, DeleteObject, EndPaint,
     FillRect, GetStockObject, GetTextExtentPoint32W, InvalidateRect, SelectObject, SetBkMode,
     SetTextColor, TextOutW, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, DEFAULT_CHARSET, FW_SEMIBOLD,
-    HBRUSH, HFONT, NULL_BRUSH, OUT_TT_PRECIS, PAINTSTRUCT, PS_SOLID, RGB, TRANSPARENT,
+    HBRUSH, HFONT, NULL_BRUSH, OUT_TT_PRECIS, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -36,20 +36,25 @@ fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
+/// windows-sys does not export the Win32 `RGB` macro.
+fn rgb(r: u8, g: u8, b: u8) -> COLORREF {
+    (r as COLORREF) | ((g as COLORREF) << 8) | ((b as COLORREF) << 16)
+}
+
 fn paper_color() -> COLORREF {
-    RGB(0xf3, 0xf4, 0xf1)
+    rgb(0xf3, 0xf4, 0xf1)
 }
 
 fn ink_color() -> COLORREF {
-    RGB(0x1a, 0x1a, 0x1a)
+    rgb(0x1a, 0x1a, 0x1a)
 }
 
 fn muted_color() -> COLORREF {
-    RGB(0x4b, 0x55, 0x63)
+    rgb(0x4b, 0x55, 0x63)
 }
 
 fn accent_color() -> COLORREF {
-    RGB(0x2f, 0x6f, 0x6a)
+    rgb(0x2f, 0x6f, 0x6a)
 }
 
 unsafe fn draw_centered_text(hdc: windows_sys::Win32::Graphics::Gdi::HDC, text: &str, y: i32, area: RECT) {
@@ -119,10 +124,10 @@ unsafe fn paint(hwnd: HWND) {
         0,
         0,
         0,
-        DEFAULT_CHARSET,
-        OUT_TT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
+        DEFAULT_CHARSET as u32,
+        OUT_TT_PRECIS as u32,
+        CLIP_DEFAULT_PRECIS as u32,
+        CLEARTYPE_QUALITY as u32,
         0,
         yahei.as_ptr(),
     );
@@ -139,10 +144,10 @@ unsafe fn paint(hwnd: HWND) {
         0,
         0,
         0,
-        DEFAULT_CHARSET,
-        OUT_TT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
+        DEFAULT_CHARSET as u32,
+        OUT_TT_PRECIS as u32,
+        CLIP_DEFAULT_PRECIS as u32,
+        CLEARTYPE_QUALITY as u32,
         0,
         yahei.as_ptr(),
     );
