@@ -46,6 +46,10 @@ hiddenimports: list = list(
         "pdfplumber",
         "pdfminer",
         "pypdfium2",
+        "rapidocr",
+        "onnxruntime",
+        "cv2",
+        "omegaconf",
     ]
 )
 
@@ -67,6 +71,10 @@ for pkg in (
     "pdfminer",
     "pypdfium2",
     "PIL",
+    "rapidocr",
+    "onnxruntime",
+    "cv2",
+    "omegaconf",
 ):
     try:
         d, b, h = collect_all(pkg)

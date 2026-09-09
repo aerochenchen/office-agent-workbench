@@ -1,12 +1,12 @@
 # 文书通 · PDF 文本/表格抽取设计
 
-**日期：** 2026-08-06  
+**日期：** 2026-08-06（2026-09-09 增补：无文本层印刷体 OCR）  
 **状态：** 已实施  
-**范围：** 标准 Runtime 的 `workspace_extract` / `doc_io` 补齐数字 PDF 抽取（含基础表格），不含 OCR
+**范围：** 标准 Runtime 的 `workspace_extract` / `doc_io`：数字 PDF 抽取（含基础表格）+ 无文本层印刷体扫描/图片版 OCR。不含手写、印章、写回 PDF。
 
 ## 1. Objective
 
-用户将 `.pdf` 放入工作区后，Agent 可通过现有 `workspace_extract` 得到与 docx/xlsx 同构的可引用文本单元（含 `unit_id`），覆盖有文本层的正文与基础表格。扫描页明确降级提示，不假装已读。
+用户将 `.pdf` 放入工作区后，Agent 可通过现有 `workspace_extract` 得到与 docx/xlsx 同构的可引用文本单元（含 `unit_id`）。有文本层的页抽正文与基础表格；无文本层的印刷体扫描/图片版页做 OCR（默认最多 30 页），并标明识别来源。OCR 仍为空的页 warning，不假装已读。
 
 ## 2. In / Out
 
@@ -20,7 +20,7 @@
 
 **Out**
 
-- OCR / 扫描件识别（含 optional skill 落地）
+- 手写、印章、图中表结构还原、视觉多模态读图
 - PyMuPDF（AGPL，与 `check_licenses.sh` 冲突）
 - PDF 的 `granularity=cells`（单元格级）
 - 新工具名；改 workspace 白名单（已含 `.pdf`）
@@ -74,9 +74,11 @@
 
 ### 5.4 无文本层页
 
-- 不产生空 unit
-- `warnings` 追加：`第N页: 无文本层（疑似扫描或纯图，暂不支持 OCR）`
-- 有字页照常返回；文件可打开则 `ok=true`
+- 先尝试 pypdfium2 渲染 + RapidOCR（印刷体，默认最多 30 页）
+- 识别成功：`kind=page`（或 paragraph），`meta.source=ocr`；warning 先说明处理得好的材料（Word/WPS、能选中文字的 PDF），再说明当前扫描件不能保证准确及可能出现的问题
+- 超过上限的扫描页：`truncated=true`，warning 说明未识别
+- OCR 仍无字：不产生空 unit；`warnings` 追加无文本层（疑似纯图或识别无结果）
+- 有字页不跑 OCR；文件可打开则 `ok=true`
 
 ### 5.5 截断与 cells
 
@@ -98,11 +100,11 @@
 - 声明：`pdfplumber>=0.11.0`（MIT）
 - 传递依赖预期含 `pdfminer.six`、`Pillow`、`pypdfium2`（均非 GPL/AGPL）
 - 发版门禁：`./scripts/check_licenses.sh` 必须通过
-- 标准底座仍禁止 torch 等 heavy 依赖；OCR 不进本轮
+- 标准底座仍禁止 torch；印刷体 OCR 用 RapidOCR + ONNX Runtime（随 sidecar 打包模型）
 
 ## 8. Agent 文案
 
-- `workspace_extract`：支持列表增加 `.pdf`；说明扫描页无 OCR
+- `workspace_extract`：支持列表含 `.pdf`；无文本层印刷体页会 OCR，并说明好材料与识别不准的风险
 - `workspace_read`：Office + PDF 请用 extract
 - 系统提示中「读取 Office」类句子同步包含 PDF
 

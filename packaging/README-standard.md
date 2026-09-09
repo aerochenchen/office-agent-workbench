@@ -1,6 +1,6 @@
 # 标准底座安装包
 
-面向内网办公场景的默认交付物：**不含** PyTorch / sentence-transformers / transformers 等写作 RAG 重依赖。
+面向内网办公场景的默认交付物：**不含** PyTorch / sentence-transformers / transformers 等写作 RAG 重依赖。印刷体 PDF 扫描识别使用 RapidOCR + ONNX Runtime（随 Runtime 打包），不引入 Torch。
 
 ## 包内内容
 

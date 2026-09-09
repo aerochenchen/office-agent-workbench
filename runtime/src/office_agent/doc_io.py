@@ -4,6 +4,7 @@
 - .doc  → .docx (soffice / textutil / Word COM on Windows)
 - .xls  → .xlsx (xlrd → openpyxl)
 - extract: .docx / .xlsx / .pdf → list of units with stable unit_id anchors
+- PDF pages with no text layer: printed-text OCR via pypdfium2 render + RapidOCR
 """
 
 from __future__ import annotations
@@ -19,6 +20,21 @@ from pathlib import Path
 from typing import Any
 
 NORMALIZED_REL = ".office-agent/work/normalized"
+PDF_OCR_MAX_PAGES_DEFAULT = 30
+# pypdfium2 scale=1 is 72 dpi. 150 dpi is enough for printed scans without huge bitmaps.
+# Source: https://github.com/pypdfium2-team/pypdfium2#render-a-page
+PDF_OCR_RENDER_DPI = 150
+PDF_OCR_QUALITY_HINT = (
+    "处理得好的材料：能打开、能改字的 Word/WPS；"
+    "或者 PDF 打开后用鼠标能把字拖选出来（Word 里点「另存为 PDF」一般就是这种）。"
+    "表格用 Excel。"
+    "当前这份是扫描件或图片版，靠印刷体识别，不能保证准确。"
+    "现在处理可能：错字、错数、文号和金额对不上、表格错行错列；"
+    "印章、手写、歪斜或模糊页更容易错。"
+    "适合先看个大概；要对数字、对原文，请换上面那种材料。"
+)
+
+_OCR_ENGINE: Any = None
 
 _CN_LEVEL1 = re.compile(r"^[一二三四五六七八九十]+、")
 _CN_LEVEL2 = re.compile(r"^（[一二三四五六七八九十]+）")
@@ -717,6 +733,113 @@ def _pdf_extract_text_pdfium(path: Path, page_index: int, *, _doc_cache: dict[st
     return raw.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
+def _page_ranges_text(pages: list[int]) -> str:
+    if not pages:
+        return ""
+    ranges: list[str] = []
+    range_start = range_end = pages[0]
+    for page_no in pages[1:]:
+        if page_no == range_end + 1:
+            range_end = page_no
+            continue
+        ranges.append(
+            str(range_start) if range_start == range_end else f"{range_start}–{range_end}"
+        )
+        range_start = range_end = page_no
+    ranges.append(
+        str(range_start) if range_start == range_end else f"{range_start}–{range_end}"
+    )
+    return "、".join(ranges)
+
+
+def _pdf_render_page_image(
+    path: Path,
+    page_index: int,
+    *,
+    _doc_cache: dict[str, Any] | None = None,
+) -> Any | None:
+    """Rasterize one page for printed OCR. Returns a PIL Image or None."""
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return None
+
+    cache_key = str(path.resolve())
+    owns_doc = False
+    doc = None
+    try:
+        if _doc_cache is not None and cache_key in _doc_cache:
+            doc = _doc_cache[cache_key]
+        else:
+            if not path.is_file():
+                return None
+            doc = pdfium.PdfDocument(path.read_bytes())
+            owns_doc = True
+            if _doc_cache is not None:
+                _doc_cache[cache_key] = doc
+                owns_doc = False
+        if page_index < 0 or page_index >= len(doc):
+            return None
+        page = doc[page_index]
+        try:
+            bitmap = page.render(scale=PDF_OCR_RENDER_DPI / 72.0)
+            return bitmap.to_pil()
+        finally:
+            page.close()
+    except Exception:  # noqa: BLE001
+        return None
+    finally:
+        if owns_doc and doc is not None:
+            try:
+                doc.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _rapidocr_engine() -> Any | None:
+    """Lazy RapidOCR singleton. False sentinel after a failed import/init."""
+    global _OCR_ENGINE
+    if _OCR_ENGINE is False:
+        return None
+    if _OCR_ENGINE is None:
+        try:
+            # Official install: pip install rapidocr onnxruntime
+            # Source: https://rapidai.github.io/RapidOCRDocs/main/install_usage/rapidocr/install/
+            from rapidocr import RapidOCR
+
+            _OCR_ENGINE = RapidOCR()
+        except Exception:  # noqa: BLE001
+            _OCR_ENGINE = False
+            return None
+    return _OCR_ENGINE
+
+
+def _pdf_ocr_printed_text(image: Any) -> str:
+    """Run printed-text OCR on a page image. Empty on missing engine or no text."""
+    engine = _rapidocr_engine()
+    if engine is None or image is None:
+        return ""
+    try:
+        result = engine(image)
+    except Exception:  # noqa: BLE001
+        return ""
+    txts = getattr(result, "txts", None) or ()
+    lines = [str(t).strip() for t in txts if t and str(t).strip()]
+    return "\n".join(lines)
+
+
+def _pdf_ocr_page_text(
+    path: Path,
+    page_index: int,
+    *,
+    _doc_cache: dict[str, Any] | None = None,
+) -> str:
+    image = _pdf_render_page_image(path, page_index, _doc_cache=_doc_cache)
+    if image is None:
+        return ""
+    return _pdf_ocr_printed_text(image)
+
+
 def extract_pdf(
     path: Path,
     doc_key: str,
@@ -724,6 +847,7 @@ def extract_pdf(
     max_chars: int,
     max_units: int,
     granularity: str = "section",
+    max_ocr_pages: int = PDF_OCR_MAX_PAGES_DEFAULT,
 ) -> tuple[list[ExtractUnit], bool, list[str]]:
     try:
         import pdfplumber
@@ -750,6 +874,9 @@ def extract_pdf(
     truncated = False
     unit_i = 0
     no_text_pages: list[int] = []
+    ocr_pages: list[int] = []
+    skipped_ocr_pages: list[int] = []
+    ocr_used = 0
     pdfium_cache: dict[str, Any] = {}
 
     def _append(kind: str, locator: str, text: str, meta: dict[str, Any]) -> bool:
@@ -781,7 +908,7 @@ def extract_pdf(
         total_chars += len(text)
         return truncated
 
-    def _append_body(page_no: int, body: str) -> None:
+    def _append_body(page_no: int, body: str, *, source: str = "text") -> None:
         if gran == "paragraph":
             blocks = [b.strip() for b in body.split("\n") if b.strip()]
             for bi, block in enumerate(blocks, start=1):
@@ -793,6 +920,7 @@ def extract_pdf(
                         "page": page_no,
                         "block": bi,
                         "granularity": "paragraph",
+                        "source": source,
                     },
                 ):
                     break
@@ -801,7 +929,11 @@ def extract_pdf(
                 "page",
                 f"第{page_no}页",
                 body,
-                {"page": page_no, "granularity": "section"},
+                {
+                    "page": page_no,
+                    "granularity": "section",
+                    "source": source,
+                },
             )
 
     # Prefer Path over str so Unicode paths stay intact on Windows.
@@ -852,9 +984,22 @@ def extract_pdf(
                     has_text_layer = True
 
             if not has_text_layer:
-                no_text_pages.append(page_no)
+                if max_ocr_pages > 0 and ocr_used >= max_ocr_pages:
+                    skipped_ocr_pages.append(page_no)
+                elif max_ocr_pages > 0:
+                    ocr_used += 1
+                    ocr_body = _pdf_ocr_page_text(
+                        path, page_no - 1, _doc_cache=pdfium_cache
+                    )
+                    if ocr_body:
+                        _append_body(page_no, ocr_body, source="ocr")
+                        ocr_pages.append(page_no)
+                    else:
+                        no_text_pages.append(page_no)
+                else:
+                    no_text_pages.append(page_no)
             else:
-                _append_body(page_no, body)
+                _append_body(page_no, body, source="text")
 
             for ti, tobj in enumerate(table_objs, start=1):
                 try:
@@ -916,29 +1061,23 @@ def extract_pdf(
         except Exception:  # noqa: BLE001
             pass
 
-    if no_text_pages:
-        ranges: list[str] = []
-        range_start = range_end = no_text_pages[0]
-        for page_no in no_text_pages[1:]:
-            if page_no == range_end + 1:
-                range_end = page_no
-                continue
-            ranges.append(
-                str(range_start)
-                if range_start == range_end
-                else f"{range_start}–{range_end}"
-            )
-            range_start = range_end = page_no
-        ranges.append(
-            str(range_start)
-            if range_start == range_end
-            else f"{range_start}–{range_end}"
-        )
+    if ocr_pages:
         warnings.append(
-            f"第{'、'.join(ranges)}页等共{len(no_text_pages)}页无文本层"
-            "（疑似扫描或纯图，暂不支持 OCR）"
+            f"第{_page_ranges_text(ocr_pages)}页等共{len(ocr_pages)}页。"
+            f"{PDF_OCR_QUALITY_HINT}"
         )
-    if not units and not no_text_pages:
+    if skipped_ocr_pages:
+        truncated = True
+        warnings.append(
+            f"第{_page_ranges_text(skipped_ocr_pages)}页未做印刷体识别"
+            f"（已达上限 {max_ocr_pages} 页）"
+        )
+    if no_text_pages:
+        warnings.append(
+            f"第{_page_ranges_text(no_text_pages)}页等共{len(no_text_pages)}页无文本层"
+            "（疑似纯图或印刷体识别无结果）"
+        )
+    if not units and not no_text_pages and not skipped_ocr_pages:
         warnings.append("pdf 未解析到文本或表格")
     return units, truncated, warnings
 
@@ -951,6 +1090,7 @@ def extract_file(
     max_units: int = 200,
     force_normalize: bool = False,
     granularity: str = "section",
+    max_ocr_pages: int = PDF_OCR_MAX_PAGES_DEFAULT,
 ) -> ExtractResult:
     """Normalize if needed, then extract units from docx/xlsx/pdf."""
     path = path.resolve()
@@ -1007,6 +1147,7 @@ def extract_file(
                 max_chars=max_chars,
                 max_units=max_units,
                 granularity=granularity,
+                max_ocr_pages=max_ocr_pages,
             )
         else:
             raise DocIOError(f"unsupported extract format: {fmt}")

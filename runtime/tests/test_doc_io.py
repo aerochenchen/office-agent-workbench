@@ -16,6 +16,16 @@ from office_agent.tools import ToolExecutor
 from office_agent.workspace import Workspace
 
 
+@pytest.fixture(autouse=True)
+def _stub_pdf_ocr_page_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep PDF unit tests off the real RapidOCR engine unless a test opts in."""
+    monkeypatch.setattr(
+        "office_agent.doc_io._pdf_ocr_page_text",
+        lambda *_a, **_k: "",
+        raising=False,
+    )
+
+
 def _write_docx(path: Path) -> None:
     doc = Document()
     doc.add_heading("专项汇报", level=1)
@@ -575,3 +585,67 @@ def test_extract_pdf_falls_back_to_pdfium_when_pdfminer_empty(
     assert result.ok is True
     assert any("99" in u.text for u in result.units)
     assert not any("无文本层" in w for w in result.warnings)
+
+
+def test_extract_pdf_ocr_fills_empty_scan_page(tmp_path: Path, monkeypatch):
+    src = tmp_path / "scan.pdf"
+    _write_pdf_pages(src, [None])
+    monkeypatch.setattr(
+        "office_agent.doc_io._pdf_ocr_page_text",
+        lambda *_a, **_k: "扫描通知 128 个网点",
+    )
+    result = extract_file(src, tmp_path)
+    assert result.ok is True
+    pages = [u for u in result.units if u.kind == "page"]
+    assert any("128" in u.text for u in pages)
+    assert all(u.meta.get("source") == "ocr" for u in pages)
+    assert any("印刷体识别" in w for w in result.warnings)
+    assert any("处理得好的材料" in w and "不能保证准确" in w for w in result.warnings)
+    assert not any("请勿当原文核对" in w for w in result.warnings)
+    assert not any("暂不支持 OCR" in w for w in result.warnings)
+
+
+def test_extract_pdf_does_not_ocr_text_layer_pages(tmp_path: Path, monkeypatch):
+    src = tmp_path / "digital.pdf"
+    _write_pdf_pages(src, ["Digital body 42"])
+    called = {"n": 0}
+
+    def _should_not_run(*_a, **_k) -> str:
+        called["n"] += 1
+        return "SHOULD_NOT"
+
+    monkeypatch.setattr("office_agent.doc_io._pdf_ocr_page_text", _should_not_run)
+    result = extract_file(src, tmp_path)
+    assert called["n"] == 0
+    assert any("42" in u.text for u in result.units)
+    assert all(u.meta.get("source") != "ocr" for u in result.units)
+
+
+def test_extract_pdf_ocr_mixed_digital_and_scan(tmp_path: Path, monkeypatch):
+    src = tmp_path / "mixed.pdf"
+    _write_pdf_pages(src, ["Alpha progress 128 sites", None])
+    monkeypatch.setattr(
+        "office_agent.doc_io._pdf_ocr_page_text",
+        lambda *_a, **_k: "封面扫描件",
+    )
+    result = extract_file(src, tmp_path)
+    pages = [u for u in result.units if u.kind == "page"]
+    digital = [u for u in pages if "128" in u.text]
+    ocr = [u for u in pages if u.meta.get("source") == "ocr"]
+    assert digital
+    assert any("封面扫描件" in u.text for u in ocr)
+    assert all(u.meta.get("source") != "ocr" for u in digital)
+
+
+def test_extract_pdf_ocr_max_pages_sets_truncated(tmp_path: Path, monkeypatch):
+    src = tmp_path / "many_scans.pdf"
+    _write_pdf_pages(src, [None, None, None])
+    monkeypatch.setattr(
+        "office_agent.doc_io._pdf_ocr_page_text",
+        lambda *_a, **_k: "scan line",
+    )
+    result = extract_file(src, tmp_path, max_ocr_pages=1)
+    ocr_units = [u for u in result.units if u.meta.get("source") == "ocr"]
+    assert len(ocr_units) == 1
+    assert result.truncated is True
+    assert any("上限" in w for w in result.warnings)

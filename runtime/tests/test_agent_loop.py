@@ -87,6 +87,23 @@ def test_tool_loop_lists_workspace_then_replies(tmp_path: Path, monkeypatch):
     assert "示例" in system["content"] or "s1" in system["content"]
 
 
+def test_workspace_extract_schema_mentions_printed_ocr():
+    schema = next(s for s in TOOL_SCHEMAS if s["function"]["name"] == "workspace_extract")
+    desc = schema["function"]["description"]
+    assert "印刷体" in desc
+    assert "Word/WPS" in desc
+    assert "不能保证准确" in desc
+    assert "不做 OCR" not in desc
+
+
+def test_system_prompt_mentions_printed_pdf_ocr():
+    text = _build_system_prompt([])
+    assert "印刷体" in text
+    assert "转告用户" in text
+    assert "处理得好的材料" in text
+    assert "扫描页无 OCR" not in text
+
+
 def test_tool_schema_names_match_executor():
     names = {s["function"]["name"] for s in TOOL_SCHEMAS}
     expected = {

@@ -603,6 +603,8 @@ def build_technical(out: Path) -> None:
             ["openpyxl", ">=3.1.0", "MIT License"],
             ["xlrd", ">=2.0.1", "BSD License"],
             ["pdfplumber", ">=0.11.0", "NOTICE 生成时可能未列入，请以锁文件/安装元数据为准"],
+            ["rapidocr", ">=3.0.0", "Apache-2.0；印刷体 OCR，随包模型"],
+            ["onnxruntime", ">=1.17.0", "MIT License"],
         ],
         col_widths=[4.0, 3.5, 8.1],
     )
