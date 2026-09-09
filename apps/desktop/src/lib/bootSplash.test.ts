@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { dismissBootSplash } from "./bootSplash";
+import { dismissBootSplash, shouldDismissBootSplash } from "./bootSplash";
 
 describe("dismissBootSplash", () => {
   beforeEach(() => {
@@ -35,5 +35,16 @@ describe("dismissBootSplash", () => {
   it("is a no-op when splash missing", () => {
     document.body.innerHTML = "";
     expect(() => dismissBootSplash()).not.toThrow();
+  });
+});
+
+describe("shouldDismissBootSplash", () => {
+  it("stays up while health is still checking", () => {
+    expect(shouldDismissBootSplash("checking")).toBe(false);
+  });
+
+  it("dismisses once health is ok or down", () => {
+    expect(shouldDismissBootSplash("ok")).toBe(true);
+    expect(shouldDismissBootSplash("down")).toBe(true);
   });
 });

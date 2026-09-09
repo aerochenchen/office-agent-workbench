@@ -12,8 +12,10 @@
         box-sizing: border-box;
       }
 
+      html,
       body {
         margin: 0;
+        background: #f3f4f1;
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       }
 
@@ -97,6 +99,19 @@
           { title: "方法沉淀", summary: "好流程变成可复用技能。" },
           { title: "能力插拔", summary: "专项技能可安装、可分享。" }
         ];
+        function revealWindow() {
+          try {
+            var api = window.__TAURI__;
+            if (api && api.window && typeof api.window.getCurrentWindow === "function") {
+              var shown = api.window.getCurrentWindow().show();
+              if (shown && typeof shown.catch === "function") {
+                shown.catch(function () {});
+              }
+            }
+          } catch (err) {}
+        }
+        revealWindow();
+
         var carousel = document.getElementById("boot-splash-carousel");
         if (!carousel) return;
 

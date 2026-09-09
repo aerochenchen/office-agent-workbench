@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
+import { dismissBootSplash, shouldDismissBootSplash } from "./lib/bootSplash";
 import { bootPollInterval, shouldMarkDownDuringBoot } from "./lib/bootHealth";
 import { isModelSetupError, MODEL_SETUP_REPLY } from "./lib/guide";
 import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
@@ -73,6 +74,12 @@ function App() {
   useEffect(() => {
     initUiPreferences();
   }, []);
+
+  useEffect(() => {
+    if (!isTauriRuntime() || shouldDismissBootSplash(health)) {
+      dismissBootSplash();
+    }
+  }, [health]);
 
   useEffect(() => {
     const bootStartedAt = Date.now();
