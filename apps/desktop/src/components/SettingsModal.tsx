@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { APP_NAME, APP_TAGLINE, APP_VERSION, OSS_CREDITS, SUPPORT_EMAIL } from "../lib/brand";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import {
+  APP_NAME,
+  APP_TAGLINE,
+  APP_VERSION,
+  OSS_CREDITS,
+  STUDIO_NAME,
+  STUDIO_WEBSITE_LABEL,
+  STUDIO_WEBSITE_URL,
+  SUPPORT_EMAIL,
+} from "../lib/brand";
 import { GUIDE_PILLARS } from "../lib/guide";
 import type { PermissionMode, RuntimeConfig } from "../lib/types";
-import { readOssNoticeText } from "../lib/tauri";
+import { openHttpsUrl, readOssNoticeText } from "../lib/tauri";
 import {
   applyUiFontScale,
   applyUiTheme,
@@ -90,6 +99,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   const [noticeBusy, setNoticeBusy] = useState(false);
   const [noticeError, setNoticeError] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string | null>(null);
+  const [studioLinkError, setStudioLinkError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
@@ -106,6 +116,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setError(null);
       setNoticeError(null);
       setNoticeText(null);
+      setStudioLinkError(null);
     }
   }, [open, initial]);
 
@@ -151,6 +162,16 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   function handleCloseNotice() {
     setNoticeText(null);
     setNoticeError(null);
+  }
+
+  async function handleOpenStudioSite(event: MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    setStudioLinkError(null);
+    try {
+      await openHttpsUrl(STUDIO_WEBSITE_URL);
+    } catch (err) {
+      setStudioLinkError(err instanceof Error ? err.message : "无法打开网站");
+    }
   }
 
   function handleModelPresetChange(value: string) {
@@ -435,6 +456,23 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                   <div className="settings-about-name">{APP_NAME}</div>
                   <div className="settings-about-tagline">{APP_TAGLINE}</div>
                   <div className="settings-about-version">版本 {APP_VERSION}</div>
+                  <div className="settings-about-studio">
+                    {STUDIO_NAME}
+                    <span className="settings-about-studio-sep" aria-hidden="true">
+                      {" · "}
+                    </span>
+                    <a
+                      className="settings-about-studio-link"
+                      href={STUDIO_WEBSITE_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${STUDIO_NAME}网站`}
+                      onClick={(e) => void handleOpenStudioSite(e)}
+                    >
+                      {STUDIO_WEBSITE_LABEL}
+                    </a>
+                  </div>
+                  {studioLinkError ? <p className="field-error">{studioLinkError}</p> : null}
                 </div>
 
                 <div className="settings-about-oss">

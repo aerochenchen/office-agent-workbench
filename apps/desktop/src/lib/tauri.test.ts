@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertHttpsUrl,
   filterPathsUnderWorkspace,
   hasDeliverableSuffix,
   isPathUnderWorkspace,
@@ -64,5 +65,16 @@ describe("isRelativeDeliverablePath", () => {
 describe("resolveUnderWorkspace", () => {
   it("joins workspace root with relative path", () => {
     expect(resolveUnderWorkspace("/ws", "./工作成果/a.md")).toBe("/ws/工作成果/a.md");
+  });
+});
+
+describe("assertHttpsUrl", () => {
+  it("returns a plain https URL", () => {
+    expect(assertHttpsUrl("https://www.lirenda.cn")).toBe("https://www.lirenda.cn");
+  });
+
+  it("rejects non-https URLs", () => {
+    expect(() => assertHttpsUrl("http://www.lirenda.cn")).toThrow("仅允许打开 https 链接");
+    expect(() => assertHttpsUrl("javascript:alert(1)")).toThrow("仅允许打开 https 链接");
   });
 });

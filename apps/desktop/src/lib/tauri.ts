@@ -117,6 +117,25 @@ export async function openMailto(mailtoUrl: string): Promise<void> {
   window.location.href = mailtoUrl;
 }
 
+/** Reject anything that is not a plain https URL. */
+export function assertHttpsUrl(url: string): string {
+  if (!url.startsWith("https://")) {
+    throw new Error("仅允许打开 https 链接");
+  }
+  return url;
+}
+
+/** Open an https URL in the OS default browser. */
+export async function openHttpsUrl(url: string): Promise<void> {
+  const httpsUrl = assertHttpsUrl(url);
+  if (isTauriRuntime()) {
+    const { openUrl } = await import("@tauri-apps/plugin-opener");
+    await openUrl(httpsUrl);
+    return;
+  }
+  window.open(httpsUrl, "_blank", "noopener,noreferrer");
+}
+
 /** Load bundled NOTICE text for the in-app read-only license viewer. */
 export async function readOssNoticeText(): Promise<string> {
   if (!isTauriRuntime()) {

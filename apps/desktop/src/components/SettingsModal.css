@@ -306,6 +306,24 @@
   font-variant-numeric: tabular-nums;
 }
 
+.settings-about-studio {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.settings-about-studio-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.settings-about-studio-link:hover,
+.settings-about-studio-link:focus-visible {
+  color: var(--ink-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .settings-about-oss-label {
   font-size: var(--font-size-xs);
   font-weight: 600;
