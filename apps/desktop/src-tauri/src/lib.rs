@@ -16,9 +16,13 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use tauri::path::BaseDirectory;
+use tauri::webview::PageLoadEvent;
 use tauri::{Manager, RunEvent};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
+
+#[cfg(windows)]
+mod native_splash;
 
 #[cfg(windows)]
 use std::os::windows::io::AsRawHandle;
@@ -586,6 +590,10 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     apply_linux_display_defaults();
 
+    // Cover WebView2 cold-start blank with a native (non-WebView) splash on Windows.
+    #[cfg(windows)]
+    native_splash::show();
+
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -595,6 +603,15 @@ pub fn run() {
             get_runtime_token,
             read_notice_text,
         ])
+        .on_page_load(|webview, payload| {
+            if webview.label() != "main" {
+                return;
+            }
+            if !matches!(payload.event(), PageLoadEvent::Finished) {
+                return;
+            }
+            reveal_main_window(&webview.app_handle());
+        })
         .setup(|app| {
             let api_token = generate_runtime_token();
             app.manage(RuntimeAuthToken(Mutex::new(api_token.clone())));
@@ -612,6 +629,12 @@ pub fn run() {
                     }
                 }
             });
+            // Fallback: never leave the main window invisible forever.
+            let fallback = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_secs(20));
+                reveal_main_window(&fallback);
+            });
             Ok(())
         });
 
@@ -621,9 +644,20 @@ pub fn run() {
         .run(|app_handle, event| {
             match event {
                 RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+                    #[cfg(windows)]
+                    native_splash::dismiss();
                     stop_owned_runtime(app_handle);
                 }
                 _ => {}
             }
         });
+}
+
+fn reveal_main_window(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+    #[cfg(windows)]
+    native_splash::dismiss();
 }

@@ -21,24 +21,30 @@ describe("boot experience wiring", () => {
     expect(app).toContain("dismissBootSplash");
   });
 
-  it("shows the window immediately with paper background", () => {
+  it("hides main until page load and keeps paper background", () => {
     const conf = JSON.parse(read("src-tauri/tauri.conf.json")) as {
       app: {
-        withGlobalTauri?: boolean;
         windows: Array<{ visible?: boolean; backgroundColor?: string }>;
       };
     };
-    expect(conf.app.windows[0].visible).not.toBe(false);
+    expect(conf.app.windows[0].visible).toBe(false);
     expect(conf.app.windows[0].backgroundColor).toBe("#f3f4f1");
-    expect(conf.app.withGlobalTauri).not.toBe(true);
   });
 
-  it("does not defer production CSS with print media", () => {
-    expect(read("vite.config.ts")).not.toContain("deferRenderBlockingStyles");
-    expect(read("vite.config.ts")).not.toContain("media=\"print\"");
+  it("wires a Windows native splash with spinner before WebView", () => {
+    const lib = read("src-tauri/src/lib.rs");
+    expect(lib).toContain("mod native_splash");
+    expect(lib).toContain("native_splash::show");
+    expect(lib).toContain("reveal_main_window");
+    expect(lib).toContain("PageLoadEvent::Finished");
+
+    const splash = read("src-tauri/src/native_splash.rs");
+    expect(splash).toContain("正在启动本地运行组件");
+    expect(splash).toContain("AngleArc");
+    expect(splash).toContain("文书通");
   });
 
-  it("keeps paper-colored html/body behind the splash", () => {
+  it("keeps paper-colored html/body behind the HTML splash", () => {
     const html = read("index.html");
     expect(html).toMatch(/html,\s*body[\s\S]*background:\s*#f3f4f1/);
     expect(html).toContain("正在启动本地运行组件");
