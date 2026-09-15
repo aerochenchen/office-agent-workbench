@@ -643,6 +643,33 @@ def test_sessions_api_list_create_delete(client: TestClient, tmp_path: Path):
     assert client.get(f"/sessions/{sid}").status_code == 404
 
 
+def test_session_messages_api_hides_tool_thinking(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                content="I'll start by looking at what's in the workspace.",
+                tool_calls=[_tool_call("c1", "workspace_list", {"path": "."})],
+            ),
+            _completion(content="已摸完底，下面把清单和发现写成文件。"),
+        ]
+    )
+    r = client.post("/chat", json={"message": "分析现在有什么资料"})
+    assert r.status_code == 200
+    assert r.json()["reply"] == "已摸完底，下面把清单和发现写成文件。"
+    sid = r.json()["session_id"]
+    msgs = client.get(f"/sessions/{sid}/messages").json()["messages"]
+    assert [m["role"] for m in msgs] == ["user", "assistant"]
+    assert msgs[0]["content"] == "分析现在有什么资料"
+    assert msgs[1]["content"] == "已摸完底，下面把清单和发现写成文件。"
+    assert "I'll start" not in msgs[1]["content"]
+    assert msgs[1]["live_steps"][0]["name"] == "workspace_list"
+
+
 def test_prepare_chat_injects_audit(client: TestClient, tmp_path: Path, app_state: ProcessState):
     ws = tmp_path / "ws"
     ws.mkdir()

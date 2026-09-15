@@ -129,9 +129,18 @@ export interface SessionMeta {
   updated_at: number;
 }
 
+export interface SessionUiLiveStep {
+  id: string;
+  name: string;
+  label: string;
+  status: LiveStepStatus;
+  summary?: string;
+}
+
 export interface SessionUiMessage {
   role: "user" | "assistant";
   content: string;
+  live_steps?: SessionUiLiveStep[];
 }
 
 export type PermissionMode = "cautious" | "standard" | "trust_workspace";

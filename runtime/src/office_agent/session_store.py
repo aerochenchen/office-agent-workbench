@@ -7,10 +7,18 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from office_agent.agent_loop import (
+    _ask_user_text,
+    _ensure_plan_html_link_in_ask,
+    _parse_tool_args,
+    result_summary,
+    tool_label,
+)
 from office_agent.paths import app_data_dir
 
 DEFAULT_TITLE = "新对话"
 TITLE_MAX_LEN = 24
+_UNTRUSTED_CLOSE = "</untrusted_workspace_data>"
 
 
 def _now() -> float:
@@ -29,23 +37,138 @@ def title_from_user_text(text: str) -> str:
     return line
 
 
-def history_to_ui_messages(history: list[dict[str, Any]]) -> list[dict[str, str]]:
-    """Flatten stored agent messages into simple user/assistant bubbles for the UI."""
-    out: list[dict[str, str]] = []
-    for msg in history:
-        role = msg.get("role")
-        content = msg.get("content")
-        if role == "user" and isinstance(content, str) and content.strip():
-            text = content
-            marker = "\n\n用户附带的文件路径："
-            if marker in text:
-                text = text.split(marker, 1)[0].strip()
-            out.append({"role": "user", "content": text})
-        elif role == "assistant" and isinstance(content, str) and content.strip():
-            # Skip pure tool-call turns that only carry tool_calls with empty content
-            if msg.get("tool_calls") and not content.strip():
+def _message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        return "".join(parts)
+    return ""
+
+
+def _strip_user_attachments(text: str) -> str:
+    marker = "\n\n用户附带的文件路径："
+    if marker in text:
+        return text.split(marker, 1)[0].strip()
+    return text.strip()
+
+
+def _tool_result_dict(content: Any) -> dict[str, Any]:
+    if isinstance(content, dict):
+        return content
+    text = str(content or "").strip()
+    if text.startswith("<untrusted_workspace_data"):
+        start = text.find(">")
+        end = text.rfind(_UNTRUSTED_CLOSE)
+        if start >= 0 and end > start:
+            inner = text[start + 1 : end].strip()
+            brace = inner.find("{")
+            if brace >= 0:
+                text = inner[brace:]
+    if text in {"cancelled", "onboarding: tools unavailable"}:
+        return {"ok": False, "error": text}
+    try:
+        parsed = json.loads(text) if text else {}
+    except json.JSONDecodeError:
+        return {"ok": True}
+    return parsed if isinstance(parsed, dict) else {"ok": True}
+
+
+def _tool_call_name_args(tc: Any) -> tuple[str, str, dict[str, Any]]:
+    if not isinstance(tc, dict):
+        return "", "", {}
+    fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+    name = str(fn.get("name") or tc.get("name") or "")
+    raw_args = fn.get("arguments") if fn else tc.get("arguments")
+    if isinstance(raw_args, dict):
+        args = raw_args
+    else:
+        args = _parse_tool_args(str(raw_args or ""))
+    return str(tc.get("id") or ""), name, args
+
+
+def _turn_to_assistant_bubble(turn: list[dict[str, Any]]) -> dict[str, Any] | None:
+    results: dict[str, dict[str, Any]] = {}
+    for msg in turn:
+        if msg.get("role") != "tool":
+            continue
+        tc_id = str(msg.get("tool_call_id") or "")
+        if tc_id:
+            results[tc_id] = _tool_result_dict(msg.get("content"))
+
+    live_steps: list[dict[str, Any]] = []
+    tool_events: list[dict[str, Any]] = []
+    ask_text = ""
+    finish_text = ""
+    final_text = ""
+
+    for msg in turn:
+        if msg.get("role") != "assistant":
+            continue
+        text = _message_text(msg.get("content")).strip()
+        tool_calls = msg.get("tool_calls") or []
+        if not tool_calls:
+            if text:
+                final_text = text
+            continue
+        for tc in tool_calls:
+            tc_id, name, args = _tool_call_name_args(tc)
+            if not name:
                 continue
-            out.append({"role": "assistant", "content": content.strip()})
+            result = results.get(tc_id, {"ok": True})
+            ok = bool(result.get("ok", True)) if isinstance(result, dict) else True
+            live_steps.append(
+                {
+                    "id": tc_id or f"step{len(live_steps) + 1}",
+                    "name": name,
+                    "label": tool_label(name),
+                    "status": "ok" if ok else "fail",
+                    "summary": result_summary(name, result),
+                }
+            )
+            event = {"name": name, "args": args, "result": result}
+            tool_events.append(event)
+            if name == "ask_user":
+                ask_text = _ask_user_text(args, result)
+            elif name == "finish" and ok:
+                finish_text = str(result.get("summary") or args.get("summary") or "").strip()
+
+    if ask_text:
+        ask_text = _ensure_plan_html_link_in_ask(ask_text, tool_events)
+    content = final_text or ask_text or finish_text
+    if not content:
+        return None
+    bubble: dict[str, Any] = {"role": "assistant", "content": content}
+    if live_steps:
+        bubble["live_steps"] = live_steps
+    return bubble
+
+
+def history_to_ui_messages(history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rebuild the live chat bubbles: one user + one final assistant per turn."""
+    out: list[dict[str, Any]] = []
+    i = 0
+    while i < len(history):
+        msg = history[i]
+        if msg.get("role") != "user":
+            i += 1
+            continue
+        user_text = _strip_user_attachments(_message_text(msg.get("content")))
+        i += 1
+        turn: list[dict[str, Any]] = []
+        while i < len(history) and history[i].get("role") != "user":
+            turn.append(history[i])
+            i += 1
+        if user_text:
+            out.append({"role": "user", "content": user_text})
+        bubble = _turn_to_assistant_bubble(turn)
+        if bubble:
+            out.append(bubble)
     return out
 
 

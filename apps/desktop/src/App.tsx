@@ -15,6 +15,7 @@ import {
   SKILLS_REFRESH_INTERVAL_MS,
   shouldRetrySkillsRefresh,
 } from "./lib/skillsRefresh";
+import { sessionMessagesToChat } from "./lib/sessionMessages";
 import { getRuntimeToken, isTauriRuntime, pickFolder } from "./lib/tauri";
 import { initUiPreferences } from "./lib/uiPreferences";
 import type {
@@ -208,14 +209,7 @@ function App() {
 
   const loadSessionMessages = useCallback(async (id: string) => {
     const res = await runtimeClient.getSessionMessages(id);
-    setMessages(
-      res.messages.map((m) => ({
-        id: nextId(),
-        role: m.role,
-        content: m.content,
-        phase: "done" as const,
-      })),
-    );
+    setMessages(sessionMessagesToChat(res.messages, nextId));
   }, []);
 
   const runtimeReady = health === "ok";
