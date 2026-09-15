@@ -27,7 +27,7 @@ on:
         default: "1.6.0.0"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -92,6 +92,7 @@ jobs:
 
       - name: Upload Store MSIX artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: wenshutong-windows-msix-store
           path: |
@@ -99,3 +100,20 @@ jobs:
             packaging/msix-out/*.pfx
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish Store MSIX to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STORE_VERSION: ${{ inputs.store_version }}
+        run: |
+          $out = "packaging/msix-out"
+          $msix = Get-ChildItem -LiteralPath $out -Filter "Wenshutong_*_x64.msix" | Select-Object -First 1
+          $pfx = Get-ChildItem -LiteralPath $out -Filter "store-devcert.pfx" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $msix) { throw "Store MSIX not found under $out" }
+          $tag = "msix-store-$($env:STORE_VERSION)"
+          $title = "文书通 Microsoft Store MSIX ($($env:STORE_VERSION))"
+          $notes = "Partner Center MSIX. Version $($env:STORE_VERSION). File: $($msix.Name). Optional store-devcert.pfx for sideload smoke."
+          $assets = @($msix.FullName)
+          if ($pfx) { $assets += $pfx.FullName }
+          gh release create $tag --title $title --notes $notes --latest=false @assets
