@@ -62,10 +62,11 @@ def is_known_public_ai_host(host: str) -> bool:
 
 
 def is_intranet_model_host(host: str, *, resolve: bool = True) -> bool:
-    """True when the model host is loopback, private, or an intranet name.
+    """True when the model host is an IP literal, loopback, private, or intranet name.
 
     Public AI API hostnames are always rejected. Named hosts are resolved so a
-    public DNS name cannot be used in the local profile.
+    public DNS name cannot be used in the local profile. IP literals (including
+    non-RFC1918 专网号段) are allowed.
     """
     h = (host or "").strip().lower().rstrip(".")
     if not h:
@@ -75,8 +76,9 @@ def is_intranet_model_host(host: str, *, resolve: bool = True) -> bool:
     if is_known_public_ai_host(h):
         return False
     try:
-        ip = ipaddress.ip_address(h)
-        return _ip_ok(ip)
+        ipaddress.ip_address(h)
+        # 专网常用非 RFC1918 号段；IP 字面量一律放行。域名仍走下方解析。
+        return True
     except ValueError:
         pass
     if h.endswith(".local") or h.endswith(".lan") or h.endswith(".intranet"):

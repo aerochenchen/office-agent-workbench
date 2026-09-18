@@ -306,7 +306,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                 </h3>
                 <p className="settings-callout">
                   {initial.deployment_profile === "local"
-                    ? "本地部署版本只连接本机或单位内网的模型服务。请填写内网地址（如 http://127.0.0.1:8000/v1），公网 DeepSeek/OpenAI 等会被拒绝。"
+                    ? "本地部署版本只连接本机或单位内网的模型服务。请填写内网地址（IP 或内网域名，如 http://127.0.0.1:8000/v1），公网 DeepSeek/OpenAI 等会被拒绝。"
                     : MODEL_TAB_INTRO}
                 </p>
 
@@ -367,7 +367,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                     </label>
                     <p className="settings-field-hint">
                       {isLocalDeploy
-                        ? "填写本机或单位内网地址（如 http://127.0.0.1:8000/v1）。公网 DeepSeek/OpenAI 等会被拒绝。"
+                        ? "填写本机或单位内网地址（如 http://127.0.0.1:8000/v1 或专网 IP）。公网 DeepSeek/OpenAI 等会被拒绝。"
                         : MODEL_FIELD_HINTS.apiBase}
                     </p>
                   </div>
@@ -383,13 +383,15 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                         placeholder={
                           initial.api_key_set
                             ? `已保存 ${initial.api_key_masked || "***"}；留空不修改`
-                            : "粘贴 API Key"
+                            : isLocalDeploy
+                              ? "可留空"
+                              : "粘贴 API Key"
                         }
                       />
                     </label>
                     <p className="settings-field-hint">
                       {isLocalDeploy
-                        ? "内网服务的密钥仅保存在本机。若服务不校验密钥，可填任意占位。"
+                        ? "内网服务若不校验密钥可留空；填写后仅保存在本机。"
                         : MODEL_FIELD_HINTS.apiKey}
                     </p>
                   </div>

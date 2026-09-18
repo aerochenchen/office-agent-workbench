@@ -4,31 +4,31 @@ import { deriveRuntimeStatus, runtimeStatusLabel } from "./runtimeStatus";
 describe("deriveRuntimeStatus", () => {
   it("stays checking while health is checking", () => {
     expect(
-      deriveRuntimeStatus("checking", { configReady: true, apiKeySet: true }),
+      deriveRuntimeStatus("checking", { configReady: true, needsConfig: false }),
     ).toBe("checking");
   });
 
   it("stays checking until config has loaded", () => {
     expect(
-      deriveRuntimeStatus("ok", { configReady: false, apiKeySet: false }),
+      deriveRuntimeStatus("ok", { configReady: false, needsConfig: true }),
     ).toBe("checking");
   });
 
-  it("needs_config when runtime is up but API key missing", () => {
+  it("needs_config when runtime is up but model is not configured", () => {
     expect(
-      deriveRuntimeStatus("ok", { configReady: true, apiKeySet: false }),
+      deriveRuntimeStatus("ok", { configReady: true, needsConfig: true }),
     ).toBe("needs_config");
   });
 
-  it("ok only when runtime up and API key set", () => {
+  it("ok when runtime up and model is configured", () => {
     expect(
-      deriveRuntimeStatus("ok", { configReady: true, apiKeySet: true }),
+      deriveRuntimeStatus("ok", { configReady: true, needsConfig: false }),
     ).toBe("ok");
   });
 
   it("down when runtime unreachable", () => {
     expect(
-      deriveRuntimeStatus("down", { configReady: true, apiKeySet: true }),
+      deriveRuntimeStatus("down", { configReady: true, needsConfig: false }),
     ).toBe("down");
   });
 });

@@ -4,7 +4,7 @@ import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
 import { dismissBootSplash, shouldDismissBootSplash } from "./lib/bootSplash";
 import { bootPollInterval, shouldMarkDownDuringBoot } from "./lib/bootHealth";
-import { isModelSetupError, MODEL_SETUP_REPLY } from "./lib/guide";
+import { isModelSetupError, MODEL_SETUP_REPLY, needsModelSetup } from "./lib/guide";
 import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
 import {
   deriveRuntimeStatus,
@@ -215,7 +215,7 @@ function App() {
   const runtimeReady = health === "ok";
   const status = deriveRuntimeStatus(health, {
     configReady,
-    apiKeySet: Boolean(config.api_key_set),
+    needsConfig: needsModelSetup(config),
   });
 
   const handleOpenPath = useCallback(
@@ -339,8 +339,8 @@ function App() {
       const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
       const assistantId = nextId();
 
-      // 无 Key：直接展示固定引导，避免 pending 闪烁，也不调用 chatStream。
-      if (!config.api_key_set) {
+      // 未配模型：直接展示固定引导。本地档有地址即可，不必有 Key。
+      if (needsModelSetup(config)) {
         setMessages((prev) => [
           ...prev,
           userMsg,
@@ -472,7 +472,7 @@ function App() {
         setSending(false);
       }
     },
-    [workspacePath, runtimeReady, refreshSessions, config.api_key_set],
+    [workspacePath, runtimeReady, refreshSessions, config],
   );
 
   const handleStop = useCallback(async () => {

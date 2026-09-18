@@ -258,8 +258,21 @@ export const GUIDE_HINTS = {
 } as const;
 
 export const MODEL_SETUP_REPLY =
-  "要开始对话，需要先连上大模型。请打开右上角「设置」，填写 API 地址、API Key（密钥）和模型名。" +
+  "要开始对话，需要先连上大模型。请打开右上角「设置」，填写 API 地址和模型名。" +
+    "公网接口还需填写 API Key（密钥）；本机或内网服务若不校验密钥，可留空。" +
     "材料仍在你的本机；配置的是你自己的接口。配好后，直接在下方再发一句即可。";
+
+export function needsModelSetup(config: {
+  api_base?: string;
+  api_key_set?: boolean;
+  deployment_profile?: string;
+}): boolean {
+  const apiBase = (config.api_base || "").trim();
+  if (config.deployment_profile === "local") {
+    return !apiBase;
+  }
+  return !config.api_key_set;
+}
 
 /** Model/auth setup failures → show MODEL_SETUP_REPLY; not runtime connectivity. */
 export function isModelSetupError(message: string): boolean {

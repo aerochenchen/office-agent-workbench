@@ -13,6 +13,7 @@ import {
   listCapabilityLeaves,
   isModelSetupError,
   MODEL_SETUP_REPLY,
+  needsModelSetup,
 } from "./guide";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -86,6 +87,45 @@ describe("guide copy", () => {
       expect(html, p.summary).toContain(p.summary);
     }
     expect(html).toContain("正在启动本地运行组件");
+  });
+});
+
+describe("needsModelSetup", () => {
+  it("local deploy with api base does not require an API key", () => {
+    expect(
+      needsModelSetup({
+        api_base: "http://88.12.1.2:9081/v1",
+        api_key_set: false,
+        deployment_profile: "local",
+      }),
+    ).toBe(false);
+  });
+
+  it("local deploy without api base still needs setup", () => {
+    expect(
+      needsModelSetup({
+        api_base: "",
+        api_key_set: false,
+        deployment_profile: "local",
+      }),
+    ).toBe(true);
+  });
+
+  it("standard deploy still requires an API key", () => {
+    expect(
+      needsModelSetup({
+        api_base: "https://api.deepseek.com",
+        api_key_set: false,
+        deployment_profile: "standard",
+      }),
+    ).toBe(true);
+    expect(
+      needsModelSetup({
+        api_base: "https://api.deepseek.com",
+        api_key_set: true,
+        deployment_profile: "standard",
+      }),
+    ).toBe(false);
   });
 });
 

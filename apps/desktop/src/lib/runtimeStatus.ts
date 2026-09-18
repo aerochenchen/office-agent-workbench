@@ -2,9 +2,9 @@
 export type HealthState = "checking" | "ok" | "down";
 
 /**
- * Top-bar readiness: runtime up is not enough — chat also needs an API key.
+ * Top-bar readiness: runtime up is not enough — chat also needs a model endpoint.
  * - checking: boot / config still loading
- * - needs_config: runtime online, API key missing
+ * - needs_config: runtime online, model not configured
  * - ok: ready to chat
  * - down: runtime unreachable
  */
@@ -12,12 +12,12 @@ export type RuntimeStatus = "checking" | "needs_config" | "ok" | "down";
 
 export function deriveRuntimeStatus(
   health: HealthState,
-  options: { configReady: boolean; apiKeySet: boolean },
+  options: { configReady: boolean; needsConfig: boolean },
 ): RuntimeStatus {
   if (health === "checking") return "checking";
   if (health === "down") return "down";
   if (!options.configReady) return "checking";
-  if (!options.apiKeySet) return "needs_config";
+  if (options.needsConfig) return "needs_config";
   return "ok";
 }
 

@@ -23,7 +23,11 @@ class ModelGateway:
         self.assert_allowed()
         api_key = (cfg.api_key or "").strip()
         if not api_key:
-            raise GatewayError("未配置 API Key，请在设置中填写后再试")
+            if cfg.resolved_profile() == PROFILE_LOCAL:
+                # OpenAI SDK requires a non-empty string; local servers often skip auth.
+                api_key = "not-needed"
+            else:
+                raise GatewayError("未配置 API Key，请在设置中填写后再试")
         # Long tool-heavy turns (PPT/docx scripting) need more than the SDK default.
         self._client = OpenAI(
             base_url=cfg.api_base,

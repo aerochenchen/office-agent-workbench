@@ -913,6 +913,19 @@ def test_local_profile_rejects_public_api_base(client: TestClient, app_state: Pr
     assert r2.status_code == 200
 
 
+def test_local_profile_allows_ip_literal_without_api_key(
+    client: TestClient, app_state: ProcessState
+):
+    app_state.config.deployment_profile = "local"
+    r = client.post(
+        "/config",
+        json={"api_base": "http://88.12.1.2:9081/v1", "api_key": "", "model": "Qwen3.8-27B"},
+    )
+    assert r.status_code == 200
+    assert app_state.config.api_base == "http://88.12.1.2:9081/v1"
+    assert app_state.config.api_key == ""
+
+
 def test_get_config_includes_deployment_fields(client: TestClient):
     body = client.get("/config").json()
     assert "deployment_profile" in body
