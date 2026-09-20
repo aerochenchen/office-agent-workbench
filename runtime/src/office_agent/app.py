@@ -33,7 +33,8 @@ from office_agent.deployment import (
     resolve_deployment_profile,
 )
 from office_agent.gateway import GatewayError, ModelGateway
-from office_agent.paths import app_data_dir
+from office_agent.paths import app_data_dir, write_private_text
+from office_agent.secret_store import SEAL_PREFIX, seal_secret, unseal_secret
 from office_agent.permissions import (
     NeedsInteractivePermission,
     PermissionGate,
@@ -114,9 +115,10 @@ def load_config() -> AppConfig:
     permission_mode = str(data.get("permission_mode", DEFAULT_CONFIG.permission_mode))
     if profile == PROFILE_LOCAL and permission_mode == "standard" and "permission_mode" not in data:
         permission_mode = "cautious"
-    return AppConfig(
+    raw_key = str(data.get("api_key", DEFAULT_CONFIG.api_key))
+    cfg = AppConfig(
         api_base=api_base,
-        api_key=str(data.get("api_key", DEFAULT_CONFIG.api_key)),
+        api_key=unseal_secret(raw_key),
         model=str(data.get("model", DEFAULT_CONFIG.model)),
         allowed_hosts=merge_allowed_hosts(api_base, allowed),
         permission_mode=permission_mode,
@@ -125,12 +127,18 @@ def load_config() -> AppConfig:
         allow_workspace_scripts=allow_scripts,
         require_script_sandbox=require_sandbox,
     )
+    if raw_key and not raw_key.startswith(SEAL_PREFIX):
+        try:
+            save_config(cfg)
+        except OSError:
+            logger.warning("could not re-seal legacy api_key on disk")
+    return cfg
 
 
 def save_config(cfg: AppConfig) -> None:
     payload = {
         "api_base": cfg.api_base,
-        "api_key": cfg.api_key,
+        "api_key": seal_secret(cfg.api_key),
         "model": cfg.model,
         "allowed_hosts": cfg.allowed_hosts,
         "permission_mode": cfg.permission_mode,
@@ -139,7 +147,7 @@ def save_config(cfg: AppConfig) -> None:
         "allow_workspace_scripts": cfg.allow_workspace_scripts,
         "require_script_sandbox": cfg.require_script_sandbox,
     }
-    _config_path().write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_private_text(_config_path(), json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def _default_audit() -> AuditLog:

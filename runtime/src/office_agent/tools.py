@@ -50,6 +50,33 @@ class ToolError(ValueError):
     pass
 
 
+def script_jail_roots(
+    workspace_root: Path,
+    app_data: Path,
+    extra: list[Path] | None = None,
+) -> list[Path]:
+    """Allowed filesystem roots for script subprocesses.
+
+    The app data root itself is excluded so scripts cannot read config.json.
+    """
+    roots: list[Path] = []
+    seen: set[Path] = set()
+    candidates = [
+        Path(workspace_root).resolve(),
+        (Path(app_data) / "skills").resolve(),
+        (Path(app_data) / "shared-scripts").resolve(),
+        Path(tempfile.gettempdir()).resolve(),
+    ]
+    if extra:
+        candidates.extend(Path(p).resolve() for p in extra)
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        roots.append(path)
+    return roots
+
+
 # Files an installed Skill may expose to the agent via read_skill.
 SKILL_TEXT_SUFFIXES = frozenset(
     {".md", ".txt", ".json", ".py", ".yaml", ".yml", ".csv", ".tmpl"}
@@ -379,21 +406,18 @@ class ToolExecutor:
         allowed_roots: list[Path] | None = None,
     ) -> dict:
         argv_roots = [self.workspace.root.resolve()]
-        jail_roots = [self.workspace.root.resolve(), self._app_data.resolve()]
-        tmp = Path(tempfile.gettempdir()).resolve()
-        if tmp not in jail_roots:
-            jail_roots.append(tmp)
+        jail_roots = script_jail_roots(
+            self.workspace.root,
+            self._app_data,
+            extra=list(allowed_roots or []),
+        )
         if allowed_roots:
             seen_argv = {argv_roots[0]}
-            seen_jail = set(jail_roots)
             for root in allowed_roots:
                 resolved = Path(root).resolve()
                 if resolved not in seen_argv:
                     argv_roots.append(resolved)
                     seen_argv.add(resolved)
-                if resolved not in seen_jail:
-                    jail_roots.append(resolved)
-                    seen_jail.add(resolved)
         assert_argv_within_roots(argv, argv_roots)
         env = build_script_env()
         script_home = self.workspace.root / AGENT_WORK_REL / "script-home"
