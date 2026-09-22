@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 import sqlite3
 from pathlib import Path
 
@@ -53,6 +52,13 @@ def test_workspace_hash_stable_and_not_raw_path(tmp_path: Path):
 
 def test_record_event_failure_does_not_raise(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    emitted: list[tuple] = []
+
+    def fake_emit(event: str, **kwargs) -> None:
+        emitted.append((event, kwargs))
+
+    monkeypatch.setattr("office_agent.diagnostic.emit", fake_emit)
     log = AuditLog(tmp_path / "a.sqlite")
     log.db_path.write_text("not-a-db", encoding="utf-8")
     log.record_event("chat_started", outcome="ok")  # must not raise
+    assert emitted == [("audit_write_failed", {"level": "error", "error_code": "sqlite"})]

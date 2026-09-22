@@ -48,12 +48,13 @@ def app_data_dir() -> Path:
     return p
 
 
-def instance_id_path() -> Path:
-    return app_data_dir() / "instance_id"
+def instance_id_path(app_data: Path | None = None) -> Path:
+    root = app_data if app_data is not None else app_data_dir()
+    return root / "instance_id"
 
 
-def instance_id() -> str:
-    path = instance_id_path()
+def instance_id(app_data: Path | None = None) -> str:
+    path = instance_id_path(app_data)
     if path.is_file():
         text = path.read_text(encoding="utf-8").strip()
         if text:

@@ -503,7 +503,8 @@ def test_chat_stream_audit_records_turn_id(
     assert all(row[1] == turn_id for row in rows)
 
 
-def test_audit_log_migrates_old_db_without_turn_id(tmp_path: Path):
+def test_audit_log_migrates_old_db_without_turn_id(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     db_path = tmp_path / "legacy.sqlite"
     import sqlite3
 
@@ -536,8 +537,9 @@ def test_audit_log_migrates_old_db_without_turn_id(tmp_path: Path):
     assert rows[1] == ("new_tool", "turn-abc")
 
 
-def test_audit_log_redacts_sensitive_args(tmp_path: Path):
+def test_audit_log_redacts_sensitive_args(tmp_path: Path, monkeypatch):
     """workspace_write 的 content 等敏感字段不得以明文落库。"""
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     import sqlite3
 
     audit = AuditLog(tmp_path / "a.sqlite")
