@@ -13,8 +13,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use serde_json::{Map, Value};
 use tauri::path::BaseDirectory;
 use tauri::webview::PageLoadEvent;
 use tauri::{Manager, RunEvent};
@@ -62,8 +63,114 @@ static RUNTIME_CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 /// Per-launch API token shared with the spawned runtime and the webview.
 struct RuntimeAuthToken(Mutex<String>);
 
+/// Per-desktop-process boot id (also passed to sidecar as OFFICE_AGENT_BOOT_ID).
+struct BootId(Mutex<String>);
+
 fn generate_runtime_token() -> String {
     Uuid::new_v4().to_string()
+}
+
+fn generate_boot_id() -> String {
+    Uuid::new_v4().to_string()
+}
+
+/// App data root: `OFFICE_AGENT_DATA` or `~/.office-agent`.
+fn app_data_dir() -> PathBuf {
+    if let Ok(override_dir) = std::env::var("OFFICE_AGENT_DATA") {
+        if !override_dir.trim().is_empty() {
+            return PathBuf::from(override_dir);
+        }
+    }
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
+    PathBuf::from(home).join(".office-agent")
+}
+
+/// UTC civil time (year, month, day, hour, min, sec) from unix epoch seconds.
+fn utc_civil_from_unix(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
+    let days = (secs / 86400) as i64;
+    let tod = (secs % 86400) as u32;
+    let hour = tod / 3600;
+    let min = (tod % 3600) / 60;
+    let sec = tod % 60;
+    // Howard Hinnant civil_from_days
+    let z = days + 719468;
+    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let doe = (z - era * 146097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe as i64 + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y as i32, m as u32, d as u32, hour, min, sec)
+}
+
+fn utc_now() -> (String /* YYYY-MM-DD */, String /* ISO ts */) {
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let (y, mo, d, h, mi, s) = utc_civil_from_unix(secs);
+    (
+        format!("{y:04}-{mo:02}-{d:02}"),
+        format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z"),
+    )
+}
+
+fn boot_id_from_app(app: &tauri::AppHandle) -> String {
+    app.try_state::<BootId>()
+        .and_then(|s| s.inner().0.lock().ok().map(|g| g.clone()))
+        .unwrap_or_else(|| "-".into())
+}
+
+const FORBIDDEN_LOG_KEYS: &[&str] = &["api_key", "key", "token", "password", "passwd", "messages", "content"];
+
+/// Structured desktop event → `logs/desktop-YYYY-MM-DD.jsonl` + plaintext temp log.
+///
+/// Acceptance (manual): after launch, `~/.office-agent/logs/desktop-*.jsonl` contains
+/// `boot` / `sidecar_spawn` rows with `boot_id`; killing health path emits `health_fail`
+/// via `desktop_log`; exit emits `sidecar_exit` with `returncode`.
+fn log_event(event: &str, level: &str, boot_id: &str, extra: &str) {
+    let (day, ts) = utc_now();
+    let mut map = Map::new();
+    map.insert("ts".into(), Value::String(ts));
+    map.insert("level".into(), Value::String(level.to_string()));
+    map.insert("event".into(), Value::String(event.to_string()));
+    map.insert("boot_id".into(), Value::String(boot_id.to_string()));
+
+    let extra_trim = extra.trim();
+    if !extra_trim.is_empty() {
+        if let Ok(Value::Object(extra_obj)) = serde_json::from_str::<Value>(extra_trim) {
+            for (k, v) in extra_obj {
+                if FORBIDDEN_LOG_KEYS.contains(&k.as_str()) {
+                    continue;
+                }
+                map.entry(k).or_insert(v);
+            }
+        }
+    }
+
+    let line = match serde_json::to_string(&Value::Object(map)) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let logs_dir = app_data_dir().join("logs");
+    let _ = std::fs::create_dir_all(&logs_dir);
+    let jsonl_path = logs_dir.join(format!("desktop-{day}.jsonl"));
+    if let Ok(mut f) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&jsonl_path)
+    {
+        let _ = writeln!(f, "{line}");
+    }
+
+    // Dual-write plaintext line to the legacy temp log (runtimeLogHint / Task 11).
+    log_line(&format!("[office-agent] {line}"));
 }
 
 #[tauri::command]
@@ -73,6 +180,22 @@ fn get_runtime_token(state: tauri::State<'_, RuntimeAuthToken>) -> Result<String
         .lock()
         .map_err(|e| e.to_string())
         .map(|guard| guard.clone())
+}
+
+#[tauri::command]
+fn desktop_log(
+    event: String,
+    level: Option<String>,
+    boot: tauri::State<'_, BootId>,
+) -> Result<(), String> {
+    let boot_id = boot
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone();
+    let lvl = level.unwrap_or_else(|| "warn".to_string());
+    log_event(&event, &lvl, &boot_id, "");
+    Ok(())
 }
 
 #[tauri::command]
@@ -231,14 +354,17 @@ fn request_runtime_shutdown() {
     }
 }
 
-fn stop_child(child: &mut Child) {
+fn stop_child(child: &mut Child) -> Option<i32> {
     request_runtime_shutdown();
     std::thread::sleep(Duration::from_millis(400));
     match child.try_wait() {
-        Ok(Some(_)) => return,
+        Ok(Some(status)) => status.code(),
         _ => {
             let _ = child.kill();
-            let _ = child.wait();
+            match child.wait() {
+                Ok(status) => status.code(),
+                Err(_) => None,
+            }
         }
     }
 }
@@ -249,10 +375,16 @@ fn stop_owned_runtime(app: &tauri::AppHandle) {
         return;
     }
     log_line("[office-agent] stop_owned_runtime: cleaning up");
+    let boot_id = boot_id_from_app(app);
     if let Some(state) = app.try_state::<RuntimeProcess>() {
         if let Ok(mut guard) = state.inner().0.lock() {
             if let Some(mut child) = guard.take() {
-                stop_child(&mut child);
+                let returncode = stop_child(&mut child);
+                let extra = match returncode {
+                    Some(code) => format!(r#"{{"returncode":{code}}}"#),
+                    None => r#"{"returncode":null}"#.to_string(),
+                };
+                log_event("sidecar_exit", "info", &boot_id, &extra);
                 return;
             }
         }
@@ -260,6 +392,7 @@ fn stop_owned_runtime(app: &tauri::AppHandle) {
     if ATTEMPTED_RUNTIME_SPAWN.load(Ordering::SeqCst) {
         // Spawn raced ahead of Mutex store — shut down our child.
         request_runtime_shutdown();
+        log_event("sidecar_exit", "info", &boot_id, r#"{"returncode":null}"#);
     }
     // Else: skipped spawn (external runtime accepted our token) — leave 8765 alone.
 }
@@ -428,7 +561,7 @@ fn apply_deployment_profile_env(cmd: &mut Command, app: &tauri::AppHandle, sidec
 }
 
 /// Production path: onedir sidecar staged under Tauri resources.
-fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
+fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str, boot_id: &str) -> Option<Child> {
     let sidecar = find_sidecar_exe(app)?;
     let bundled = find_bundled_dir(app, &sidecar);
 
@@ -443,6 +576,7 @@ fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
     }
     apply_deployment_profile_env(&mut cmd, app, &sidecar);
     cmd.env("OFFICE_AGENT_API_TOKEN", api_token);
+    cmd.env("OFFICE_AGENT_BOOT_ID", boot_id);
 
     // Keep logs for packaged installs (stderr was previously discarded).
     let log_path = std::env::temp_dir().join("office-agent-runtime.err.log");
@@ -470,17 +604,25 @@ fn try_spawn_sidecar(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
             log_line(&format!(
                 "[office-agent] auto-started packaged runtime from {sidecar:?}"
             ));
+            log_event("sidecar_spawn", "info", boot_id, r#"{"ok":true}"#);
             Some(c)
         }
         Err(e) => {
             log_line(&format!("[office-agent] could not start packaged runtime: {e}"));
+            let err_json = serde_json::to_string(&e.to_string()).unwrap_or_else(|_| "\"spawn_failed\"".into());
+            log_event(
+                "sidecar_spawn",
+                "warn",
+                boot_id,
+                &format!(r#"{{"ok":false,"error":{err_json}}}"#),
+            );
             None
         }
     }
 }
 
 /// Dev path: `python -m office_agent` via local `.venv`.
-fn try_spawn_venv(api_token: &str) -> Option<Child> {
+fn try_spawn_venv(api_token: &str, boot_id: &str) -> Option<Child> {
     let runtime_dir = find_runtime_dir()?;
     let python = venv_python(&runtime_dir)?;
     let bundled = runtime_dir
@@ -510,6 +652,7 @@ fn try_spawn_venv(api_token: &str) -> Option<Child> {
         }
     }
     cmd.env("OFFICE_AGENT_API_TOKEN", api_token);
+    cmd.env("OFFICE_AGENT_BOOT_ID", boot_id);
 
     #[cfg(windows)]
     {
@@ -521,12 +664,20 @@ fn try_spawn_venv(api_token: &str) -> Option<Child> {
             log_line(&format!(
                 "[office-agent] auto-started runtime from {runtime_dir:?}"
             ));
+            log_event("sidecar_spawn", "info", boot_id, r#"{"ok":true}"#);
             Some(c)
         }
         Err(e) => {
             log_line(&format!(
                 "[office-agent] could not auto-start runtime: {e} (start it manually, see README)"
             ));
+            let err_json = serde_json::to_string(&e.to_string()).unwrap_or_else(|_| "\"spawn_failed\"".into());
+            log_event(
+                "sidecar_spawn",
+                "warn",
+                boot_id,
+                &format!(r#"{{"ok":false,"error":{err_json}}}"#),
+            );
             None
         }
     }
@@ -535,7 +686,7 @@ fn try_spawn_venv(api_token: &str) -> Option<Child> {
 /// Best-effort spawn of the local runtime. Never panics: any failure is
 /// logged and the UI will simply show "runtime offline" until the
 /// user starts it manually (see README).
-fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
+fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str, boot_id: &str) -> Option<Child> {
     if runtime_already_up() {
         if runtime_accepts_token(api_token) {
             log_line("[office-agent] runtime already listening on 127.0.0.1:8765 — skip auto-start");
@@ -556,14 +707,14 @@ fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str) -> Option<Child> {
 
     // Release builds prefer the packaged sidecar; debug keeps the fast venv loop.
     let child = if !cfg!(debug_assertions) {
-        if let Some(child) = try_spawn_sidecar(app, api_token) {
+        if let Some(child) = try_spawn_sidecar(app, api_token, boot_id) {
             Some(child)
         } else {
             log_line("[office-agent] sidecar unavailable — trying local .venv fallback");
-            try_spawn_venv(api_token)
+            try_spawn_venv(api_token, boot_id)
         }
     } else {
-        try_spawn_venv(api_token)
+        try_spawn_venv(api_token, boot_id)
     };
 
     if let Some(ref c) = child {
@@ -602,6 +753,7 @@ pub fn run() {
             pick_skill_file,
             get_runtime_token,
             read_notice_text,
+            desktop_log,
         ])
         .on_page_load(|webview, payload| {
             if webview.label() != "main" {
@@ -613,6 +765,16 @@ pub fn run() {
             reveal_main_window(&webview.app_handle());
         })
         .setup(|app| {
+            let boot_id = generate_boot_id();
+            app.manage(BootId(Mutex::new(boot_id.clone())));
+            let version = env!("CARGO_PKG_VERSION");
+            log_event(
+                "boot",
+                "info",
+                &boot_id,
+                &format!(r#"{{"version":"{version}"}}"#),
+            );
+
             let api_token = generate_runtime_token();
             app.manage(RuntimeAuthToken(Mutex::new(api_token.clone())));
             app.manage(RuntimeProcess(Mutex::new(None)));
@@ -621,8 +783,9 @@ pub fn run() {
                 app.manage(RuntimeJob(Mutex::new(None)));
             }
             let handle = app.handle().clone();
+            let boot_id_spawn = boot_id.clone();
             std::thread::spawn(move || {
-                let child = try_spawn_runtime(&handle, &api_token);
+                let child = try_spawn_runtime(&handle, &api_token, &boot_id_spawn);
                 if let Some(state) = handle.try_state::<RuntimeProcess>() {
                     if let Ok(mut guard) = state.inner().0.lock() {
                         *guard = child;

@@ -67,6 +67,13 @@ export async function getRuntimeToken(): Promise<string | null> {
   return invoke<string>("get_runtime_token");
 }
 
+/** Structured desktop log event (JSONL via Rust). No-op outside Tauri. */
+export async function logDesktopEvent(event: string, level?: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("desktop_log", { event, level });
+}
+
 /**
  * Multi-select files via `@tauri-apps/plugin-dialog`.
  * Returns `null` when cancelled or unavailable (browser / non-Tauri).

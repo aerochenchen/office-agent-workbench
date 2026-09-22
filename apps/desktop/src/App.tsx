@@ -16,7 +16,7 @@ import {
   shouldRetrySkillsRefresh,
 } from "./lib/skillsRefresh";
 import { sessionMessagesToChat } from "./lib/sessionMessages";
-import { getRuntimeToken, isTauriRuntime, pickFolder } from "./lib/tauri";
+import { getRuntimeToken, isTauriRuntime, logDesktopEvent, pickFolder } from "./lib/tauri";
 import { initUiPreferences } from "./lib/uiPreferences";
 import type {
   ChatMessage,
@@ -107,6 +107,7 @@ function App() {
             shouldMarkDownDuringBoot(elapsed, false) &&
             healthFailCount.current >= 2
           ) {
+            void logDesktopEvent("health_fail");
             setHealth("down");
           }
         }
