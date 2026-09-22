@@ -739,7 +739,8 @@ class ToolExecutor:
                 continue
             path = resolved[rel]
             try:
-                head = path.read_bytes()[:4]
+                with path.open("rb") as f:
+                    head = f.read(4)
             except OSError:
                 head = b""
             if head in zip_magics:
