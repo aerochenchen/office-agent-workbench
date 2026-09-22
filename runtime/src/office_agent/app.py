@@ -274,6 +274,21 @@ def _audit_recent_entry(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _chat_status_from_tool_events(
+    tool_events: list[dict[str, Any]] | None, *, base: str = "ok"
+) -> str:
+    """Map turn outcome to chat_finished.status; finish+unverified → unverified_deliverable."""
+    if base == "error":
+        return "error"
+    for ev in tool_events or []:
+        if not isinstance(ev, dict) or ev.get("name") != "finish":
+            continue
+        result = ev.get("result")
+        if isinstance(result, dict) and result.get("ok") and result.get("unverified"):
+            return "unverified_deliverable"
+    return base
+
+
 class CreateSessionBody(BaseModel):
     workspace_path: str | None = None
 
@@ -830,6 +845,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 raise HTTPException(status_code=500, detail=f"agent error: {e}") from e
 
             steps = len(result.tool_events)
+            status = _chat_status_from_tool_events(result.tool_events, base=status)
             try:
                 office.sessions.append_messages(session_id, result.messages)
             except Exception:
@@ -947,6 +963,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     onboarding=tools is None,
                 )
                 steps = len(result.tool_events)
+                status = _chat_status_from_tool_events(result.tool_events, base=status)
                 # Best-effort: persist whatever the turn produced (incl. cancel truncation).
                 try:
                     office.sessions.append_messages(session_id, result.messages)

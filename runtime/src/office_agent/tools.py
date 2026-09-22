@@ -692,6 +692,7 @@ class ToolExecutor:
             }
         missing: list[str] = []
         empty: list[str] = []
+        resolved: dict[str, Path] = {}
         for rel in paths:
             try:
                 path = self.workspace.resolve(rel)
@@ -703,6 +704,8 @@ class ToolExecutor:
                 continue
             if path.stat().st_size <= 0:
                 empty.append(rel)
+                continue
+            resolved[rel] = path
         if missing or empty:
             parts: list[str] = []
             if missing:
@@ -716,9 +719,53 @@ class ToolExecutor:
                 "missing": missing,
                 "empty": empty,
             }
-        return {
+        unverified = False
+        office_suffixes = {".docx", ".xlsx", ".pptx"}
+        zip_magics = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+        for rel in paths:
+            try:
+                from office_agent.diagnostic import emit
+
+                emit(
+                    "deliverable_claimed",
+                    turn_id=self.turn_id,
+                    session_id=self.session_id,
+                    path=rel,
+                )
+            except Exception:
+                pass
+            suffix = Path(rel).suffix.lower()
+            if suffix not in office_suffixes:
+                continue
+            path = resolved[rel]
+            try:
+                head = path.read_bytes()[:4]
+            except OSError:
+                head = b""
+            if head in zip_magics:
+                kind = suffix.lstrip(".")
+            else:
+                kind = "other"
+                unverified = True
+            try:
+                from office_agent.diagnostic import emit
+
+                emit(
+                    "deliverable_verified",
+                    turn_id=self.turn_id,
+                    session_id=self.session_id,
+                    exists=True,
+                    kind=kind,
+                    path=rel,
+                )
+            except Exception:
+                pass
+        out: dict = {
             "ok": True,
             "finished": True,
             "summary": summary,
             "deliverables": paths,
         }
+        if unverified:
+            out["unverified"] = True
+        return out

@@ -420,3 +420,49 @@ def test_finish_rejects_empty_deliverable_file(tmp_path: Path, monkeypatch):
     )
     assert result["ok"] is False
     assert "空" in str(result.get("error") or "") or "empty" in str(result.get("error") or "").lower()
+
+
+def test_finish_non_zip_docx_still_ok_but_unverified(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "工作成果").mkdir()
+    (ws / "工作成果" / "a.docx").write_text("not-zip", encoding="utf-8")
+    emitted: list[tuple] = []
+
+    def _fake_emit(event, **fields):
+        emitted.append((event, fields))
+
+    monkeypatch.setattr("office_agent.diagnostic.emit", _fake_emit)
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute("finish", {"summary": "x", "deliverables": ["工作成果/a.docx"]})
+    assert result["ok"] is True
+    assert result.get("unverified") is True
+    assert any(e == "deliverable_claimed" for e, _ in emitted)
+    verified = [f for e, f in emitted if e == "deliverable_verified"]
+    assert verified
+    assert verified[0].get("exists") is True
+    assert verified[0].get("kind") == "other"
+
+
+def test_finish_zip_docx_verified_kind(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "工作成果").mkdir()
+    (ws / "工作成果" / "a.docx").write_bytes(b"PK\x03\x04docx-body")
+    emitted: list[tuple] = []
+
+    def _fake_emit(event, **fields):
+        emitted.append((event, fields))
+
+    monkeypatch.setattr("office_agent.diagnostic.emit", _fake_emit)
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute("finish", {"summary": "x", "deliverables": ["工作成果/a.docx"]})
+    assert result["ok"] is True
+    assert result.get("unverified") is not True
+    verified = [f for e, f in emitted if e == "deliverable_verified"]
+    assert verified
+    assert verified[0].get("kind") == "docx"
