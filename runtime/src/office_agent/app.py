@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from office_agent.agent_loop import run_agent
@@ -315,6 +315,19 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             "allow_workspace_scripts": cfg.allow_workspace_scripts,
             "require_script_sandbox": cfg.require_script_sandbox,
         }
+
+    @app.get("/audit/recent")
+    def audit_recent(limit: int = Query(default=20)) -> dict[str, Any]:
+        capped = min(100, max(0, int(limit)))
+        return {"entries": office.audit.list_recent(limit=capped)}
+
+    @app.get("/audit/export")
+    def audit_export(since: float | None = Query(default=None)) -> Response:
+        rows = office.audit.export_rows(since=since)
+        body = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows)
+        if body:
+            body += "\n"
+        return Response(content=body, media_type="application/x-ndjson")
 
     @app.post("/workspace/open")
     def workspace_open(body: OpenWorkspaceBody) -> dict[str, Any]:

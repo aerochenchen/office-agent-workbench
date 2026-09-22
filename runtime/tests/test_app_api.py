@@ -1110,3 +1110,21 @@ def test_skill_install_audits(client: TestClient, tmp_path: Path, app_state: Pro
     un_attrs = _json.loads(un_rows[-1][0])
     assert un_attrs["skill_id"] == "audit-skill"
     assert "path" not in un_attrs
+
+
+def test_audit_export_ndjson_and_redacted(client, app_state):
+    app_state.audit.record("workspace_write", {"path": "a.docx", "content": "密"}, True)
+    r = client.get("/audit/export")
+    assert r.status_code == 200
+    assert "密" not in r.text
+    line = r.text.strip().splitlines()[-1]
+    row = json.loads(line)
+    assert "event_type" in row
+
+
+def test_audit_recent_limit(client, app_state):
+    for i in range(3):
+        app_state.audit.record_event("chat_started", outcome="ok", session_id=str(i))
+    r = client.get("/audit/recent", params={"limit": 2})
+    assert r.status_code == 200
+    assert len(r.json()["entries"]) == 2

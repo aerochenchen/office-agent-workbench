@@ -41,6 +41,10 @@ def test_token_env_requires_bearer(app_state: ProcessState, monkeypatch):
     assert denied.status_code == 401
     assert denied.json()["detail"] == "Invalid or missing API token"
 
+    export_denied = client.get("/audit/export")
+    assert export_denied.status_code == 401
+    assert export_denied.json()["detail"] == "Invalid or missing API token"
+
     ok = client.get("/config", headers={"Authorization": "Bearer secret-token"})
     assert ok.status_code == 200
 
