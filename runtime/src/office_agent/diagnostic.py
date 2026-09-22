@@ -94,11 +94,11 @@ def emit(
         if value is None:
             continue
         row[key] = value
-    line = json.dumps(row, ensure_ascii=False) + "\n"
-    path = current_log_path("runtime")
     try:
+        line = json.dumps(row, ensure_ascii=False) + "\n"
+        path = current_log_path("runtime")
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(line)
-    except OSError:
+    except (OSError, TypeError):
         pass

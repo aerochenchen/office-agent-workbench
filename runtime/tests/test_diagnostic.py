@@ -31,6 +31,14 @@ def test_emit_omits_forbidden_fields(tmp_path: Path, monkeypatch):
     assert "api_key" not in row
 
 
+def test_emit_swallows_oserror_when_log_path_fails(monkeypatch):
+    def _raise_oserror(*_args, **_kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr("office_agent.diagnostic.current_log_path", _raise_oserror)
+    emit("chat_started", level="info", turn_id="t1")
+
+
 def test_configure_prunes_old_files(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     logs = tmp_path / "logs"
