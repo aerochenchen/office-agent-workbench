@@ -6,6 +6,7 @@ import logging
 import os
 import queue
 import threading
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from office_agent.agent_loop import run_agent
 from office_agent.auth import install_api_token_middleware
-from office_agent.audit import AuditLog
+from office_agent.audit import AuditLog, workspace_hash
 from office_agent.bundled_seed import seed_bundled_assets
 from office_agent.cancel import CancelToken
 from office_agent.config import AppConfig, merge_allowed_hosts
@@ -32,6 +33,8 @@ from office_agent.deployment import (
     model_host_from_api_base,
     resolve_deployment_profile,
 )
+from office_agent.diagnostic import configure as diagnostic_configure
+from office_agent.diagnostic import emit as diag_emit
 from office_agent.gateway import GatewayError, ModelGateway
 from office_agent.paths import app_data_dir, write_private_text
 from office_agent.secret_store import SEAL_PREFIX, seal_secret, unseal_secret
@@ -240,6 +243,7 @@ async def _app_lifespan(app: FastAPI):
 
 
 def create_app(state: ProcessState | None = None) -> FastAPI:
+    diagnostic_configure()
     office = state if state is not None else ProcessState.load()
     app = FastAPI(title="Office Agent Runtime", lifespan=_app_lifespan)
     app.add_middleware(
@@ -522,6 +526,35 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 office.gates.pop(request_id, None)
         return {"ok": True}
 
+    def _record_gateway_error(e: GatewayError) -> None:
+        event_type = (
+            "model_host_rejected"
+            if e.error_code == "model_host_rejected"
+            else "gateway_error"
+        )
+        attrs: dict[str, Any] | None = None
+        if e.host_class:
+            attrs = {"host_class": e.host_class}
+        office.audit.record_event(
+            event_type,
+            outcome="error",
+            error_code=e.error_code,
+            detail=str(e),
+            attrs=attrs,
+        )
+        diag_emit(
+            "gateway_error",
+            level="error",
+            error_code=e.error_code,
+            host_class=e.host_class or None,
+        )
+
+    def _chat_start_attrs(route: str) -> dict[str, Any]:
+        attrs: dict[str, Any] = {"route": route}
+        if office.workspace is not None:
+            attrs["workspace_hash"] = workspace_hash(office.workspace.root)
+        return attrs
+
     def _prepare_chat(
         body: ChatBody,
         *,
@@ -562,6 +595,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             try:
                 gateway = office.gateway_factory(office.config)
             except GatewayError as e:
+                _record_gateway_error(e)
                 raise HTTPException(status_code=400, detail=str(e)) from e
             history = office.sessions.get_messages(session_id)
             return (
@@ -585,6 +619,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         try:
             gateway = office.gateway_factory(office.config)
         except GatewayError as e:
+            _record_gateway_error(e)
             raise HTTPException(status_code=400, detail=str(e)) from e
 
         gate = PermissionGate(
@@ -626,6 +661,13 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         """Run agent off the event loop so /health stays responsive during long chats."""
         session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(body)
         message = body.message
+        started = time.monotonic()
+        diag_emit("chat_started", session_id=session_id)
+        office.audit.record_event(
+            "chat_started",
+            session_id=session_id,
+            attrs=_chat_start_attrs("/chat"),
+        )
 
         def _run() -> Any:
             return run_agent(
@@ -639,27 +681,49 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 onboarding=tools is None,
             )
 
+        status = "ok"
+        steps = 0
         try:
-            result = await asyncio.to_thread(_run)
-        except NeedsInteractivePermission as e:
-            raise HTTPException(
-                status_code=409,
-                detail={
-                    "code": "needs_interactive_permission",
-                    "tool": e.tool,
-                    "summary": e.summary,
-                    "hint": "use POST /chat/stream and confirm via /chat/permissions/{id}",
-                },
-            ) from e
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"agent error: {e}") from e
+            try:
+                result = await asyncio.to_thread(_run)
+            except NeedsInteractivePermission as e:
+                status = "error"
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "needs_interactive_permission",
+                        "tool": e.tool,
+                        "summary": e.summary,
+                        "hint": "use POST /chat/stream and confirm via /chat/permissions/{id}",
+                    },
+                ) from e
+            except Exception as e:
+                status = "error"
+                raise HTTPException(status_code=500, detail=f"agent error: {e}") from e
 
-        office.sessions.append_messages(session_id, result.messages)
-        return {
-            "reply": result.final_text,
-            "tool_events": result.tool_events,
-            "session_id": session_id,
-        }
+            steps = len(result.tool_events)
+            try:
+                office.sessions.append_messages(session_id, result.messages)
+            except Exception:
+                diag_emit("session_persist_failed", level="error", session_id=session_id)
+                logger.warning(
+                    "failed to append messages for session %s",
+                    session_id,
+                    exc_info=True,
+                )
+            return {
+                "reply": result.final_text,
+                "tool_events": result.tool_events,
+                "session_id": session_id,
+            }
+        finally:
+            diag_emit(
+                "chat_finished",
+                session_id=session_id,
+                duration_ms=int((time.monotonic() - started) * 1000),
+                status=status,
+                steps=steps,
+            )
 
     @app.post("/chat/stream")
     async def chat_stream(body: ChatBody) -> StreamingResponse:
@@ -707,7 +771,17 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             office.active_gates[session_id] = gate
 
         def worker() -> None:
+            started = time.monotonic()
+            status = "ok"
+            steps = 0
             try:
+                diag_emit("chat_started", session_id=session_id, turn_id=turn_id)
+                office.audit.record_event(
+                    "chat_started",
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    attrs=_chat_start_attrs("/chat/stream"),
+                )
                 emit("started", {"session_id": session_id, "turn_id": turn_id})
                 result = run_agent(
                     message,
@@ -722,10 +796,16 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     turn_id=turn_id,
                     onboarding=tools is None,
                 )
+                steps = len(result.tool_events)
                 # Best-effort: persist whatever the turn produced (incl. cancel truncation).
                 try:
                     office.sessions.append_messages(session_id, result.messages)
                 except Exception:
+                    diag_emit(
+                        "session_persist_failed",
+                        level="error",
+                        session_id=session_id,
+                    )
                     logger.warning(
                         "failed to append messages for session %s",
                         session_id,
@@ -740,8 +820,17 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     },
                 )
             except Exception as e:
+                status = "error"
                 emit("error", {"message": f"agent error: {e}"})
             finally:
+                diag_emit(
+                    "chat_finished",
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    status=status,
+                    steps=steps,
+                )
                 office.active_cancel.pop(session_id, None)
                 office.active_gates.pop(session_id, None)
                 event_q.put(None)

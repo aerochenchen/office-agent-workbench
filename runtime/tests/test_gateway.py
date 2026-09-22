@@ -50,3 +50,22 @@ def test_rejects_missing_api_key():
     )
     with pytest.raises(GatewayError, match="API Key"):
         ModelGateway(cfg)
+
+
+def test_local_profile_public_host_sets_error_code():
+    from office_agent.config import AppConfig
+    from office_agent.gateway import GatewayError, ModelGateway
+
+    cfg = AppConfig(
+        api_base="https://api.deepseek.com",
+        api_key="k",
+        model="m",
+        allowed_hosts=["api.deepseek.com"],
+        deployment_profile="local",
+    )
+    try:
+        ModelGateway(cfg)
+        assert False, "expected GatewayError"
+    except GatewayError as e:
+        assert e.error_code == "model_host_rejected"
+        assert e.host_class == "denied"

@@ -588,6 +588,20 @@ def test_chat_stream_emits_started_and_final(client: TestClient, tmp_path: Path,
     assert any(m.get("role") == "user" for m in msgs)
 
 
+def test_chat_stream_writes_chat_started(client, tmp_path, app_state, monkeypatch):
+    from office_agent.diagnostic import current_log_path, configure
+
+    configure()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    with client.stream("POST", "/chat/stream", json={"message": "你好"}) as r:
+        "".join(r.iter_text())
+    text = current_log_path().read_text(encoding="utf-8")
+    assert "chat_started" in text
+    assert "chat_finished" in text
+
+
 def test_chat_second_turn_includes_history(client: TestClient, tmp_path: Path, app_state: ProcessState):
     ws = tmp_path / "ws"
     ws.mkdir()

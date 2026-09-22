@@ -77,8 +77,14 @@ def main(argv: list[str] | None = None) -> None:
     # Import after argparse so ``--help`` works without pulling the full stack.
     import uvicorn
 
+    from office_agent import diagnostic
     from office_agent.app import app
 
+    diagnostic.configure()
+    diagnostic.emit(
+        "runtime_start",
+        boot_id=os.environ.get("OFFICE_AGENT_BOOT_ID"),
+    )
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
