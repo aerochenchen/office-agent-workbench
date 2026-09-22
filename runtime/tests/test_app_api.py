@@ -830,6 +830,23 @@ def test_chat_stream_permission_request_then_allow(
     assert (ws / "notes.txt").read_text(encoding="utf-8") == "hello\n"
     assert "destination" in text
 
+    import json as _json
+    import sqlite3
+
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT outcome, error_code, attrs_json, tool FROM audit "
+            "WHERE event_type = 'permission_decision'"
+        ).fetchall()
+    assert len(rows) >= 1
+    outcome, error_code, attrs_json, tool = rows[-1]
+    assert outcome == "ok"
+    assert error_code is None
+    assert tool == "workspace_write"
+    attrs = _json.loads(attrs_json)
+    assert attrs["decision"] == "allow"
+    assert attrs["mode"] == "cautious"
+
 
 def test_sync_chat_allows_list_and_attached_read(
     client: TestClient, tmp_path: Path, app_state: ProcessState

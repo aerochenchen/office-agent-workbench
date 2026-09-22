@@ -808,8 +808,30 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     },
                 )
 
+            def on_decision(tool: str, decision: str, mode: str) -> None:
+                office.audit.record_event(
+                    "permission_decision",
+                    outcome="ok" if decision == "allow" else "deny",
+                    session_id=session_id,
+                    turn_id=turn_id,
+                    tool=tool,
+                    error_code="permission_timeout" if decision == "timeout" else None,
+                    attrs={"decision": decision, "mode": mode},
+                )
+                if decision == "timeout":
+                    from office_agent.diagnostic import emit
+
+                    emit(
+                        "permission_timeout",
+                        level="warn",
+                        session_id=session_id,
+                        turn_id=turn_id,
+                        tool=tool,
+                    )
+
             gate.on_request = on_permission_request
             gate.on_timeout = lambda request_id: office.gates.pop(request_id, None)
+            gate.on_decision = on_decision
 
         cancel_token = CancelToken()
         office.active_cancel[session_id] = cancel_token

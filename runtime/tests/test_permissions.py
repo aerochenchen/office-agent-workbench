@@ -215,3 +215,90 @@ def test_workspace_script_denied_by_default(tmp_path: Path, monkeypatch) -> None
     result = ex.execute("run_workspace_script", {"path": "p.py", "args": []})
     assert result["ok"] is False
     assert "disabled" in result["error"].lower()
+
+
+def test_on_decision_not_called_for_needs_interactive() -> None:
+    from office_agent.permissions import NeedsInteractivePermission
+
+    decisions: list[tuple[str, str, str]] = []
+    gate = PermissionGate(mode="cautious")
+    gate.set_auto(False)
+    gate.on_decision = lambda tool, decision, mode: decisions.append((tool, decision, mode))
+
+    with pytest.raises(NeedsInteractivePermission):
+        gate.check("workspace_write", {"path": "x.txt", "content": "a"})
+
+    assert decisions == []
+
+
+def test_on_decision_allow_via_resolve() -> None:
+    decisions: list[tuple[str, str, str]] = []
+    seen: list = []
+    gate = PermissionGate(mode="cautious")
+    gate.set_auto(None)
+    gate.on_request = lambda req: seen.append(req)
+    gate.on_decision = lambda tool, decision, mode: decisions.append((tool, decision, mode))
+
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            gate.check("workspace_write", {"path": "notes.txt", "content": "hi\n"})
+        except BaseException as e:
+            errors.append(e)
+
+    t = threading.Thread(target=run)
+    t.start()
+    _wait_until(lambda: len(seen) >= 1)
+    gate.resolve(seen[0].id, True)
+    t.join(timeout=5)
+    assert not t.is_alive()
+    assert errors == []
+    assert decisions == [("workspace_write", "allow", "cautious")]
+
+
+def test_on_decision_deny_via_resolve() -> None:
+    from office_agent.permissions import PermissionDenied
+
+    decisions: list[tuple[str, str, str]] = []
+    seen: list = []
+    gate = PermissionGate(mode="cautious")
+    gate.set_auto(None)
+    gate.on_request = lambda req: seen.append(req)
+    gate.on_decision = lambda tool, decision, mode: decisions.append((tool, decision, mode))
+
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            gate.check("workspace_write", {"path": "notes.txt", "content": "hi\n"})
+        except BaseException as e:
+            errors.append(e)
+
+    t = threading.Thread(target=run)
+    t.start()
+    _wait_until(lambda: len(seen) >= 1)
+    gate.resolve(seen[0].id, False)
+    t.join(timeout=5)
+    assert not t.is_alive()
+    assert len(errors) == 1
+    assert isinstance(errors[0], PermissionDenied)
+    assert decisions == [("workspace_write", "deny", "cautious")]
+
+
+def test_on_decision_timeout_when_no_resolve() -> None:
+    from office_agent.permissions import PermissionDenied
+
+    decisions: list[tuple[str, str, str]] = []
+    timed_out: list[str] = []
+    gate = PermissionGate(mode="cautious")
+    gate.set_auto(None)
+    gate.wait_timeout = 0.05
+    gate.on_timeout = lambda request_id: timed_out.append(request_id)
+    gate.on_decision = lambda tool, decision, mode: decisions.append((tool, decision, mode))
+
+    with pytest.raises(PermissionDenied, match="timed out"):
+        gate.check("workspace_write", {"path": "notes.txt", "content": "hi\n"})
+
+    assert len(timed_out) == 1
+    assert decisions == [("workspace_write", "timeout", "cautious")]

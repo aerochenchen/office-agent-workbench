@@ -117,7 +117,13 @@ class PermissionGate:
         self._requests: dict[str, PermissionRequest] = {}
         self.on_request: Callable[[PermissionRequest], None] | None = None
         self.on_timeout: Callable[[str], None] | None = None
+        self.on_decision: Callable[[str, str, str], None] | None = None
         self.wait_timeout: float = 300.0
+
+    def _fire_decision(self, tool: str, decision: str) -> None:
+        callback = self.on_decision
+        if callback is not None:
+            callback(tool, decision, self.mode)
 
     def set_auto(self, allow: bool | None) -> None:
         """None = interactive waiter; True/False = auto allow/deny for tests."""
@@ -187,6 +193,7 @@ class PermissionGate:
             timeout_cb = self.on_timeout
             if timeout_cb is not None:
                 timeout_cb(request.id)
+            self._fire_decision(tool, "timeout")
             raise PermissionDenied(f"permission request timed out: {tool}")
 
         with self._lock:
@@ -195,8 +202,10 @@ class PermissionGate:
             self._requests.pop(request.id, None)
 
         if not allowed:
+            self._fire_decision(tool, "deny")
             raise PermissionDenied(f"denied by user: {tool}")
 
+        self._fire_decision(tool, "allow")
         if self.mode == "standard":
             self._remembered.add(key)
 
