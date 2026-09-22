@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { SessionMeta } from "../lib/types";
 import { GUIDE_HINTS } from "../lib/guide";
 import "./SessionList.css";
@@ -11,11 +10,9 @@ interface Props {
   sending: boolean;
   runtimeReady: boolean;
   onPickWorkspace: () => void;
-  onOpenWorkspacePath: (path: string) => void;
   onNewSession: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
-  showManualPath: boolean;
 }
 
 function formatRelativeTime(ts: number): string {
@@ -43,14 +40,10 @@ export default function SessionList({
   sending,
   runtimeReady,
   onPickWorkspace,
-  onOpenWorkspacePath,
   onNewSession,
   onSelectSession,
   onDeleteSession,
-  showManualPath,
 }: Props) {
-  const [manualPath, setManualPath] = useState("");
-
   return (
     <section className="pane session-pane">
       <div className="pane-header">
@@ -159,30 +152,6 @@ export default function SessionList({
         >
           {workspacePath ? "更换文件夹" : "打开文件夹"}
         </button>
-        {showManualPath && (
-          <form
-            className="session-manual-path"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (manualPath.trim() && runtimeReady) onOpenWorkspacePath(manualPath.trim());
-            }}
-          >
-            <input
-              className="session-manual-input"
-              placeholder="或粘贴文件夹绝对路径"
-              value={manualPath}
-              disabled={!runtimeReady}
-              onChange={(e) => setManualPath(e.currentTarget.value)}
-            />
-            <button
-              type="submit"
-              className="btn btn--ghost btn--full"
-              disabled={!manualPath.trim() || !runtimeReady}
-            >
-              打开路径
-            </button>
-          </form>
-        )}
       </div>
     </section>
   );

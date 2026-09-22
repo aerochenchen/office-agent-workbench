@@ -35,6 +35,7 @@ export default function SkillPanel({
   onRefresh,
 }: Props) {
   const [managerOpen, setManagerOpen] = useState(false);
+  const [activeSaying, setActiveSaying] = useState<string | null>(null);
   const defaultOpen = useMemo(
     () => new Set(CAPABILITY_TREE.map((b) => b.id)),
     [],
@@ -93,10 +94,16 @@ export default function SkillPanel({
                         <li key={leaf.id}>
                           <button
                             type="button"
-                            className="capability-leaf"
+                            className={`capability-leaf${
+                              activeSaying === leaf.saying ? " capability-leaf--active" : ""
+                            }`}
                             title={leaf.saying}
+                            aria-pressed={activeSaying === leaf.saying}
                             disabled={pickDisabled}
-                            onClick={() => onPickSaying(leaf.saying)}
+                            onClick={() => {
+                              setActiveSaying(leaf.saying);
+                              onPickSaying(leaf.saying);
+                            }}
                           >
                             {leaf.label}
                           </button>

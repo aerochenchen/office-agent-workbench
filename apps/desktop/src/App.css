@@ -14,7 +14,7 @@
   justify-content: space-between;
   padding: 0 var(--space-4);
   background: var(--paper-1);
-  border-bottom: 1px solid var(--line-0);
+  border-bottom: 1px solid var(--line-1);
 }
 
 .topbar-brand {
@@ -191,25 +191,19 @@
   overflow: hidden;
 }
 
-.pane + .pane {
-  border-left: 1px solid var(--line-0);
-}
-
 .pane-header {
   flex: 0 0 auto;
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--line-1);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
 .pane-title {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-md);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink-1);
-  text-transform: uppercase;
+  letter-spacing: normal;
+  color: var(--ink-0);
 }
 
 .pane-body {

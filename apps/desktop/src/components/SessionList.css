@@ -1,5 +1,5 @@
 .session-pane {
-  background: var(--paper-1);
+  background: var(--paper-0);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -8,7 +8,7 @@
 .session-toolbar {
   flex: 0 0 auto;
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--line-1);
+  border-bottom: none;
 }
 
 .session-list-body {
@@ -94,12 +94,12 @@
 
 .session-workspace-bar {
   flex: 0 0 auto;
-  border-top: 1px solid var(--line-0);
+  border-top: 1px solid var(--line-1);
   padding: var(--space-3);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  background: var(--paper-1);
+  background: var(--paper-0);
 }
 
 .session-workspace-label {
@@ -124,19 +124,4 @@
 .session-workspace-error {
   font-size: var(--font-size-xs);
   color: var(--status-error);
-}
-
-.session-manual-path {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.session-manual-input {
-  border: 1px solid var(--line-0);
-  border-radius: var(--radius-sm);
-  padding: 3px var(--space-2);
-  font-size: var(--font-size-xs);
-  background: var(--paper-2);
-  color: var(--ink-0);
 }

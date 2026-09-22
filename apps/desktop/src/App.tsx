@@ -662,11 +662,9 @@ function App() {
           sending={sending}
           runtimeReady={runtimeReady}
           onPickWorkspace={handlePickFolder}
-          onOpenWorkspacePath={handleOpenPath}
           onNewSession={() => void handleNewSession()}
           onSelectSession={(id) => void handleSelectSession(id)}
           onDeleteSession={(id) => void handleDeleteSession(id)}
-          showManualPath={!isTauriRuntime()}
         />
 
         <ChatPanel
