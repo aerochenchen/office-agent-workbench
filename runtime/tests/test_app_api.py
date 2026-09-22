@@ -1019,3 +1019,94 @@ def test_get_config_includes_deployment_fields(client: TestClient):
     assert "deployment_profile" in body
     assert "allow_workspace_scripts" in body
     assert body["allow_workspace_scripts"] is False
+
+
+def test_delete_session_audits_before_row_gone(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    import sqlite3
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    sid = client.post("/sessions", json={}).json()["session"]["id"]
+    client.delete(f"/sessions/{sid}")
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        ev = conn.execute(
+            "SELECT event_type, session_id FROM audit WHERE event_type='session_deleted'"
+        ).fetchone()
+    assert ev is not None
+    assert ev[0] == "session_deleted"
+    assert ev[1] == sid
+    assert client.get(f"/sessions/{sid}").status_code == 404
+
+
+def test_workspace_open_stores_hash_not_path(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    import json as _json
+    import sqlite3
+
+    from office_agent.audit import workspace_hash
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT attrs_json FROM audit WHERE event_type='workspace_opened'"
+        ).fetchall()
+    assert len(rows) >= 1
+    attrs = _json.loads(rows[-1][0])
+    assert attrs.get("workspace_hash") == workspace_hash(ws)
+    assert str(ws) not in (rows[-1][0] or "")
+
+
+def test_skill_install_audits(client: TestClient, tmp_path: Path, app_state: ProcessState):
+    import hashlib
+    import json as _json
+    import sqlite3
+
+    src = tmp_path / "pkg" / "audit-skill"
+    src.mkdir(parents=True)
+    skill_md = (
+        "---\nname: audit-skill\ndescription: install audit\nversion: 0.1.0\ntier: light\n"
+        "permissions:\n  - run_python\n---\n\n# y\n"
+    )
+    (src / "SKILL.md").write_text(skill_md, encoding="utf-8")
+    expected_sha = hashlib.sha256(skill_md.encode("utf-8")).hexdigest()
+
+    r = client.post("/skills/install", json={"path": str(src), "enabled": True})
+    assert r.status_code == 200
+
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT attrs_json FROM audit WHERE event_type='skill_install'"
+        ).fetchall()
+    assert len(rows) >= 1
+    attrs = _json.loads(rows[-1][0])
+    assert attrs["skill_id"] == "audit-skill"
+    assert attrs["source"] == "dir"
+    assert attrs["sha256"] == expected_sha
+    assert attrs["permissions"] == ["run_python"]
+    assert str(src) not in (rows[-1][0] or "")
+
+    off = client.post("/skills/audit-skill/enabled", json={"enabled": False})
+    assert off.status_code == 200
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        en_rows = conn.execute(
+            "SELECT attrs_json FROM audit WHERE event_type='skill_enabled'"
+        ).fetchall()
+    en_attrs = _json.loads(en_rows[-1][0])
+    assert en_attrs["skill_id"] == "audit-skill"
+    assert en_attrs["enabled"] is False
+
+    un = client.delete("/skills/audit-skill")
+    assert un.status_code == 200
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        un_rows = conn.execute(
+            "SELECT attrs_json FROM audit WHERE event_type='skill_uninstall'"
+        ).fetchall()
+    un_attrs = _json.loads(un_rows[-1][0])
+    assert un_attrs["skill_id"] == "audit-skill"
+    assert "path" not in un_attrs

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -91,6 +92,22 @@ def _validate_attached_paths(ws: Workspace, paths: list[str]) -> list[str]:
             raise HTTPException(status_code=400, detail=str(e)) from e
         validated.append(str(resolved.relative_to(ws.root)))
     return validated
+
+
+_SKILL_HASH_MAX_BYTES = 50 * 1024 * 1024
+
+
+def _skill_install_hash_attrs(src: Path) -> dict[str, Any]:
+    """Hash install source for audit; never include raw path."""
+    if src.is_file():
+        size = src.stat().st_size
+        if size > _SKILL_HASH_MAX_BYTES:
+            return {"sha256": "omitted", "size": size}
+        return {"sha256": hashlib.sha256(src.read_bytes()).hexdigest()}
+    skill_md = src / "SKILL.md"
+    if skill_md.is_file():
+        return {"sha256": hashlib.sha256(skill_md.read_bytes()).hexdigest()}
+    return {}
 
 
 def _config_path() -> Path:
@@ -307,6 +324,10 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             office.workspace.ensure_layout()
         except SandboxError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
+        office.audit.record_event(
+            "workspace_opened",
+            attrs={"workspace_hash": workspace_hash(office.workspace.root)},
+        )
         return {"ok": True, "path": str(office.workspace.root)}
 
     @app.get("/workspace/tree")
@@ -354,8 +375,10 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
     @app.delete("/sessions/{session_id}")
     def delete_session(session_id: str) -> dict[str, Any]:
-        if not office.sessions.delete_session(session_id):
+        if not office.sessions.session_exists(session_id):
             raise HTTPException(status_code=404, detail="session not found")
+        office.audit.record_event("session_deleted", session_id=session_id)
+        office.sessions.delete_session(session_id)
         return {"ok": True, "id": session_id}
 
     @app.get("/skills")
@@ -426,6 +449,13 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             if installed.is_dir()
             else {"ok": True, "errors": [], "warnings": []}
         )
+        attrs: dict[str, Any] = {
+            "skill_id": meta.id,
+            "source": "zip" if src.is_file() else "dir",
+            "permissions": list(meta.permissions),
+            **_skill_install_hash_attrs(src),
+        }
+        office.audit.record_event("skill_install", attrs=attrs)
         return {
             "ok": True,
             "skill": office.registry.meta_payload(meta),
@@ -442,6 +472,10 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         if skill_id not in known:
             raise HTTPException(status_code=404, detail=f"skill not found: {skill_id}")
         office.registry.set_enabled(skill_id, body.enabled)
+        office.audit.record_event(
+            "skill_enabled",
+            attrs={"skill_id": skill_id, "enabled": body.enabled},
+        )
         return {"ok": True, "id": skill_id, "enabled": body.enabled}
 
     @app.post("/skills/{skill_id}/restore-bundled")
@@ -462,6 +496,10 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             # Bundled policy / not found → 400 so UI can show the message
             raise HTTPException(status_code=400, detail=_skill_error_detail(e)) from e
         office.zh_locale_tried.discard(skill_id)
+        office.audit.record_event(
+            "skill_uninstall",
+            attrs={"skill_id": skill_id},
+        )
         return {"ok": True, "id": skill_id}
 
     @app.post("/config")

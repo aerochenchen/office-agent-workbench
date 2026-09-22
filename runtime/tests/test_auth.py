@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -41,6 +43,34 @@ def test_token_env_requires_bearer(app_state: ProcessState, monkeypatch):
 
     ok = client.get("/config", headers={"Authorization": "Bearer secret-token"})
     assert ok.status_code == 200
+
+
+def test_auth_fail_writes_audit(app_state: ProcessState, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_API_TOKEN", "secret-token")
+    client = TestClient(create_app(app_state))
+    denied = client.get("/config")
+    assert denied.status_code == 401
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT outcome, attrs_json FROM audit WHERE event_type='api_auth_fail'"
+        ).fetchall()
+    assert len(rows) >= 1
+    outcome, attrs_json = rows[-1]
+    assert outcome == "deny"
+    attrs = json.loads(attrs_json)
+    assert attrs["route"] == "/config"
+    assert attrs["reason"] == "missing"
+    assert "secret-token" not in (attrs_json or "")
+
+    wrong = client.get("/config", headers={"Authorization": "Bearer wrong-token"})
+    assert wrong.status_code == 401
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT attrs_json FROM audit WHERE event_type='api_auth_fail' ORDER BY ts"
+        ).fetchall()
+    mismatch = json.loads(rows[-1][0])
+    assert mismatch["reason"] == "mismatch"
+    assert "wrong-token" not in (rows[-1][0] or "")
 
 
 def test_health_exempt_when_token_configured(app_state: ProcessState, monkeypatch):

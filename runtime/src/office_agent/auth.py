@@ -32,6 +32,16 @@ def install_api_token_middleware(app: FastAPI) -> None:
         auth = request.headers.get("Authorization", "")
         if auth == f"Bearer {expected}":
             return await call_next(request)
+        office = getattr(request.app.state, "office", None)
+        if office is not None:
+            office.audit.record_event(
+                "api_auth_fail",
+                outcome="deny",
+                attrs={
+                    "route": request.url.path,
+                    "reason": "missing" if not auth else "mismatch",
+                },
+            )
         return JSONResponse(
             status_code=401,
             content={"detail": "Invalid or missing API token"},
