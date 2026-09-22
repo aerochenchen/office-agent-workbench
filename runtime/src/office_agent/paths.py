@@ -46,3 +46,20 @@ def app_data_dir() -> Path:
         child.mkdir(exist_ok=True)
         chmod_private_dir(child)
     return p
+
+
+def instance_id_path() -> Path:
+    return app_data_dir() / "instance_id"
+
+
+def instance_id() -> str:
+    path = instance_id_path()
+    if path.is_file():
+        text = path.read_text(encoding="utf-8").strip()
+        if text:
+            return text
+    import uuid
+
+    value = str(uuid.uuid4())
+    write_private_text(path, value + "\n")
+    return value

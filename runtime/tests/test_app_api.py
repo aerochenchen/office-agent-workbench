@@ -530,6 +530,7 @@ def test_audit_log_migrates_old_db_without_turn_id(tmp_path: Path):
     with sqlite3.connect(db_path) as conn:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(audit)").fetchall()}
         assert "turn_id" in cols
+        assert "event_type" in cols
         rows = conn.execute("SELECT tool, turn_id FROM audit ORDER BY ts").fetchall()
     assert rows[0] == ("legacy_tool", None)
     assert rows[1] == ("new_tool", "turn-abc")
