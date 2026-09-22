@@ -53,7 +53,7 @@ export default function SessionList({
       <div className="session-toolbar">
         <button
           type="button"
-          className="btn btn--ghost btn--full"
+          className="btn btn--pane btn--full"
           disabled={!workspacePath || sending || !runtimeReady}
           onClick={onNewSession}
           title={
@@ -137,7 +137,7 @@ export default function SessionList({
         {workspaceError && <div className="session-workspace-error">{workspaceError}</div>}
         <button
           type="button"
-          className="btn btn--full btn--ghost"
+          className="btn btn--pane btn--pane-accent btn--full"
           disabled={!runtimeReady}
           onClick={onPickWorkspace}
         >

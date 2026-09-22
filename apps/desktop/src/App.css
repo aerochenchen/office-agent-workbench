@@ -152,6 +152,63 @@
   justify-content: center;
 }
 
+/* 左栏、右栏里的三个文字按钮：白底实体，打开文件夹再铺一层浅青绿。 */
+.btn--pane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--paper-2);
+  color: var(--ink-0);
+  border-color: var(--line-0);
+  box-shadow:
+    0 1px 2px rgba(30, 40, 35, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition:
+    background var(--motion-fast),
+    box-shadow var(--motion-fast),
+    transform 100ms ease;
+}
+
+.btn--pane:hover:not(:disabled) {
+  border-color: var(--line-0);
+  background: color-mix(in srgb, var(--accent-teal-soft) 72%, var(--paper-2));
+  box-shadow:
+    0 2px 6px rgba(30, 40, 35, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.btn--pane:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn--pane:disabled {
+  color: var(--ink-0);
+  background: var(--paper-2);
+  border-color: var(--line-0);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--pane-accent {
+  background: var(--accent-teal-soft);
+  color: var(--accent-teal);
+  border-color: var(--status-ok-line);
+}
+
+.btn--pane-accent:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-teal) 14%, var(--accent-teal-soft));
+  border-color: var(--status-ok-line);
+}
+
+.btn--pane-accent:disabled {
+  color: var(--accent-teal);
+  background: var(--accent-teal-soft);
+  border-color: var(--status-ok-line);
+}
+
 .btn--primary {
   background: var(--accent-teal);
   border-color: var(--accent-teal);

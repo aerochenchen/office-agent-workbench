@@ -124,7 +124,7 @@ export default function SkillPanel({
           </div>
           <button
             type="button"
-            className="btn btn--ghost btn--full"
+            className="btn btn--pane btn--full"
             onClick={() => setManagerOpen(true)}
           >
             技能管理
