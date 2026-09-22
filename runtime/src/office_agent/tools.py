@@ -202,17 +202,31 @@ class ToolExecutor:
             detail = str(
                 result.get("error") or result.get("reason") or result.get("stderr") or ""
             )[:500]
-            self._audit(name, args, ok, detail)
+            code = result.get("error_code")
+            error_code = code if isinstance(code, str) and code else None
+            self._audit(name, args, ok, detail, error_code=error_code)
             return result
         except NeedsInteractivePermission:
             raise
         except PermissionDenied as e:
+            msg = str(e).lower()
+            if "workspace scripts are disabled" in msg or (
+                "disabled" in msg and "script" in msg
+            ):
+                code = "workspace_scripts_disabled"
+            else:
+                code = "permission_denied"
             result = {"ok": False, "error": f"permission denied: {e}"}
-            self._audit(name, args, False, str(result["error"])[:500])
+            self._audit(name, args, False, str(result["error"])[:500], error_code=code)
             return result
         except (SandboxError, ToolError) as e:
-            result = {"ok": False, "error": str(e)}
-            self._audit(name, args, False, str(e)[:500])
+            msg = str(e)
+            lower = msg.lower()
+            code = None
+            if any(token in lower for token in ("outside", "escape", "jail")):
+                code = "sandbox_escape_blocked"
+            result = {"ok": False, "error": msg}
+            self._audit(name, args, False, msg[:500], error_code=code)
             return result
         except Exception as e:
             result = {"ok": False, "error": f"tool failed: {e}"}
@@ -268,17 +282,9 @@ class ToolExecutor:
     def _audit(self, tool: str, args: dict, ok: bool, detail: str, error_code: str | None = None) -> None:
         if self.audit is None:
             return
+        # error_code must be set at throw/catch (or result) sites — never infer from
+        # script stderr detail (e.g. "index outside range" is not a jail escape).
         code = error_code
-        if not ok and code is None:
-            err = detail.lower()
-            if "disabled" in err:
-                code = "workspace_scripts_disabled"
-            elif "outside" in err or "escape" in err or "jail" in err:
-                code = "sandbox_escape_blocked"
-            elif "permission denied" in err:
-                code = "permission_denied"
-            elif "timeout" in err:
-                code = "script_timeout"
         try:
             self.audit.record(
                 tool, args, ok, detail, turn_id=self.turn_id,
@@ -530,6 +536,7 @@ class ToolExecutor:
                 "stdout": stdout,
                 "stderr": (stderr + "\nscript timeout").strip(),
                 "error": f"script timeout after {SCRIPT_TIMEOUT_SEC}s",
+                "error_code": "script_timeout",
             }
         stdout, out_cut = truncate_output(proc.stdout)
         stderr, err_cut = truncate_output(proc.stderr)

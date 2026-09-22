@@ -121,6 +121,47 @@ def test_script_timeout_sets_error_code_and_emits(tmp_path: Path, monkeypatch):
     assert any(ev == "script_timeout" for ev, _ in emitted)
 
 
+def test_script_stderr_outside_does_not_create_sandbox_escape_event(
+    tmp_path: Path, monkeypatch
+):
+    """Python stderr like 'index outside range' must not look like a jail escape."""
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    work = ws / ".office-agent" / "work"
+    work.mkdir(parents=True)
+    (work / "outside_stderr.py").write_text(
+        "import sys\n"
+        "sys.stderr.write('index outside range\\n')\n"
+        "sys.exit(1)\n",
+        encoding="utf-8",
+    )
+    audit = AuditLog(tmp_path / "db" / "outside-stderr.sqlite")
+    ex = ToolExecutor(
+        Workspace(ws),
+        SkillRegistry(),
+        permission_mode="trust",
+        audit=audit,
+        session_id="sess-stderr",
+        allow_workspace_scripts=True,
+    )
+    result = ex.execute("run_workspace_script", {"path": "outside_stderr.py", "args": []})
+    assert result["ok"] is False
+    assert "outside" in (result.get("stderr") or "").lower()
+    with sqlite3.connect(audit.db_path) as conn:
+        escape_n = conn.execute(
+            "SELECT count(*) FROM audit WHERE event_type = 'sandbox_escape_blocked'"
+        ).fetchone()[0]
+        tool_row = conn.execute(
+            "SELECT event_type, error_code FROM audit "
+            "WHERE tool = 'run_workspace_script' ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+    assert escape_n == 0
+    assert tool_row is not None
+    assert tool_row[0] == "tool_invoked"
+    assert tool_row[1] != "sandbox_escape_blocked"
+
+
 def test_workspace_write_relocates_root_py(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     (tmp_path / "skills").mkdir()

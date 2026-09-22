@@ -67,7 +67,8 @@ function downloadBlob(blob: Blob, filename: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Keep the object URL alive long enough for the browser to start the download.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; hint: string }[] = [
   { value: "cautious", label: "谨慎", hint: "每次写入、跑脚本、读取未附加文件都需确认" },

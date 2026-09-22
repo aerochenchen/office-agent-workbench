@@ -573,6 +573,16 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             "allow_workspace_scripts": cfg.allow_workspace_scripts,
         }
 
+        # Validate the whole body before mutating in-memory config.
+        permission_mode: str | None = None
+        if body.permission_mode is not None:
+            permission_mode = body.permission_mode.strip()
+            if permission_mode not in ("cautious", "standard", "trust_workspace"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="permission_mode must be cautious|standard|trust_workspace",
+                )
+        new_base: str | None = None
         if body.api_base is not None:
             new_base = body.api_base.strip()
             if cfg.resolved_profile() == PROFILE_LOCAL and new_base:
@@ -588,6 +598,8 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                         status_code=400,
                         detail="本地部署版本仅允许本机或内网模型地址",
                     )
+
+        if new_base is not None:
             cfg.api_base = new_base
         if body.allowed_hosts is not None:
             cfg.allowed_hosts = body.allowed_hosts
@@ -601,14 +613,8 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             cfg.api_key = body.api_key
         if body.model is not None:
             cfg.model = body.model
-        if body.permission_mode is not None:
-            mode = body.permission_mode.strip()
-            if mode not in ("cautious", "standard", "trust_workspace"):
-                raise HTTPException(
-                    status_code=400,
-                    detail="permission_mode must be cautious|standard|trust_workspace",
-                )
-            cfg.permission_mode = mode
+        if permission_mode is not None:
+            cfg.permission_mode = permission_mode
         if body.allow_workspace_scripts is not None:
             cfg.allow_workspace_scripts = bool(body.allow_workspace_scripts)
 
@@ -840,6 +846,10 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                         "hint": "use POST /chat/stream and confirm via /chat/permissions/{id}",
                     },
                 ) from e
+            except GatewayError as e:
+                status = "error"
+                _record_gateway_error(e)
+                raise HTTPException(status_code=500, detail=f"agent error: {e}") from e
             except Exception as e:
                 status = "error"
                 raise HTTPException(status_code=500, detail=f"agent error: {e}") from e
@@ -986,6 +996,10 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                         "session_id": session_id,
                     },
                 )
+            except GatewayError as e:
+                status = "error"
+                _record_gateway_error(e)
+                emit("error", {"message": f"agent error: {e}"})
             except Exception as e:
                 status = "error"
                 emit("error", {"message": f"agent error: {e}"})

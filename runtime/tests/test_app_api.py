@@ -977,6 +977,54 @@ def test_config_change_permission_mode_is_audited(client, app_state):
     assert "permission_mode" in attrs["keys"]
 
 
+def test_invalid_permission_mode_does_not_mutate_api_base(client, app_state):
+    before = app_state.config.api_base
+    r = client.post(
+        "/config",
+        json={"api_base": "http://127.0.0.1:9999/v1", "permission_mode": "bogus"},
+    )
+    assert r.status_code == 400
+    assert app_state.config.api_base == before
+    import sqlite3
+
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        n_changed = conn.execute(
+            "SELECT count(*) FROM audit WHERE event_type = 'config_changed'"
+        ).fetchone()[0]
+    assert n_changed == 0
+
+
+def test_chat_mid_turn_gateway_error_is_audited(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    from office_agent.gateway import GatewayError
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    class BoomGateway:
+        def chat(self, messages, tools=None):
+            raise GatewayError(
+                "boom mid-turn",
+                error_code="gateway_error",
+                host_class="loopback",
+            )
+
+    app_state.gateway_factory = lambda _cfg: BoomGateway()
+    r = client.post("/chat", json={"message": "你好"})
+    assert r.status_code == 500
+    import sqlite3
+
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT event_type, outcome, error_code FROM audit "
+            "WHERE event_type = 'gateway_error'"
+        ).fetchall()
+    assert rows
+    assert rows[-1] == ("gateway_error", "error", "gateway_error")
+
+
 def test_local_deploy_rejects_public_model_and_audits(client, app_state, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DEPLOYMENT", "local")
     app_state.config.deployment_profile = "local"
