@@ -73,7 +73,7 @@ def _resolve_under_roots(arg: str, roots: list[Path]) -> Path:
                 return candidate
             except ValueError:
                 continue
-    raise _tool_error(f"path argument outside allowed roots: {arg}")
+    raise _tool_error(f"path outside allowed roots: {arg}")
 
 
 def _tool_error(message: str) -> Exception:

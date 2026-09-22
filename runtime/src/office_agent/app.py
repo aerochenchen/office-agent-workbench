@@ -635,6 +635,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             audit=office.audit,
             gate=gate,
             turn_id=turn_id,
+            session_id=session_id,
             attached_paths=attached,
             allow_workspace_scripts=office.config.allow_workspace_scripts,
             require_script_sandbox=office.config.require_script_sandbox

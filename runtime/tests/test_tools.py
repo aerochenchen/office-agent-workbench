@@ -1,9 +1,13 @@
 from pathlib import Path
+import sqlite3
+import subprocess
+
 import pytest
 from office_agent.workspace import Workspace
 from office_agent.skills import SkillRegistry
 from office_agent.tools import MAX_SKILL_FILE_BYTES, ToolExecutor
 from office_agent.audit import AuditLog
+
 
 def test_run_workspace_script(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
@@ -24,6 +28,97 @@ def test_run_workspace_script(tmp_path: Path, monkeypatch):
     result = ex.execute("run_workspace_script", {"path": "hello.py", "args": []})
     assert result["ok"] is True
     assert "from-workspace" in result["stdout"]
+
+
+def test_run_workspace_script_disabled_audits_error_code(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    audit = AuditLog(tmp_path / "db" / "disabled.sqlite")
+    ex = ToolExecutor(
+        Workspace(ws),
+        SkillRegistry(),
+        permission_mode="trust",
+        audit=audit,
+        session_id="sess-disabled",
+        allow_workspace_scripts=False,
+    )
+    result = ex.execute("run_workspace_script", {"path": "hello.py", "args": []})
+    assert result["ok"] is False
+    with sqlite3.connect(audit.db_path) as conn:
+        row = conn.execute(
+            "SELECT event_type, session_id, error_code, detail, ok FROM audit "
+            "WHERE tool = 'run_workspace_script' ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    event_type, session_id, error_code, detail, ok = row
+    assert event_type == "tool_invoked"
+    assert session_id == "sess-disabled"
+    assert ok == 0
+    assert error_code == "workspace_scripts_disabled" or "disabled" in (detail or "").lower()
+
+
+def test_run_workspace_script_propagates_turn_id_env(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    work = ws / ".office-agent" / "work"
+    work.mkdir(parents=True)
+    (work / "echo_turn.py").write_text(
+        "import os\nprint(os.environ.get('OFFICE_AGENT_TURN_ID', ''))\n",
+        encoding="utf-8",
+    )
+    ex = ToolExecutor(
+        Workspace(ws),
+        SkillRegistry(),
+        permission_mode="trust",
+        turn_id="turn-abc",
+        allow_workspace_scripts=True,
+    )
+    result = ex.execute("run_workspace_script", {"path": "echo_turn.py", "args": []})
+    assert result["ok"] is True
+    assert "turn-abc" in result["stdout"]
+
+
+def test_script_timeout_sets_error_code_and_emits(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    work = ws / ".office-agent" / "work"
+    work.mkdir(parents=True)
+    (work / "slow.py").write_text("print('never')\n", encoding="utf-8")
+    audit = AuditLog(tmp_path / "db" / "timeout.sqlite")
+    emitted: list[tuple] = []
+
+    def _fake_emit(event, **fields):
+        emitted.append((event, fields))
+
+    monkeypatch.setattr("office_agent.diagnostic.emit", _fake_emit)
+
+    def _timeout_run(*_a, **_kw):
+        raise subprocess.TimeoutExpired(cmd="py", timeout=1)
+
+    monkeypatch.setattr("office_agent.tools.subprocess.run", _timeout_run)
+    ex = ToolExecutor(
+        Workspace(ws),
+        SkillRegistry(),
+        permission_mode="trust",
+        audit=audit,
+        session_id="sess-to",
+        allow_workspace_scripts=True,
+    )
+    result = ex.execute("run_workspace_script", {"path": "slow.py", "args": []})
+    assert result["ok"] is False
+    assert "timeout" in result["error"].lower()
+    with sqlite3.connect(audit.db_path) as conn:
+        row = conn.execute(
+            "SELECT error_code FROM audit WHERE tool = 'run_workspace_script' "
+            "ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    assert row[0] == "script_timeout"
+    assert any(ev == "script_timeout" for ev, _ in emitted)
 
 
 def test_workspace_write_relocates_root_py(tmp_path: Path, monkeypatch):

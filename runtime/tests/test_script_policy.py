@@ -51,6 +51,7 @@ def test_build_script_env_strips_sensitive_credentials() -> None:
             "PATH": "/usr/bin:/bin",
             "HOME": "/tmp/home",
             "OTHER": "keep",
+            "OFFICE_AGENT_TURN_ID": "turn-keep",
         }
     )
     # 敏感凭据必须被剥离
@@ -63,6 +64,8 @@ def test_build_script_env_strips_sensitive_credentials() -> None:
     assert env["PATH"] == "/usr/bin:/bin"
     assert env["HOME"] == "/tmp/home"
     assert env["OTHER"] == "keep"
+    # TURN_ID 不含 TOKEN/KEY，剥离逻辑必须保留
+    assert env["OFFICE_AGENT_TURN_ID"] == "turn-keep"
     # 业务白名单 env 保留
     assert env["HF_HUB_OFFLINE"] == "1"
 
@@ -96,6 +99,10 @@ def test_assert_argv_rejects_relative_escape(tmp_path: Path) -> None:
 
 
 def test_run_workspace_script_rejects_outside_argv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sqlite3
+
+    from office_agent.audit import AuditLog
+
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     (tmp_path / "skills").mkdir()
     ws = tmp_path / "ws"
@@ -104,8 +111,14 @@ def test_run_workspace_script_rejects_outside_argv(tmp_path: Path, monkeypatch: 
     (work / "runner.py").write_text("import sys\nprint('ran', sys.argv[1:])\n", encoding="utf-8")
     outside = tmp_path / "outside.docx"
     outside.write_bytes(b"PK")
+    audit = AuditLog(tmp_path / "db" / "escape.sqlite")
     ex = ToolExecutor(
-        Workspace(ws), SkillRegistry(), permission_mode="trust", allow_workspace_scripts=True
+        Workspace(ws),
+        SkillRegistry(),
+        permission_mode="trust",
+        allow_workspace_scripts=True,
+        audit=audit,
+        session_id="sess-escape",
     )
     result = ex.execute(
         "run_workspace_script",
@@ -113,6 +126,25 @@ def test_run_workspace_script_rejects_outside_argv(tmp_path: Path, monkeypatch: 
     )
     assert result["ok"] is False
     assert "outside allowed roots" in result["error"]
+    assert result["error"].startswith("path outside") or "outside" in result["error"]
+    with sqlite3.connect(audit.db_path) as conn:
+        tool_row = conn.execute(
+            "SELECT event_type, session_id, error_code FROM audit "
+            "WHERE tool = 'run_workspace_script' AND event_type = 'tool_invoked' "
+            "ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+        escape_row = conn.execute(
+            "SELECT event_type, outcome, error_code, session_id FROM audit "
+            "WHERE event_type = 'sandbox_escape_blocked' ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+    assert tool_row is not None
+    assert tool_row[0] == "tool_invoked"
+    assert tool_row[1] == "sess-escape"
+    assert tool_row[2] == "sandbox_escape_blocked"
+    assert escape_row is not None
+    assert escape_row[1] == "deny"
+    assert escape_row[2] == "sandbox_escape_blocked"
+    assert escape_row[3] == "sess-escape"
 
 
 def test_run_workspace_script_allows_in_workspace_argv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -138,6 +138,7 @@ class ToolExecutor:
         permission_mode: str = "standard",
         audit: AuditLog | None = None,
         turn_id: str | None = None,
+        session_id: str | None = None,
         python_bin: str | None = None,
         gate: PermissionGate | None = None,
         attached_paths: list[str] | None = None,
@@ -150,6 +151,7 @@ class ToolExecutor:
         self.permission_mode = permission_mode
         self.audit = audit
         self.turn_id = turn_id
+        self.session_id = session_id
         self.python_bin = python_bin or sys.executable
         self._app_data = app_data_dir()
         self.allow_workspace_scripts = allow_workspace_scripts
@@ -263,9 +265,38 @@ class ToolExecutor:
                     f"skill {skill_id} missing workspace_write in permissions"
                 )
 
-    def _audit(self, tool: str, args: dict, ok: bool, detail: str) -> None:
-        if self.audit is not None:
-            self.audit.record(tool, args, ok, detail, turn_id=self.turn_id)
+    def _audit(self, tool: str, args: dict, ok: bool, detail: str, error_code: str | None = None) -> None:
+        if self.audit is None:
+            return
+        code = error_code
+        if not ok and code is None:
+            err = detail.lower()
+            if "disabled" in err:
+                code = "workspace_scripts_disabled"
+            elif "outside" in err or "escape" in err or "jail" in err:
+                code = "sandbox_escape_blocked"
+            elif "permission denied" in err:
+                code = "permission_denied"
+            elif "timeout" in err:
+                code = "script_timeout"
+        try:
+            self.audit.record(
+                tool, args, ok, detail, turn_id=self.turn_id,
+                session_id=self.session_id, error_code=code,
+            )
+        except Exception:
+            from office_agent.diagnostic import emit
+            emit("audit_write_failed", level="error", turn_id=self.turn_id)
+        if not ok and code in {"workspace_scripts_disabled", "sandbox_escape_blocked", "script_timeout", "script_denied"}:
+            from office_agent.diagnostic import emit
+            ev = "script_timeout" if code == "script_timeout" else "script_denied"
+            emit(ev, level="warn", turn_id=self.turn_id, error_code=code, tool=tool)
+            if code == "sandbox_escape_blocked":
+                self.audit.record_event(
+                    "sandbox_escape_blocked", outcome="deny",
+                    turn_id=self.turn_id, session_id=self.session_id,
+                    error_code=code, tool=tool,
+                )
 
     def _workspace_list(self, args: dict) -> dict:
         rel = str(args.get("path", "."))
@@ -441,6 +472,8 @@ class ToolExecutor:
                     seen_argv.add(resolved)
         assert_argv_within_roots(argv, argv_roots)
         env = build_script_env()
+        if self.turn_id:
+            env["OFFICE_AGENT_TURN_ID"] = self.turn_id
         script_home = self.workspace.root / AGENT_WORK_REL / "script-home"
         script_home.mkdir(parents=True, exist_ok=True)
         env["HOME"] = str(script_home)
@@ -495,8 +528,8 @@ class ToolExecutor:
                 "ok": False,
                 "exit_code": -1,
                 "stdout": stdout,
-                "stderr": (stderr + "\nscript timed out").strip(),
-                "error": f"script timed out after {SCRIPT_TIMEOUT_SEC}s",
+                "stderr": (stderr + "\nscript timeout").strip(),
+                "error": f"script timeout after {SCRIPT_TIMEOUT_SEC}s",
             }
         stdout, out_cut = truncate_output(proc.stdout)
         stderr, err_cut = truncate_output(proc.stderr)
