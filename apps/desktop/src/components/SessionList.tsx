@@ -50,12 +50,6 @@ export default function SessionList({
         <span className="pane-title">对话</span>
       </div>
 
-      {!runtimeReady && (
-        <div className="empty-hint" style={{ padding: "8px 12px" }}>
-          本地运行时未就绪，请稍候或重启应用
-        </div>
-      )}
-
       <div className="session-toolbar">
         <button
           type="button"
@@ -63,13 +57,11 @@ export default function SessionList({
           disabled={!workspacePath || sending || !runtimeReady}
           onClick={onNewSession}
           title={
-            !runtimeReady
-              ? "本地运行时未就绪"
-              : !workspacePath
-                ? GUIDE_HINTS.newSessionNeedsFolder
-                : sending
-                  ? "请等待当前回复结束"
-                  : undefined
+            !workspacePath
+              ? GUIDE_HINTS.newSessionNeedsFolder
+              : sending
+                ? "请等待当前回复结束"
+                : undefined
           }
         >
           新建对话
@@ -114,7 +106,7 @@ export default function SessionList({
                   <button
                     type="button"
                     className="session-delete"
-                    title={!runtimeReady ? "本地运行时未就绪" : "删除对话"}
+                    title="删除对话"
                     disabled={sending || !runtimeReady}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -147,7 +139,6 @@ export default function SessionList({
           type="button"
           className="btn btn--full btn--ghost"
           disabled={!runtimeReady}
-          title={!runtimeReady ? "本地运行时未就绪" : undefined}
           onClick={onPickWorkspace}
         >
           {workspacePath ? "更换文件夹" : "打开文件夹"}

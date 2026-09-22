@@ -231,7 +231,7 @@ function App() {
   const handleOpenPath = useCallback(
     async (path: string) => {
       if (!runtimeReady) {
-        setWorkspaceError("本地运行时未就绪，请稍候或重启应用");
+        setWorkspaceError("本地服务未就绪，请关闭后重新打开本应用。");
         return;
       }
       setWorkspaceError(null);
@@ -604,13 +604,7 @@ function App() {
               if (status === "needs_config") setSettingsOpen(true);
             }}
             title={
-              status === "needs_config"
-                ? "本地运行时已启动，请先在设置中配置 API Key"
-                : status === "down"
-                  ? "无法连接本地运行时"
-                  : status === "ok"
-                    ? "本地运行时已就绪，API 已配置"
-                    : "正在启动本地运行时…"
+              status === "needs_config" ? "请先在设置中填写模型密钥" : undefined
             }
             disabled={status !== "needs_config"}
           >
@@ -673,7 +667,6 @@ function App() {
           messages={messages}
           sending={sending}
           runtimeReady={runtimeReady}
-          health={health}
           draftPrefill={draftPrefill}
           onDraftPrefillConsumed={() => setDraftPrefill(null)}
           onSend={handleSend}

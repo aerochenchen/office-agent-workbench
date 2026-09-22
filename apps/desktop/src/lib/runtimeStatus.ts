@@ -28,7 +28,7 @@ export function runtimeStatusLabel(status: RuntimeStatus): string {
     case "needs_config":
       return "待配置";
     case "down":
-      return "未就绪";
+      return "未连接";
     default:
       return "启动中…";
   }

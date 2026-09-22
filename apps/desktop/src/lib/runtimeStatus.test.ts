@@ -37,7 +37,7 @@ describe("runtimeStatusLabel", () => {
   it("maps statuses to Chinese labels", () => {
     expect(runtimeStatusLabel("ok")).toBe("就绪");
     expect(runtimeStatusLabel("needs_config")).toBe("待配置");
-    expect(runtimeStatusLabel("down")).toBe("未就绪");
+    expect(runtimeStatusLabel("down")).toBe("未连接");
     expect(runtimeStatusLabel("checking")).toBe("启动中…");
   });
 });

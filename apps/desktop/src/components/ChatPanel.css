@@ -530,10 +530,10 @@
   display: flex;
   align-items: flex-end;
   gap: var(--space-1);
-  border: 1px solid var(--line-1);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--line-0);
+  border-radius: var(--radius-lg);
   background: var(--paper-2);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-composer);
   padding: var(--space-1);
   transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
 }
@@ -541,7 +541,7 @@
 .chat-input-shell:focus-within {
   border-color: var(--accent-teal);
   box-shadow:
-    var(--shadow-1),
+    var(--shadow-composer),
     0 0 0 3px color-mix(in srgb, var(--accent-teal) 16%, transparent);
 }
 

@@ -13,7 +13,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-4);
-  background: var(--paper-1);
+  background: var(--paper-0);
   border-bottom: 1px solid var(--line-1);
 }
 
@@ -103,7 +103,7 @@
 }
 
 .health-dot--down {
-  background: var(--status-error);
+  background: var(--ink-2);
 }
 
 .health-label {

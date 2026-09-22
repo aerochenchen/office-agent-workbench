@@ -1,11 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, LiveStep } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
-import {
-  GUIDE_HINTS,
-  guideEmptyHeadline,
-} from "../lib/guide";
-import type { HealthState } from "../lib/runtimeStatus";
+import { guideEmptyHeadline } from "../lib/guide";
 import {
   filterPathsUnderWorkspace,
   isTauriRuntime,
@@ -21,7 +17,6 @@ interface Props {
   messages: ChatMessage[];
   sending: boolean;
   runtimeReady: boolean;
-  health?: HealthState;
   draftPrefill?: string | null;
   onDraftPrefillConsumed?: () => void;
   onSend: (text: string, attachedPaths: string[]) => void | Promise<void>;
@@ -199,7 +194,6 @@ export default function ChatPanel({
   messages,
   sending,
   runtimeReady,
-  health = "ok",
   draftPrefill,
   onDraftPrefillConsumed,
   onSend,
@@ -219,13 +213,6 @@ export default function ChatPanel({
   );
   const disabled = sending || !runtimeReady;
   const attachDisabled = disabled || !workspaceOpen;
-
-  const emptyHint =
-    health === "down"
-      ? "本地服务未就绪，请关闭后重新打开本应用。"
-      : health === "checking"
-        ? GUIDE_HINTS.bootWaiting
-        : null;
 
   function applyPrefill(saying: string) {
     setDraft(saying);
@@ -368,11 +355,7 @@ export default function ChatPanel({
               <div className="chat-empty-name">{APP_NAME}</div>
               <div className="chat-empty-tagline">{APP_TAGLINE}</div>
             </div>
-            {health !== "down" && health !== "checking" ? (
-              <p className="chat-empty-headline">{guideEmptyHeadline(workspaceOpen)}</p>
-            ) : emptyHint ? (
-              <p className="empty-hint chat-empty-hint">{emptyHint}</p>
-            ) : null}
+            <p className="chat-empty-headline">{guideEmptyHeadline(workspaceOpen)}</p>
           </div>
         )}
         {messages.map((m) => (
@@ -457,13 +440,11 @@ export default function ChatPanel({
               disabled={attachDisabled}
               aria-label="添加文件夹内文件"
               title={
-                !runtimeReady
-                  ? "本地运行时未就绪"
-                  : !workspaceOpen
-                    ? "请先打开文件夹"
-                    : isTauriRuntime()
-                      ? "添加文件夹内文件"
-                      : "粘贴文件夹内绝对路径"
+                !workspaceOpen
+                  ? "请先打开文件夹"
+                  : isTauriRuntime()
+                    ? "添加文件夹内文件"
+                    : "粘贴文件夹内绝对路径"
               }
               onClick={() => void handleAttachClick()}
             >
@@ -473,13 +454,11 @@ export default function ChatPanel({
               ref={inputRef}
               className="chat-input"
               placeholder={
-                !runtimeReady
-                  ? "本地运行时未就绪…"
-                  : sending
-                    ? "处理中，完成后可继续…"
-                    : workspaceOpen
-                      ? "描述要办的事…"
-                      : "描述要办的事，或点上方一句…"
+                sending
+                  ? "处理中，完成后可继续…"
+                  : workspaceOpen
+                    ? "描述要办的事…"
+                    : "描述要办的事，或点上方一句…"
               }
               value={draft}
               disabled={disabled}
@@ -500,7 +479,7 @@ export default function ChatPanel({
           ) : (
             <button
               type="submit"
-              className={`btn${runtimeReady && !sending ? " btn--primary" : " btn--ghost"}`}
+              className="btn btn--primary"
               disabled={disabled || !draft.trim()}
             >
               发送
