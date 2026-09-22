@@ -126,6 +126,47 @@
   gap: var(--space-3);
 }
 
+.settings-audit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-audit-table-wrap {
+  overflow: auto;
+  max-height: 280px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-sm);
+}
+
+.settings-audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+  color: var(--ink-0);
+}
+
+.settings-audit-table th,
+.settings-audit-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--line-1);
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.settings-audit-table th {
+  position: sticky;
+  top: 0;
+  background: var(--paper-1);
+  color: var(--ink-1);
+  font-weight: 600;
+}
+
+.settings-audit-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .settings-section-title {
   margin: 0;
   font-size: var(--font-size-xs);

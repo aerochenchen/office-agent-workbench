@@ -1,4 +1,5 @@
 import type {
+  AuditEntry,
   ChatReply,
   ChatStreamHandlers,
   PermissionRequestEvent,
@@ -89,14 +90,25 @@ export function formatSkillErrorDetail(detail: unknown): string {
   return lines.length > 0 ? lines.join("\n") : "技能包校验失败";
 }
 
-/** Cross-platform hint for where the desktop sidecar writes logs. */
+/** Cross-platform hint for where diagnostic JSONL and audit export live. */
 export function runtimeLogHint(): string {
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const isWin = /Windows/i.test(ua);
   if (isWin) {
-    return "%TEMP%\\office-agent-desktop.log";
+    return "本机日志目录：%USERPROFILE%\\.office-agent\\logs（诊断 JSONL）；使用记录在设置「使用审计」导出。";
   }
-  return "系统临时目录中的 office-agent-desktop.log（macOS 多为 $TMPDIR）";
+  return "本机日志目录：用户目录/.office-agent/logs（诊断 JSONL）；使用记录在设置「使用审计」导出。";
+}
+
+/** Table summary cell: tool name, else error_code. */
+export function formatAuditSummary(
+  entry: Pick<AuditEntry, "tool" | "error_code">,
+): string {
+  const tool = entry.tool?.trim();
+  if (tool) return tool;
+  const code = entry.error_code?.trim();
+  if (code) return code;
+  return "";
 }
 
 async function request<T>(
@@ -554,6 +566,48 @@ export const runtimeClient = {
       body: JSON.stringify({ session_id: sessionId }),
       timeoutMs: 10_000,
     });
+  },
+
+  listAuditRecent(limit = 20): Promise<{ entries: AuditEntry[] }> {
+    const capped = Math.min(100, Math.max(0, Math.floor(limit)));
+    return request(`/audit/recent?limit=${encodeURIComponent(String(capped))}`);
+  },
+
+  /**
+   * Download desensitized audit as NDJSON. Must not use `request()` (JSON parse).
+   */
+  async exportAudit(since?: number): Promise<Blob> {
+    const q =
+      since != null && Number.isFinite(since)
+        ? `?since=${encodeURIComponent(String(since))}`
+        : "";
+    const path = `/audit/export${q}`;
+    try {
+      const res = await fetch(`${RUNTIME_BASE_URL}${path}`, {
+        headers: mergeAuthHeaders(path),
+      });
+      if (!res.ok) {
+        let detail: unknown = res.statusText;
+        try {
+          const body = (await res.json()) as { detail?: unknown };
+          if (body?.detail !== undefined) detail = body.detail;
+        } catch {
+          // ignore non-JSON error bodies
+        }
+        throw new RuntimeClientError(formatSkillErrorDetail(detail), res.status);
+      }
+      return await res.blob();
+    } catch (err) {
+      if (err instanceof RuntimeClientError) throw err;
+      const name = err instanceof Error ? err.name : "";
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/Failed to fetch|NetworkError|ECONNREFUSED|Load failed/i.test(msg)) {
+        throw new RuntimeClientError(
+          `无法连接本地运行时（127.0.0.1:8765）。请关闭后重新打开本应用；若仍失败，查看 ${runtimeLogHint()}`,
+        );
+      }
+      throw new RuntimeClientError(`运行时请求失败：${msg || name || "未知错误"}`);
+    }
   },
 
   chat(input: {
