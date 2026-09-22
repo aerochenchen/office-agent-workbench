@@ -930,6 +930,60 @@ def test_local_profile_rejects_public_api_base(client: TestClient, app_state: Pr
     assert r2.status_code == 200
 
 
+def test_config_change_allow_workspace_scripts_is_audited(client, app_state):
+    r = client.post("/config", json={"allow_workspace_scripts": True})
+    assert r.status_code == 200
+    import sqlite3, json as _json
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT event_type, attrs_json FROM audit WHERE event_type = 'config_changed'"
+        ).fetchall()
+    assert rows
+    attrs = _json.loads(rows[-1][1])
+    assert attrs["allow_workspace_scripts"]["old"] is False
+    assert attrs["allow_workspace_scripts"]["new"] is True
+    assert "allow_workspace_scripts" in attrs["keys"]
+
+
+def test_config_change_permission_mode_is_audited(client, app_state):
+    r = client.post("/config", json={"permission_mode": "cautious"})
+    assert r.status_code == 200
+    import sqlite3, json as _json
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT attrs_json FROM audit WHERE event_type = 'config_changed'"
+        ).fetchall()
+    assert rows
+    attrs = _json.loads(rows[-1][0])
+    assert attrs["permission_mode"]["old"] == "standard"
+    assert attrs["permission_mode"]["new"] == "cautious"
+    assert "permission_mode" in attrs["keys"]
+
+
+def test_local_deploy_rejects_public_model_and_audits(client, app_state, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DEPLOYMENT", "local")
+    app_state.config.deployment_profile = "local"
+    r = client.post("/config", json={"api_base": "https://api.deepseek.com"})
+    assert r.status_code == 400
+    import sqlite3, json as _json
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT outcome, error_code, attrs_json FROM audit "
+            "WHERE event_type = 'model_host_rejected'"
+        ).fetchall()
+        n_changed = conn.execute(
+            "SELECT count(*) FROM audit WHERE event_type = 'config_changed'"
+        ).fetchone()[0]
+    assert len(rows) >= 1
+    assert n_changed == 0
+    outcome, error_code, attrs_json = rows[-1]
+    assert outcome == "deny"
+    assert error_code == "model_host_rejected"
+    attrs = _json.loads(attrs_json)
+    assert attrs == {"host": "api.deepseek.com", "profile": "local"}
+    assert "api_key" not in attrs
+
+
 def test_local_profile_allows_ip_literal_without_api_key(
     client: TestClient, app_state: ProcessState
 ):

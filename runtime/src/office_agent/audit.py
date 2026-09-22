@@ -62,7 +62,14 @@ def _redact_attrs(attrs: dict | None) -> dict | None:
     if "api_base" in safe:
         from office_agent.deployment import model_host_from_api_base
 
-        safe["api_base"] = model_host_from_api_base(str(safe["api_base"]))
+        val = safe["api_base"]
+        if isinstance(val, dict):
+            safe["api_base"] = {
+                k: model_host_from_api_base(str(v)) if isinstance(v, str) else v
+                for k, v in val.items()
+            }
+        else:
+            safe["api_base"] = model_host_from_api_base(str(val))
     return safe
 
 

@@ -466,28 +466,44 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
     @app.post("/config")
     def update_config(body: ConfigBody) -> dict[str, Any]:
+        cfg = office.config
+        old = {
+            "api_base": cfg.api_base,
+            "allowed_hosts": list(cfg.allowed_hosts),
+            "api_key": cfg.api_key,
+            "model": cfg.model,
+            "permission_mode": cfg.permission_mode,
+            "allow_workspace_scripts": cfg.allow_workspace_scripts,
+        }
+
         if body.api_base is not None:
             new_base = body.api_base.strip()
-            if office.config.resolved_profile() == PROFILE_LOCAL and new_base:
+            if cfg.resolved_profile() == PROFILE_LOCAL and new_base:
                 host = model_host_from_api_base(new_base)
                 if not is_intranet_model_host(host):
+                    office.audit.record_event(
+                        "model_host_rejected",
+                        outcome="deny",
+                        error_code="model_host_rejected",
+                        attrs={"host": host, "profile": "local"},
+                    )
                     raise HTTPException(
                         status_code=400,
                         detail="本地部署版本仅允许本机或内网模型地址",
                     )
-            office.config.api_base = new_base
+            cfg.api_base = new_base
         if body.allowed_hosts is not None:
-            office.config.allowed_hosts = body.allowed_hosts
+            cfg.allowed_hosts = body.allowed_hosts
         if body.api_base is not None:
             # Auto-allow the configured API host so users never manage the allowlist.
-            office.config.allowed_hosts = merge_allowed_hosts(
-                office.config.api_base,
-                office.config.allowed_hosts,
+            cfg.allowed_hosts = merge_allowed_hosts(
+                cfg.api_base,
+                cfg.allowed_hosts,
             )
         if body.api_key is not None:
-            office.config.api_key = body.api_key
+            cfg.api_key = body.api_key
         if body.model is not None:
-            office.config.model = body.model
+            cfg.model = body.model
         if body.permission_mode is not None:
             mode = body.permission_mode.strip()
             if mode not in ("cautious", "standard", "trust_workspace"):
@@ -495,10 +511,39 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     status_code=400,
                     detail="permission_mode must be cautious|standard|trust_workspace",
                 )
-            office.config.permission_mode = mode
+            cfg.permission_mode = mode
         if body.allow_workspace_scripts is not None:
-            office.config.allow_workspace_scripts = bool(body.allow_workspace_scripts)
-        save_config(office.config)
+            cfg.allow_workspace_scripts = bool(body.allow_workspace_scripts)
+
+        changes: dict[str, Any] = {}
+        keys: list[str] = []
+
+        def _note(key: str, old_v: Any, new_v: Any) -> None:
+            if old_v == new_v:
+                return
+            keys.append(key)
+            if key == "api_key":
+                # Never persist credential values; keys list still records the change.
+                return
+            changes[key] = {"old": old_v, "new": new_v}
+
+        _note("api_base", old["api_base"], cfg.api_base)
+        _note("allowed_hosts", old["allowed_hosts"], list(cfg.allowed_hosts))
+        _note("api_key", old["api_key"], cfg.api_key)
+        _note("model", old["model"], cfg.model)
+        _note("permission_mode", old["permission_mode"], cfg.permission_mode)
+        _note(
+            "allow_workspace_scripts",
+            old["allow_workspace_scripts"],
+            cfg.allow_workspace_scripts,
+        )
+
+        if keys:
+            office.audit.record_event(
+                "config_changed",
+                attrs={"keys": keys, **changes},
+            )
+        save_config(cfg)
         return {"ok": True}
 
     @app.post("/chat/permissions/{request_id}")
