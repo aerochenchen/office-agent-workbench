@@ -3,7 +3,11 @@ import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
 import { dismissBootSplash, shouldDismissBootSplash } from "./lib/bootSplash";
-import { bootPollInterval, shouldMarkDownDuringBoot } from "./lib/bootHealth";
+import {
+  bootPollInterval,
+  shouldEmitHealthFail,
+  shouldMarkDownDuringBoot,
+} from "./lib/bootHealth";
 import { isModelSetupError, MODEL_SETUP_REPLY, needsModelSetup } from "./lib/guide";
 import { runtimeClient, RuntimeClientError, setRuntimeApiToken, type ChatStreamHandle } from "./lib/runtimeClient";
 import {
@@ -67,9 +71,11 @@ function App() {
   const [permissionBusy, setPermissionBusy] = useState(false);
   const sessionIdRef = useRef<string | undefined>(undefined);
   const healthFailCount = useRef(0);
+  const healthRef = useRef<HealthState>(health);
   const sendingRef = useRef(false);
   const streamHandleRef = useRef<ChatStreamHandle | null>(null);
   sessionIdRef.current = sessionId;
+  healthRef.current = health;
   sendingRef.current = sending;
 
   useEffect(() => {
@@ -103,11 +109,14 @@ function App() {
           healthFailCount.current += 1;
           const elapsed = Date.now() - bootStartedAt;
           // Boot window: stay "checking". After timeout: down on consecutive failures (≥2).
+          // Emit health_fail only on transition into down (once per down episode).
           if (
             shouldMarkDownDuringBoot(elapsed, false) &&
-            healthFailCount.current >= 2
+            healthFailCount.current >= 2 &&
+            shouldEmitHealthFail(healthRef.current)
           ) {
             void logDesktopEvent("health_fail");
+            healthRef.current = "down";
             setHealth("down");
           }
         }
