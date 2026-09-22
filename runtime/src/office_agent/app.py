@@ -248,6 +248,32 @@ class CancelChatBody(BaseModel):
     session_id: str
 
 
+def _parse_attrs_json(raw: Any) -> dict[str, Any] | None:
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, dict):
+        return raw
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _audit_recent_entry(row: dict[str, Any]) -> dict[str, Any]:
+    """Map stored audit row to the /audit/recent API contract."""
+    return {
+        "ts": row.get("ts"),
+        "event_type": row.get("event_type"),
+        "outcome": row.get("outcome"),
+        "tool": row.get("tool"),
+        "error_code": row.get("error_code"),
+        "session_id": row.get("session_id"),
+        "attrs": _parse_attrs_json(row.get("attrs_json")),
+        "detail": row.get("detail"),
+    }
+
+
 class CreateSessionBody(BaseModel):
     workspace_path: str | None = None
 
@@ -319,7 +345,12 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     @app.get("/audit/recent")
     def audit_recent(limit: int = Query(default=20)) -> dict[str, Any]:
         capped = min(100, max(0, int(limit)))
-        return {"entries": office.audit.list_recent(limit=capped)}
+        return {
+            "entries": [
+                _audit_recent_entry(row)
+                for row in office.audit.list_recent(limit=capped)
+            ]
+        }
 
     @app.get("/audit/export")
     def audit_export(since: float | None = Query(default=None)) -> Response:

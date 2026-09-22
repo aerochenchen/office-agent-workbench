@@ -1124,7 +1124,27 @@ def test_audit_export_ndjson_and_redacted(client, app_state):
 
 def test_audit_recent_limit(client, app_state):
     for i in range(3):
-        app_state.audit.record_event("chat_started", outcome="ok", session_id=str(i))
+        app_state.audit.record_event(
+            "chat_started",
+            outcome="ok",
+            session_id=str(i),
+            attrs={"i": i},
+        )
     r = client.get("/audit/recent", params={"limit": 2})
     assert r.status_code == 200
-    assert len(r.json()["entries"]) == 2
+    entries = r.json()["entries"]
+    assert len(entries) == 2
+    entry = entries[0]
+    assert "attrs" in entry
+    assert isinstance(entry["attrs"], dict)
+    assert "attrs_json" not in entry
+    assert set(entry) == {
+        "ts",
+        "event_type",
+        "outcome",
+        "tool",
+        "error_code",
+        "session_id",
+        "attrs",
+        "detail",
+    }
