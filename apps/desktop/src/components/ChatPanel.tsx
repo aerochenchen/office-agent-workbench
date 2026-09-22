@@ -5,7 +5,6 @@ import {
   GUIDE_HINTS,
   guideEmptyHeadline,
 } from "../lib/guide";
-import { runtimeLogHint } from "../lib/runtimeClient";
 import type { HealthState } from "../lib/runtimeStatus";
 import {
   filterPathsUnderWorkspace,
@@ -223,7 +222,7 @@ export default function ChatPanel({
 
   const emptyHint =
     health === "down"
-      ? `本地服务未就绪，请关闭后重新打开本应用；若仍失败，查看 ${runtimeLogHint()}`
+      ? "本地服务未就绪，请关闭后重新打开本应用。"
       : health === "checking"
         ? GUIDE_HINTS.bootWaiting
         : null;

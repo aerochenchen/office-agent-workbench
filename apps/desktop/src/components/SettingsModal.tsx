@@ -10,8 +10,7 @@ import {
   SUPPORT_EMAIL,
 } from "../lib/brand";
 import { GUIDE_PILLARS } from "../lib/guide";
-import { formatAuditSummary, runtimeClient } from "../lib/runtimeClient";
-import type { AuditEntry, PermissionMode, RuntimeConfig } from "../lib/types";
+import type { PermissionMode, RuntimeConfig } from "../lib/types";
 import { openHttpsUrl, readOssNoticeText } from "../lib/tauri";
 import {
   applyUiFontScale,
@@ -35,41 +34,16 @@ interface Props {
   onSave: (partial: Partial<RuntimeConfig>) => Promise<void>;
 }
 
-type SettingsTab = "appearance" | "model" | "permission" | "audit" | "guide" | "about";
+type SettingsTab = "appearance" | "model" | "permission" | "guide" | "about";
 
 const SETTINGS_TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
   { id: "appearance", label: "外观" },
   { id: "model", label: "模型" },
   { id: "permission", label: "权限与安全" },
-  { id: "audit", label: "使用审计" },
   { id: "guide", label: "使用说明" },
   { id: "about", label: "关于" },
 ];
 
-const AUDIT_EXPORT_FILENAME = "文书通-审计.jsonl";
-
-function formatAuditLocalTime(ts: number): string {
-  if (!Number.isFinite(ts)) return "—";
-  const ms = ts > 1e12 ? ts : ts * 1000;
-  try {
-    return new Date(ms).toLocaleString();
-  } catch {
-    return "—";
-  }
-}
-
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Keep the object URL alive long enough for the browser to start the download.
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
 const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; hint: string }[] = [
   { value: "cautious", label: "谨慎", hint: "每次写入、跑脚本、读取未附加文件都需确认" },
   { value: "standard", label: "标准（默认）", hint: "首次确认后，同会话同操作可记住" },
@@ -127,10 +101,6 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   const [noticeText, setNoticeText] = useState<string | null>(null);
   const [studioLinkError, setStudioLinkError] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [auditError, setAuditError] = useState<string | null>(null);
-  const [auditExporting, setAuditExporting] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -147,34 +117,8 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setNoticeError(null);
       setNoticeText(null);
       setStudioLinkError(null);
-      setAuditEntries([]);
-      setAuditError(null);
     }
   }, [open, initial]);
-
-  useEffect(() => {
-    if (!open || tab !== "audit") return;
-    let cancelled = false;
-    setAuditLoading(true);
-    setAuditError(null);
-    void runtimeClient
-      .listAuditRecent(20)
-      .then((res) => {
-        if (!cancelled) setAuditEntries(Array.isArray(res.entries) ? res.entries : []);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setAuditEntries([]);
-          setAuditError(err instanceof Error ? err.message : "无法加载使用记录");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setAuditLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, tab]);
 
   const editable = tab === "appearance" || tab === "model" || tab === "permission";
   const viewingNotice = noticeText !== null;
@@ -270,19 +214,6 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setError(err instanceof Error ? err.message : "保存失败");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleExportAudit() {
-    setAuditExporting(true);
-    setAuditError(null);
-    try {
-      const blob = await runtimeClient.exportAudit();
-      downloadBlob(blob, AUDIT_EXPORT_FILENAME);
-    } catch (err) {
-      setAuditError(err instanceof Error ? err.message : "导出失败");
-    } finally {
-      setAuditExporting(false);
     }
   }
 
@@ -508,60 +439,6 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                     ? "已开启：助手可在工作区写并运行临时脚本，能力更强，也可能改动工作区文件。技能脚本不受影响。"
                     : "默认关闭：助手不能自写自跑工作区脚本，复杂自动化会弱一些。技能功能不受影响。"}
                 </p>
-              </section>
-            )}
-
-            {tab === "audit" && (
-              <section className="settings-section" aria-labelledby="settings-audit-title">
-                <h3 id="settings-audit-title" className="settings-section-title">
-                  使用审计
-                </h3>
-                <p className="settings-permission-hint">
-                  记录保存在本机，不上传。不提供清空；删除应用数据会丢掉记录。
-                </p>
-                <div className="settings-audit-actions">
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    disabled={auditExporting || auditLoading}
-                    onClick={() => void handleExportAudit()}
-                  >
-                    {auditExporting ? "导出中…" : "导出 JSONL"}
-                  </button>
-                </div>
-                {auditError ? <p className="field-error">{auditError}</p> : null}
-                {auditLoading ? (
-                  <p className="settings-permission-hint">加载中…</p>
-                ) : (
-                  <div className="settings-audit-table-wrap">
-                    <table className="settings-audit-table">
-                      <thead>
-                        <tr>
-                          <th scope="col">时间</th>
-                          <th scope="col">事件</th>
-                          <th scope="col">结果</th>
-                          <th scope="col">摘要</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {auditEntries.length === 0 ? (
-                          <tr>
-                            <td colSpan={4}>暂无记录</td>
-                          </tr>
-                        ) : (
-                          auditEntries.map((entry, i) => (
-                            <tr key={`${entry.ts}-${entry.event_type}-${entry.session_id ?? ""}-${i}`}>
-                              <td>{formatAuditLocalTime(entry.ts)}</td>
-                              <td>{entry.event_type || "—"}</td>
-                              <td>{entry.outcome || "—"}</td>
-                              <td>{formatAuditSummary(entry) || "—"}</td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
               </section>
             )}
 

@@ -169,17 +169,6 @@ export interface PermissionRequestEvent {
   path?: string;
 }
 
-/** One row from GET /audit/recent (desensitized; no document bodies / API keys). */
-export interface AuditEntry {
-  ts: number;
-  event_type: string;
-  outcome: string;
-  tool?: string;
-  error_code?: string;
-  session_id?: string;
-  detail?: string;
-}
-
 export interface ChatStreamHandlers {
   onStarted?: (sessionId: string, turnId?: string) => void;
   onStatus?: (phase: string) => void;

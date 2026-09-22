@@ -73,13 +73,6 @@ def _redact_attrs(attrs: dict | None) -> dict | None:
     return safe
 
 
-def _row_to_dict(row: sqlite3.Row) -> dict:
-    data = dict(row)
-    if not data.get("event_type"):
-        data["event_type"] = "tool_invoked"
-    return data
-
-
 class AuditLog:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -183,26 +176,3 @@ class AuditLog:
             from office_agent.diagnostic import emit
 
             emit("audit_write_failed", level="error", error_code="sqlite")
-
-    def list_recent(self, limit: int = 20) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM audit ORDER BY ts DESC LIMIT ?",
-                (max(0, int(limit)),),
-            ).fetchall()
-        return [_row_to_dict(row) for row in rows]
-
-    def export_rows(self, since: float | None = None) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if since is None:
-                rows = conn.execute(
-                    "SELECT * FROM audit ORDER BY ts DESC"
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM audit WHERE ts >= ? ORDER BY ts DESC",
-                    (since,),
-                ).fetchall()
-        return [_row_to_dict(row) for row in rows]

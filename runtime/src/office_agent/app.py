@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from office_agent.agent_loop import run_agent
@@ -248,32 +248,6 @@ class CancelChatBody(BaseModel):
     session_id: str
 
 
-def _parse_attrs_json(raw: Any) -> dict[str, Any] | None:
-    if raw is None or raw == "":
-        return None
-    if isinstance(raw, dict):
-        return raw
-    try:
-        parsed = json.loads(raw)
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return None
-    return parsed if isinstance(parsed, dict) else None
-
-
-def _audit_recent_entry(row: dict[str, Any]) -> dict[str, Any]:
-    """Map stored audit row to the /audit/recent API contract."""
-    return {
-        "ts": row.get("ts"),
-        "event_type": row.get("event_type"),
-        "outcome": row.get("outcome"),
-        "tool": row.get("tool"),
-        "error_code": row.get("error_code"),
-        "session_id": row.get("session_id"),
-        "attrs": _parse_attrs_json(row.get("attrs_json")),
-        "detail": row.get("detail"),
-    }
-
-
 def _chat_status_from_tool_events(
     tool_events: list[dict[str, Any]] | None, *, base: str = "ok"
 ) -> str:
@@ -356,24 +330,6 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             "allow_workspace_scripts": cfg.allow_workspace_scripts,
             "require_script_sandbox": cfg.require_script_sandbox,
         }
-
-    @app.get("/audit/recent")
-    def audit_recent(limit: int = Query(default=20)) -> dict[str, Any]:
-        capped = min(100, max(0, int(limit)))
-        return {
-            "entries": [
-                _audit_recent_entry(row)
-                for row in office.audit.list_recent(limit=capped)
-            ]
-        }
-
-    @app.get("/audit/export")
-    def audit_export(since: float | None = Query(default=None)) -> Response:
-        rows = office.audit.export_rows(since=since)
-        body = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows)
-        if body:
-            body += "\n"
-        return Response(content=body, media_type="application/x-ndjson")
 
     @app.post("/workspace/open")
     def workspace_open(body: OpenWorkspaceBody) -> dict[str, Any]:

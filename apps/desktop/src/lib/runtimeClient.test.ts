@@ -2,44 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   authHeadersForPath,
   createSseDispatcher,
-  formatAuditSummary,
   formatSkillErrorDetail,
   getRuntimeApiToken,
-  runtimeLogHint,
   setRuntimeApiToken,
 } from "./runtimeClient";
-
-describe("runtimeLogHint", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    setRuntimeApiToken(null);
-  });
-
-  it("returns USERPROFILE logs dir on Windows UA", () => {
-    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Windows NT 10.0)" });
-    expect(runtimeLogHint()).toBe(
-      "本机日志目录：%USERPROFILE%\\.office-agent\\logs（诊断 JSONL）；使用记录在设置「使用审计」导出。",
-    );
-  });
-
-  it("returns user-dir logs hint on non-Windows", () => {
-    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Macintosh)" });
-    expect(runtimeLogHint()).toBe(
-      "本机日志目录：用户目录/.office-agent/logs（诊断 JSONL）；使用记录在设置「使用审计」导出。",
-    );
-  });
-});
-
-describe("formatAuditSummary", () => {
-  it("prefers tool over error_code", () => {
-    expect(formatAuditSummary({ tool: "read_file", error_code: "E1" })).toBe("read_file");
-  });
-
-  it("falls back to error_code then empty", () => {
-    expect(formatAuditSummary({ error_code: "permission_timeout" })).toBe("permission_timeout");
-    expect(formatAuditSummary({})).toBe("");
-  });
-});
 
 describe("authHeadersForPath", () => {
   afterEach(() => {
