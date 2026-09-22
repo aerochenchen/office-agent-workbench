@@ -50,6 +50,19 @@ class ToolError(ValueError):
     pass
 
 
+def list_shared_script_names(app_data: Path | None = None) -> list[str]:
+    """Installed shared-script logical names (no .py), sorted."""
+    root = Path(app_data or app_data_dir()) / "shared-scripts"
+    if not root.is_dir():
+        return []
+    names: list[str] = []
+    for path in sorted(root.glob("*.py")):
+        if not path.is_file() or path.name.startswith("_"):
+            continue
+        names.append(path.stem)
+    return names
+
+
 def script_jail_roots(
     workspace_root: Path,
     app_data: Path,
@@ -389,7 +402,15 @@ class ToolExecutor:
             raise ToolError(f"invalid shared script name: {name}")
         script_path = self._app_data / "shared-scripts" / f"{name}.py"
         if not script_path.is_file():
-            return {"ok": False, "error": f"shared script not found: {name}"}
+            installed = list_shared_script_names(self._app_data)
+            avail = "、".join(installed) if installed else "（无）"
+            return {
+                "ok": False,
+                "error": (
+                    f"shared script not found: {name}; 已安装: {avail}。"
+                    "run_shared_script 不能跑工作区 .py，也没有 python/run_python 这类通用入口。"
+                ),
+            }
         return self._run_python(
             script_path,
             argv,

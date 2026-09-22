@@ -223,6 +223,26 @@ def test_run_shared_script(tmp_path: Path, monkeypatch):
     assert result["ok"] is True
     assert "formatted" in result["stdout"]
 
+
+def test_run_shared_script_not_found_lists_available(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "shared-scripts").mkdir(parents=True)
+    (tmp_path / "shared-scripts" / "format_gongwen.py").write_text(
+        "print('formatted')\n", encoding="utf-8"
+    )
+    (tmp_path / "skills").mkdir(exist_ok=True)
+    (tmp_path / "ws").mkdir()
+    ex = ToolExecutor(
+        Workspace(tmp_path / "ws"),
+        SkillRegistry(),
+        permission_mode="trust",
+    )
+    result = ex.execute("run_shared_script", {"name": "python", "args": []})
+    assert result["ok"] is False
+    assert "python" in result["error"]
+    assert "format_gongwen" in result["error"]
+    assert "available" in result["error"] or "已安装" in result["error"]
+
 def test_write_escape_rejected(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     (tmp_path / "skills").mkdir()

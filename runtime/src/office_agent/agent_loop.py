@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from office_agent.cancel import CancelToken, CancelledError
-from office_agent.tools import ToolExecutor
+from office_agent.tools import ToolExecutor, list_shared_script_names
 
 EventCallback = Callable[[dict[str, Any]], None]
 
@@ -202,10 +202,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "run_shared_script",
             "description": (
-                "运行共享脚本。公文排版 format_gongwen："
-                "先 args=[dump, docx]，Agent 写 roles.json 后 "
-                "args=[apply, docx, roles.json]；结果宜落到 工作成果/。"
+                "运行已安装的共享脚本；name 只能是逻辑名（不含 .py）。"
+                "内置：公文排版 format_gongwen（先 dump 再 apply）；"
                 "两版对比 docx_diff：args=[旧.docx, 新.docx, --out, 报告.json]。"
+                "禁止把 name 设为 python / run_python / py / execute_python；"
+                "本工具不能执行工作区内的 .py。"
             ),
             "parameters": {
                 "type": "object",
@@ -437,18 +438,34 @@ def tool_schemas_for(*, allow_workspace_scripts: bool) -> list[dict[str, Any]]:
     return [s for s in TOOL_SCHEMAS if s["function"]["name"] != "run_workspace_script"]
 
 
+def _shared_script_names_text(names: list[str] | None) -> str:
+    cleaned = [n for n in (names or []) if n]
+    if not cleaned:
+        cleaned = ["format_gongwen", "docx_diff"]
+    return "、".join(cleaned)
+
+
 def _build_system_prompt(
     catalog: list[dict[str, Any]],
     *,
     allow_workspace_scripts: bool = False,
+    shared_script_names: list[str] | None = None,
 ) -> str:
     catalog_json = json.dumps(catalog, ensure_ascii=False, indent=2)
+    names_text = _shared_script_names_text(shared_script_names)
     script_line = (
         "- 工作区内的 .py 用 run_workspace_script 执行（写完脚本后立刻执行）；\n"
         if allow_workspace_scripts
         else (
             "- 工作区自定义脚本已关闭，禁止调用 run_workspace_script；"
-            "请用 run_skill_script / run_shared_script 执行技能与共享脚本；\n"
+            "没有「运行任意工作区 .py」的共享脚本，禁止猜测 name="
+            "python / run_python / py / execute_python / run_python_script；"
+            f"run_shared_script 仅能跑已安装共享脚本：{names_text}；"
+            "请用 run_skill_script / run_shared_script 执行技能与共享脚本；"
+            "禁止把一次性补丁脚本包装成新技能（含用 skill-builder 安装）来绕过；"
+            "禁止向用户询问工具名、白名单或「请允许执行脚本」。"
+            "若现有技能做不到、又必须生成 Word/表格等二进制文件："
+            "对用户只说请到设置打开「允许运行工作区内的自定义脚本」，打开后再说继续；\n"
         )
     )
     return (
@@ -505,7 +522,11 @@ def _build_system_prompt(
         "needs_user 澄清（若本轮 ask_user 已用则留待下一轮）；\n"
         "- 可用 workspace_list 查看目录；读取未在附件中的文件须经用户确认。\n"
         "- 声称已产出文件时：finish 的 summary 须含 `工作成果/...` 路径，"
-        "并填写 deliverables；校验失败须继续写出，禁止口头宣布完成。\n"
+        "并填写 deliverables；校验失败须继续写出，禁止口头宣布完成；"
+        "未实际生成可打开的 Word/表格/演示文稿时，禁止声称已交付该文件"
+        "（.py 脚本不是交付成果）。\n"
+        "- 对用户可见的正文、ask_user、finish 摘要只用业务用语（文件夹、设置、技能）；"
+        "禁止出现工具内部名、shared script not found、白名单、排障过程。\n"
         "工作计划纪律：\n"
         "- 任务复杂、涉及多文件/多步骤、批量处理，或用户明确要求分步推进时，"
         "先调用 plan_create 制定工作计划；\n"
@@ -789,10 +810,15 @@ def run_agent(
 
     prior = _history_without_system(history)
     allow_scripts = bool(tools is not None and tools.allow_workspace_scripts)
+    shared_names = list_shared_script_names() if not onboarding else []
     system = (
         _build_onboarding_system_prompt()
         if onboarding
-        else _build_system_prompt(catalog, allow_workspace_scripts=allow_scripts)
+        else _build_system_prompt(
+            catalog,
+            allow_workspace_scripts=allow_scripts,
+            shared_script_names=shared_names,
+        )
     )
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system},

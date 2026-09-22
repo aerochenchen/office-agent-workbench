@@ -140,6 +140,30 @@ def test_system_prompt_disables_workspace_scripts_by_default():
     assert "用 run_workspace_script 执行" in enabled
 
 
+def test_system_prompt_when_scripts_off_blocks_guessing_bypass_and_user_leak():
+    text = _build_system_prompt(
+        [], shared_script_names=["format_gongwen", "docx_diff"]
+    )
+    assert "run_python" in text
+    assert "format_gongwen" in text
+    assert "docx_diff" in text
+    assert "允许运行工作区内的自定义脚本" in text
+    assert "包装成" in text
+    assert "白名单" in text
+    assert "工具名" in text or "内部名" in text
+    enabled = _build_system_prompt([], allow_workspace_scripts=True)
+    assert "允许运行工作区内的自定义脚本" not in enabled
+
+
+def test_shared_script_schema_rejects_generic_python_runner():
+    schema = next(s for s in TOOL_SCHEMAS if s["function"]["name"] == "run_shared_script")
+    desc = schema["function"]["description"]
+    assert "format_gongwen" in desc
+    assert "docx_diff" in desc
+    assert "python" in desc.lower()
+    assert "工作区" in desc
+
+
 def test_onboarding_prompt_local_colleague_tone_and_boundaries():
     text = _build_onboarding_system_prompt()
     assert "本地使用" in text
