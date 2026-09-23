@@ -5,10 +5,8 @@
 }
 
 .skill-pane--collapsed {
-  width: 0;
-  border-left: none;
-  padding: 0;
-  opacity: 0;
+  /* Leave the grid so skills-collapsed can use a 2-column template. */
+  display: none;
 }
 
 .capability-tree-scroll {

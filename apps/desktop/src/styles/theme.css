@@ -152,6 +152,7 @@ html,
 body {
   margin: 0;
   height: 100%;
+  overflow: hidden; /* WebView2: avoid document scrollbars when panes collapse */
   background: var(--paper-0);
   color: var(--ink-0);
   font-family: var(--font-sans);
@@ -160,7 +161,8 @@ body {
 }
 
 #root {
-  height: 100vh;
+  height: 100%;
+  overflow: hidden;
 }
 
 button {
