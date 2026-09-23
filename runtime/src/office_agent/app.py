@@ -53,6 +53,17 @@ from office_agent.workspace import SandboxError, Workspace
 
 logger = logging.getLogger(__name__)
 
+# Comment-only heartbeats keep the desktop idle watchdog alive during long model/tool turns.
+SSE_HEARTBEAT_SEC = 15.0
+SSE_PING = object()
+
+
+def queue_get_or_ping(event_q: queue.Queue[Any], timeout: float) -> Any:
+    try:
+        return event_q.get(timeout=timeout)
+    except queue.Empty:
+        return SSE_PING
+
 def _default_config() -> AppConfig:
     if is_local_profile():
         return AppConfig(
@@ -975,10 +986,16 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         threading.Thread(target=worker, daemon=True).start()
 
         async def event_gen():
+            yield ": ping\n\n"
             while True:
-                item = await asyncio.to_thread(event_q.get)
+                item = await asyncio.to_thread(
+                    queue_get_or_ping, event_q, SSE_HEARTBEAT_SEC
+                )
                 if item is None:
                     break
+                if item is SSE_PING:
+                    yield ": ping\n\n"
+                    continue
                 event, data = item
                 yield _sse(event, data)
 

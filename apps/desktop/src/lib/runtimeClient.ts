@@ -11,7 +11,12 @@ import type {
   SkillMeta,
   TreeEntry,
 } from "./types";
+import { createIdleWatchdog } from "./idleWatchdog";
 import { isTauriRuntime } from "./tauri";
+
+/** Abort the SSE turn only after this long with no bytes (pings reset it). */
+export const STREAM_IDLE_MS = 180_000;
+export const STREAM_IDLE_LABEL = `${Math.round(STREAM_IDLE_MS / 1000)}s 无新进度`;
 
 /** Local Python runtime is always loopback-only; not user configurable. */
 export const RUNTIME_BASE_URL = "http://127.0.0.1:8765";
@@ -258,7 +263,7 @@ export type ChatStreamHandle = {
 function streamChatViaXhr(
   input: { message: string; attached_paths?: string[]; session_id?: string },
   handlers: ChatStreamHandlers,
-  timeoutMs = 600_000,
+  idleMs = STREAM_IDLE_MS,
   onHandle?: (handle: ChatStreamHandle) => void,
 ): Promise<StreamOutcome> {
   return new Promise((resolve, reject) => {
@@ -268,10 +273,14 @@ function streamChatViaXhr(
     let seenChars = 0;
     let userAborted = false;
     const streamAuth = authHeadersForPath("/chat/stream");
+    const watchdog = createIdleWatchdog(idleMs, () => {
+      xhr.abort();
+    });
 
     onHandle?.({
       abort: () => {
         userAborted = true;
+        watchdog.stop();
         xhr.abort();
       },
     });
@@ -279,6 +288,7 @@ function streamChatViaXhr(
     const pump = () => {
       const text = xhr.responseText || "";
       if (text.length <= seenChars) return;
+      watchdog.bump();
       buffer += text.slice(seenChars);
       seenChars = text.length;
       const parts = buffer.split(/\r?\n\r?\n/);
@@ -294,7 +304,8 @@ function streamChatViaXhr(
     if (streamAuth.Authorization) {
       xhr.setRequestHeader("Authorization", streamAuth.Authorization);
     }
-    xhr.timeout = timeoutMs;
+    // Absolute XHR timeout would kill multi-step turns; idle watchdog + SSE pings instead.
+    xhr.timeout = 0;
     xhr.responseType = "text";
 
     xhr.onprogress = () => pump();
@@ -306,6 +317,7 @@ function streamChatViaXhr(
     };
 
     xhr.onload = () => {
+      watchdog.stop();
       pump();
       if (buffer.trim()) dispatchBlock(buffer);
       if (xhr.status === 404) {
@@ -328,9 +340,16 @@ function streamChatViaXhr(
       resolve(outcome);
     };
 
-    xhr.onerror = () => reject(new Error("NetworkError"));
-    xhr.ontimeout = () => reject(new Error("timeout"));
+    xhr.onerror = () => {
+      watchdog.stop();
+      reject(new Error("NetworkError"));
+    };
+    xhr.ontimeout = () => {
+      watchdog.stop();
+      reject(new Error("timeout"));
+    };
     xhr.onabort = () => {
+      watchdog.stop();
       if (userAborted) {
         // Treat user stop as a soft end if SSE already delivered final/error.
         if (outcome.sawFinal || outcome.sawError) {
@@ -342,12 +361,13 @@ function streamChatViaXhr(
         resolve(outcome);
         return;
       }
-      reject(new Error("aborted"));
+      reject(new Error("timeout"));
     };
 
     try {
       xhr.send(JSON.stringify(input));
     } catch (err) {
+      watchdog.stop();
       reject(err instanceof Error ? err : new Error(String(err)));
     }
   });
@@ -356,18 +376,19 @@ function streamChatViaXhr(
 async function streamChatViaFetch(
   input: { message: string; attached_paths?: string[]; session_id?: string },
   handlers: ChatStreamHandlers,
-  timeoutMs = 600_000,
+  idleMs = STREAM_IDLE_MS,
   onHandle?: (handle: ChatStreamHandle) => void,
 ): Promise<StreamOutcome> {
   const controller = new AbortController();
   let userAborted = false;
+  const watchdog = createIdleWatchdog(idleMs, () => controller.abort());
   onHandle?.({
     abort: () => {
       userAborted = true;
+      watchdog.stop();
       controller.abort();
     },
   });
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${RUNTIME_BASE_URL}/chat/stream`, {
       method: "POST",
@@ -404,6 +425,7 @@ async function streamChatViaFetch(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      watchdog.bump();
       buffer += decoder.decode(value, { stream: true });
       const parts = buffer.split(/\r?\n\r?\n/);
       buffer = parts.pop() ?? "";
@@ -422,7 +444,7 @@ async function streamChatViaFetch(
     }
     throw err;
   } finally {
-    clearTimeout(timer);
+    watchdog.stop();
   }
 }
 
@@ -588,8 +610,8 @@ export const runtimeClient = {
 
       try {
         const outcome = isTauriRuntime()
-          ? await streamChatViaXhr(input, handlers, 600_000, bindHandle)
-          : await streamChatViaFetch(input, handlers, 600_000, bindHandle);
+          ? await streamChatViaXhr(input, handlers, STREAM_IDLE_MS, bindHandle)
+          : await streamChatViaFetch(input, handlers, STREAM_IDLE_MS, bindHandle);
 
         if (outcome.sawFinal || outcome.sawError) return;
         handlers.onError?.(
@@ -598,7 +620,7 @@ export const runtimeClient = {
             : "流式对话未能建立（未回退到同步接口，以避免绕过权限确认）",
         );
       } catch (err) {
-        handlers.onError?.(mapNetworkError(err, "600s"));
+        handlers.onError?.(mapNetworkError(err, STREAM_IDLE_LABEL));
       }
     })();
 

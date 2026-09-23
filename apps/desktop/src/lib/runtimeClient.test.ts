@@ -80,4 +80,12 @@ describe("createSseDispatcher", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(outcome.sawAny).toBe(false);
   });
+
+  it("ignores SSE comment heartbeats", () => {
+    const onError = vi.fn();
+    const { dispatchBlock, outcome } = createSseDispatcher({ onError });
+    dispatchBlock(": ping");
+    expect(outcome.sawAny).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+  });
 });

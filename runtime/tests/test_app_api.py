@@ -602,6 +602,41 @@ def test_chat_stream_writes_chat_started(client, tmp_path, app_state, monkeypatc
     assert "chat_finished" in text
 
 
+def test_queue_get_or_ping_returns_ping_when_empty():
+    import queue
+
+    from office_agent.app import SSE_PING, queue_get_or_ping
+
+    q: queue.Queue = queue.Queue()
+    assert queue_get_or_ping(q, 0.01) is SSE_PING
+    q.put(("started", {"ok": True}))
+    assert queue_get_or_ping(q, 0.01) == ("started", {"ok": True})
+
+
+def test_chat_stream_sends_sse_comment_while_model_waits(
+    client: TestClient, tmp_path: Path, app_state: ProcessState, monkeypatch
+):
+    import office_agent.app as app_mod
+
+    monkeypatch.setattr(app_mod, "SSE_HEARTBEAT_SEC", 0.05)
+
+    class SlowGateway(FakeGateway):
+        def chat(self, messages, tools=None):
+            time.sleep(0.18)
+            return super().chat(messages, tools)
+
+    app_state.gateway_factory = lambda _cfg: SlowGateway(
+        responses=[_completion(content="慢好")]
+    )
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    with client.stream("POST", "/chat/stream", json={"message": "你好"}) as r:
+        text = "".join(r.iter_text())
+    assert ": ping" in text
+    assert "event: final" in text
+
+
 def test_chat_second_turn_includes_history(client: TestClient, tmp_path: Path, app_state: ProcessState):
     ws = tmp_path / "ws"
     ws.mkdir()
