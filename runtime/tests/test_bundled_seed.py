@@ -120,7 +120,8 @@ def test_seed_does_not_clobber_user_skill(tmp_path: Path, monkeypatch):
     skill_dir = tmp_path / "skills" / "government-document-format"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
-        "---\nname: government-document-format\ndescription: 用户自定义副本\ntier: light\n---\n\n# User\n",
+        "---\nname: government-document-format\ndisplay_name: 旧名称\n"
+        "description: 用户自定义副本\ntier: light\n---\n\n# User\n",
         encoding="utf-8",
     )
     (skill_dir / "USER_MARKER.txt").write_text("keep me", encoding="utf-8")
@@ -128,4 +129,51 @@ def test_seed_does_not_clobber_user_skill(tmp_path: Path, monkeypatch):
     seed_bundled_assets(repo_bundled)
 
     assert (skill_dir / "USER_MARKER.txt").read_text(encoding="utf-8") == "keep me"
-    assert "用户自定义副本" in (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert "用户自定义副本" in text
+    # Factory display_name refreshes for non-overridden bundled ids
+    assert "公文排版" in text
+    assert "旧名称" not in text
+
+
+def test_seed_skips_display_name_when_overridden(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    repo_bundled = Path(__file__).resolve().parents[2] / "bundled"
+
+    skill_dir = tmp_path / "skills" / "government-document-format"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: government-document-format\ndisplay_name: 我的覆盖名\n"
+        "description: x\ntier: light\n---\n\n# Overridden\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "skills_state.json").write_text(
+        '{"overridden": {"government-document-format": true}}',
+        encoding="utf-8",
+    )
+
+    seed_bundled_assets(repo_bundled)
+
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert "我的覆盖名" in text
+    assert "公文排版" not in text
+
+
+def test_seed_refreshes_stale_display_name(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    repo_bundled = Path(__file__).resolve().parents[2] / "bundled"
+
+    skill_dir = tmp_path / "skills" / "multidoc-digest"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: multidoc-digest\ndisplay_name: 批量文档整理\n"
+        "description: keep\ntier: light\n---\n\n# Body\n",
+        encoding="utf-8",
+    )
+
+    seed_bundled_assets(repo_bundled)
+
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert "display_name: 多份汇总" in text
+    assert "批量文档整理" not in text
+    assert "description: keep" in text
