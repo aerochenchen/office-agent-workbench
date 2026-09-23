@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from "react";
 import type { SessionMeta } from "../lib/types";
 import { GUIDE_HINTS } from "../lib/guide";
+import { normalizeSessionTitle } from "../lib/sessionTitle";
 import "./SessionList.css";
 
 interface Props {
@@ -13,7 +15,14 @@ interface Props {
   onNewSession: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onRenameSession: (id: string, title: string) => void | Promise<void>;
 }
+
+type MenuState = {
+  sessionId: string;
+  x: number;
+  y: number;
+};
 
 function formatRelativeTime(ts: number): string {
   if (!ts) return "";
@@ -43,7 +52,64 @@ export default function SessionList({
   onNewSession,
   onSelectSession,
   onDeleteSession,
+  onRenameSession,
 }: Props) {
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const renameCommitLock = useRef(false);
+  const menuDisabled = sending || !runtimeReady;
+
+  useEffect(() => {
+    if (!renamingId) return;
+    renameCommitLock.current = false;
+    const el = renameInputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [renamingId]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const onPointer = (e: MouseEvent) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(null);
+    };
+    window.addEventListener("mousedown", onPointer);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onPointer);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
+  function startRename(session: SessionMeta) {
+    if (menuDisabled) return;
+    setMenu(null);
+    setRenamingId(session.id);
+    setDraft(session.title);
+  }
+
+  function cancelRename() {
+    setRenamingId(null);
+    setDraft("");
+  }
+
+  async function commitRename(session: SessionMeta) {
+    if (renamingId !== session.id) return;
+    if (renameCommitLock.current) return;
+    renameCommitLock.current = true;
+    const next = normalizeSessionTitle(draft);
+    cancelRename();
+    if (next === session.title) return;
+    await onRenameSession(session.id, next);
+  }
+
   return (
     <section className="pane session-pane">
       <div className="pane-header">
@@ -79,17 +145,26 @@ export default function SessionList({
           {sessions.map((s) => {
             const active = s.id === activeSessionId;
             const blocked = sending && s.id !== activeSessionId;
+            const renaming = renamingId === s.id;
             return (
               <li key={s.id}>
                 <div
                   className={`session-row${active ? " session-row--active" : ""}${
                     blocked ? " session-row--blocked" : ""
-                  }`}
+                  }${renaming ? " session-row--renaming" : ""}`}
                   onClick={() => {
-                    if (blocked) return;
+                    if (blocked || renaming) return;
                     onSelectSession(s.id);
                   }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    if (renamingId && renamingId !== s.id) {
+                      cancelRename();
+                    }
+                    setMenu({ sessionId: s.id, x: e.clientX, y: e.clientY });
+                  }}
                   onKeyDown={(e) => {
+                    if (renaming) return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       if (!blocked) onSelectSession(s.id);
@@ -100,30 +175,79 @@ export default function SessionList({
                   aria-current={active ? "true" : undefined}
                 >
                   <div className="session-row-main">
-                    <span className="session-title">{s.title}</span>
+                    {renaming ? (
+                      <input
+                        ref={renameInputRef}
+                        className="session-rename-input"
+                        value={draft}
+                        aria-label="重命名对话"
+                        onChange={(e) => setDraft(e.currentTarget.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void commitRename(s);
+                          } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            cancelRename();
+                          }
+                        }}
+                        onBlur={() => void commitRename(s)}
+                      />
+                    ) : (
+                      <span className="session-title">{s.title}</span>
+                    )}
                     <span className="session-time">{formatRelativeTime(s.updated_at)}</span>
                   </div>
-                  <button
-                    type="button"
-                    className="session-delete"
-                    title="删除对话"
-                    disabled={sending || !runtimeReady}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (sending || !runtimeReady) return;
-                      if (window.confirm(`删除对话「${s.title}」？此操作无法恢复。`)) {
-                        onDeleteSession(s.id);
-                      }
-                    }}
-                  >
-                    删除
-                  </button>
                 </div>
               </li>
             );
           })}
         </ul>
       </div>
+
+      {menu && (
+        <div
+          ref={menuRef}
+          className="session-context-menu"
+          style={{ left: menu.x, top: menu.y }}
+          role="menu"
+        >
+          {(() => {
+            const target = sessions.find((s) => s.id === menu.sessionId);
+            if (!target) return null;
+            return (
+              <>
+                <button
+                  type="button"
+                  className="session-context-item"
+                  role="menuitem"
+                  disabled={menuDisabled}
+                  onClick={() => startRename(target)}
+                >
+                  重命名
+                </button>
+                <button
+                  type="button"
+                  className="session-context-item session-context-item--danger"
+                  role="menuitem"
+                  disabled={menuDisabled}
+                  onClick={() => {
+                    setMenu(null);
+                    if (menuDisabled) return;
+                    if (window.confirm(`删除对话「${target.title}」？此操作无法恢复。`)) {
+                      onDeleteSession(target.id);
+                    }
+                  }}
+                >
+                  删除
+                </button>
+              </>
+            );
+          })()}
+        </div>
+      )}
 
       <div className="session-workspace-bar">
         <div className="session-workspace-label">当前文件夹</div>

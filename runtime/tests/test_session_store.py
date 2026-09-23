@@ -5,6 +5,7 @@ from office_agent.session_store import (
     DEFAULT_TITLE,
     SessionStore,
     history_to_ui_messages,
+    normalize_session_title,
     title_from_user_text,
 )
 
@@ -24,6 +25,26 @@ def test_create_list_delete_sessions(tmp_path: Path, monkeypatch):
     assert store.delete_session(b) is True
     assert len(store.list_sessions(ws)) == 1
     assert store.delete_session(b) is False
+
+
+def test_normalize_session_title():
+    assert normalize_session_title("") == DEFAULT_TITLE
+    assert normalize_session_title("   ") == DEFAULT_TITLE
+    assert normalize_session_title("  季度总结  ") == "季度总结"
+    long = "字" * 100
+    out = normalize_session_title(long)
+    assert len(out) == 80
+    assert out == "字" * 80
+
+
+def test_set_title_normalizes(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    store = SessionStore()
+    sid = store.create_session("/tmp/ws")
+    store.set_title(sid, "  ")
+    assert store.get_session(sid)["title"] == DEFAULT_TITLE
+    store.set_title(sid, "自定义标题")
+    assert store.get_session(sid)["title"] == "自定义标题"
 
 
 def test_title_from_user_text_truncates():

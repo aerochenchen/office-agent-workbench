@@ -18,11 +18,22 @@ from office_agent.paths import app_data_dir
 
 DEFAULT_TITLE = "新对话"
 TITLE_MAX_LEN = 24
+TITLE_RENAME_MAX_LEN = 80
 _UNTRUSTED_CLOSE = "</untrusted_workspace_data>"
 
 
 def _now() -> float:
     return time.time()
+
+
+def normalize_session_title(title: str | None, *, max_len: int = TITLE_RENAME_MAX_LEN) -> str:
+    """Normalize a user-edited session title (trim, empty → default, truncate)."""
+    cleaned = (title or "").strip()
+    if not cleaned:
+        return DEFAULT_TITLE
+    if len(cleaned) > max_len:
+        return cleaned[:max_len]
+    return cleaned
 
 
 def title_from_user_text(text: str) -> str:
@@ -268,10 +279,11 @@ class SessionStore:
             return cur.rowcount > 0
 
     def set_title(self, session_id: str, title: str) -> None:
+        cleaned = normalize_session_title(title)
         with self._connect() as conn:
             conn.execute(
                 "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
-                (title or DEFAULT_TITLE, _now(), session_id),
+                (cleaned, _now(), session_id),
             )
 
     def touch(self, session_id: str) -> None:

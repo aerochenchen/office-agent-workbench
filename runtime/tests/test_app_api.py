@@ -695,6 +695,34 @@ def test_sessions_api_list_create_delete(client: TestClient, tmp_path: Path):
     assert client.get(f"/sessions/{sid}").status_code == 404
 
 
+def test_sessions_api_rename(client: TestClient, tmp_path: Path, app_state: ProcessState):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    sid = client.post("/sessions", json={}).json()["session"]["id"]
+
+    r = client.patch(f"/sessions/{sid}", json={"title": "  季度汇报  "})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["session"]["title"] == "季度汇报"
+    assert client.get(f"/sessions/{sid}").json()["session"]["title"] == "季度汇报"
+
+    blank = client.patch(f"/sessions/{sid}", json={"title": "   "})
+    assert blank.status_code == 200
+    assert blank.json()["session"]["title"] == "新对话"
+
+    assert client.patch("/sessions/missing", json={"title": "x"}).status_code == 404
+
+    import sqlite3
+
+    with sqlite3.connect(app_state.audit.db_path) as conn:
+        rows = conn.execute(
+            "SELECT event_type FROM audit WHERE event_type = 'session_renamed'"
+        ).fetchall()
+    assert len(rows) >= 1
+
+
 def test_session_messages_api_hides_tool_thinking(
     client: TestClient, tmp_path: Path, app_state: ProcessState
 ):

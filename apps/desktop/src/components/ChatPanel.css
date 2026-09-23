@@ -215,6 +215,16 @@
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+  /* WKWebView (Tauri macOS) needs the prefix; keep bubbles copyable. */
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+.bubble .markdown-body,
+.bubble .markdown-body *:not(button):not(a) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .bubble--user {

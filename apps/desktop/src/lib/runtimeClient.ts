@@ -486,6 +486,16 @@ export const runtimeClient = {
     });
   },
 
+  renameSession(
+    sessionId: string,
+    title: string,
+  ): Promise<{ ok: boolean; session: SessionMeta }> {
+    return request(`/sessions/${encodeURIComponent(sessionId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+  },
+
   listSkills(): Promise<{ skills: SkillMeta[] }> {
     return request("/skills");
   },

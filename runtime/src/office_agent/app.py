@@ -278,6 +278,10 @@ class CreateSessionBody(BaseModel):
     workspace_path: str | None = None
 
 
+class RenameSessionBody(BaseModel):
+    title: str
+
+
 @asynccontextmanager
 async def _app_lifespan(app: FastAPI):
     t = threading.Thread(target=seed_bundled_assets, name="seed-bundled", daemon=True)
@@ -406,6 +410,21 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         office.audit.record_event("session_deleted", session_id=session_id)
         office.sessions.delete_session(session_id)
         return {"ok": True, "id": session_id}
+
+    @app.patch("/sessions/{session_id}")
+    def rename_session(session_id: str, body: RenameSessionBody) -> dict[str, Any]:
+        if not office.sessions.session_exists(session_id):
+            raise HTTPException(status_code=404, detail="session not found")
+        office.sessions.set_title(session_id, body.title)
+        meta = office.sessions.get_session(session_id)
+        if not meta:
+            raise HTTPException(status_code=404, detail="session not found")
+        office.audit.record_event(
+            "session_renamed",
+            session_id=session_id,
+            attrs={"title_len": len(meta["title"])},
+        )
+        return {"ok": True, "session": meta}
 
     @app.get("/skills")
     def list_skills() -> dict[str, Any]:

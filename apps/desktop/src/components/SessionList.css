@@ -68,28 +68,69 @@
   color: var(--ink-2);
 }
 
-.session-delete {
-  flex: 0 0 auto;
-  opacity: 0;
+.session-row--renaming {
+  cursor: default;
+}
+
+.session-rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 2px 4px;
+  border: 1px solid var(--accent-teal);
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+  color: var(--ink-0);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+}
+
+.session-rename-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-teal) 22%, transparent);
+}
+
+.session-context-menu {
+  position: fixed;
+  z-index: 30;
+  min-width: 8.5em;
+  padding: 4px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-context-item {
   border: none;
   background: transparent;
-  color: var(--ink-2);
-  font-size: var(--font-size-xs);
+  color: var(--ink-0);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  padding: 2px 4px;
 }
 
-.session-row:hover .session-delete,
-.session-row:focus-within .session-delete {
-  opacity: 1;
+.session-context-item:hover:not(:disabled) {
+  background: var(--accent-teal-soft);
+  color: var(--accent-teal);
 }
 
-.session-delete:hover:not(:disabled) {
+.session-context-item--danger:hover:not(:disabled) {
+  background: var(--status-error-soft);
   color: var(--status-error);
 }
 
-.session-delete:disabled {
+.session-context-item:disabled {
+  color: var(--ink-2);
   cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .session-workspace-bar {

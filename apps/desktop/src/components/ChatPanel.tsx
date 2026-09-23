@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage, LiveStep } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
+import { selectionTouchesElement, shouldAutoScrollChat } from "../lib/chatScroll";
 import { guideEmptyHeadline } from "../lib/guide";
 import {
   filterPathsUnderWorkspace,
@@ -64,7 +65,14 @@ function LiveStepRow({ step }: { step: LiveStep }) {
   );
 }
 
-function PendingBody({ message, now }: { message: ChatMessage; now: number }) {
+function PendingBody({ message }: { message: ChatMessage }) {
+  // Local tick only — parent must not re-render all bubbles every 500ms (clears text selection).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const hintIndex = Math.floor(((now - (message.startedAt ?? now)) / 3500) % PHASE_HINTS.length);
   const phaseText =
     message.statusPhase === "tools"
@@ -105,12 +113,10 @@ function PendingBody({ message, now }: { message: ChatMessage; now: number }) {
 
 function Bubble({
   message,
-  now,
   workspacePath,
   onToggleSteps,
 }: {
   message: ChatMessage;
-  now: number;
   workspacePath: string | null;
   onToggleSteps?: (messageId: string) => void;
 }) {
@@ -138,7 +144,7 @@ function Bubble({
     <div className={`message-row message-row--${message.role}`}>
       <div className={`bubble ${roleClass}`}>
         {inFlight ? (
-          <PendingBody message={message} now={now} />
+          <PendingBody message={message} />
         ) : message.role === "assistant" && message.phase === "done" ? (
           <MarkdownMessage content={message.content} workspacePath={workspacePath} />
         ) : (
@@ -205,12 +211,8 @@ export default function ChatPanel({
   const [attachHint, setAttachHint] = useState<string | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteDraft, setPasteDraft] = useState("");
-  const [now, setNow] = useState(() => Date.now());
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const hasPending = useMemo(
-    () => messages.some((m) => m.phase === "pending" || m.phase === "live"),
-    [messages],
-  );
+  const scrollRef = useRef<HTMLDivElement>(null);
   const disabled = sending || !runtimeReady;
   const attachDisabled = disabled || !workspaceOpen;
 
@@ -241,15 +243,19 @@ export default function ChatPanel({
   }, [draftPrefill]);
 
   useEffect(() => {
-    const el = document.querySelector(".chat-scroll");
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, now]);
-
-  useEffect(() => {
-    if (!hasPending) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 500);
-    return () => window.clearInterval(timer);
-  }, [hasPending]);
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (
+      !shouldAutoScrollChat({
+        hasSelectionInScroll: selectionTouchesElement(window.getSelection(), el),
+        distanceFromBottom,
+      })
+    ) {
+      return;
+    }
+    el.scrollTop = el.scrollHeight;
+  }, [messages]);
 
   useEffect(() => {
     setAttachedPaths([]);
@@ -340,7 +346,7 @@ export default function ChatPanel({
         {sending && <span className="chat-status">运行中…</span>}
       </div>
 
-      <div className="pane-body chat-scroll">
+      <div className="pane-body chat-scroll" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="chat-empty">
             <img
@@ -362,7 +368,6 @@ export default function ChatPanel({
           <Bubble
             key={m.id}
             message={m}
-            now={now}
             workspacePath={workspacePath}
             onToggleSteps={onToggleSteps}
           />

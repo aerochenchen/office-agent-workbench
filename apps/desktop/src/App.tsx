@@ -342,6 +342,28 @@ function App() {
     [sending, runtimeReady, workspacePath, refreshSessions, loadSessionMessages],
   );
 
+  const handleRenameSession = useCallback(
+    async (id: string, title: string) => {
+      if (sending || !runtimeReady) return;
+      try {
+        const { session } = await runtimeClient.renameSession(id, title);
+        setSessions((prev) =>
+          prev.map((s) => (s.id === id ? { ...s, ...session } : s)),
+        );
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: nextId(),
+            role: "error",
+            content: err instanceof RuntimeClientError ? err.message : "重命名失败",
+          },
+        ]);
+      }
+    },
+    [sending, runtimeReady],
+  );
+
   const handleSend = useCallback(
     async (text: string, attachedPaths: string[] = []) => {
       if (!runtimeReady) return;
@@ -659,6 +681,7 @@ function App() {
           onNewSession={() => void handleNewSession()}
           onSelectSession={(id) => void handleSelectSession(id)}
           onDeleteSession={(id) => void handleDeleteSession(id)}
+          onRenameSession={(id, title) => void handleRenameSession(id, title)}
         />
 
         <ChatPanel
