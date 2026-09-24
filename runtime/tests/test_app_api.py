@@ -1125,12 +1125,16 @@ def test_local_profile_allows_private_ip_without_api_key(
     assert app_state.config.api_key == ""
 
 
-def test_local_profile_rejects_public_ip_literal(
+def test_local_profile_allows_dedicated_ip_literal(
     client: TestClient, app_state: ProcessState
 ):
     app_state.config.deployment_profile = "local"
-    r = client.post("/config", json={"api_base": "http://1.1.1.1/v1"})
-    assert r.status_code == 400
+    r = client.post(
+        "/config",
+        json={"api_base": "http://88.12.1.2:9081/v1", "model": "Qwen3.8-27B"},
+    )
+    assert r.status_code == 200
+    assert app_state.config.api_base == "http://88.12.1.2:9081/v1"
 
 
 def test_get_config_includes_deployment_fields(client: TestClient):

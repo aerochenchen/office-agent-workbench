@@ -29,9 +29,10 @@ def test_intranet_host_literals() -> None:
     assert not is_intranet_model_host("api.deepseek.com", resolve=False)
 
 
-def test_intranet_host_rejects_public_ip_literals() -> None:
-    assert not is_intranet_model_host("88.12.1.2", resolve=False)
-    assert not is_intranet_model_host("1.1.1.1", resolve=False)
+def test_intranet_host_allows_any_ip_literal() -> None:
+    """专网常用非 RFC1918 号段，按 IP 字面量放行；公网厂商域名仍拒绝。"""
+    assert is_intranet_model_host("88.12.1.2", resolve=False)
+    assert is_intranet_model_host("1.1.1.1", resolve=False)
     assert is_intranet_model_host("::1", resolve=False)
     assert not is_intranet_model_host("api.deepseek.com", resolve=False)
     assert not is_intranet_model_host("example.com", resolve=False)
@@ -79,16 +80,15 @@ def test_local_gateway_allows_private_ip() -> None:
     ModelGateway(cfg).assert_allowed()
 
 
-def test_local_gateway_rejects_public_ip() -> None:
+def test_local_gateway_allows_public_looking_ip() -> None:
     cfg = AppConfig(
-        api_base="http://1.1.1.1/v1",
+        api_base="http://88.12.1.2:9081/v1",
         api_key="x",
         model="Qwen3.8-27B",
-        allowed_hosts=["1.1.1.1", "127.0.0.1", "localhost"],
+        allowed_hosts=["88.12.1.2", "127.0.0.1", "localhost"],
         deployment_profile=PROFILE_LOCAL,
     )
-    with pytest.raises(GatewayError, match="本地部署"):
-        ModelGateway(cfg).assert_allowed()
+    ModelGateway(cfg).assert_allowed()
 
 
 def test_local_gateway_allows_empty_api_key() -> None:
