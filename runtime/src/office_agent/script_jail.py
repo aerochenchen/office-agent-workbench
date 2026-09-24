@@ -54,6 +54,16 @@ def is_denied_secret_path(path: Path) -> bool:
     return resolved.parent == data
 
 
+def is_allowed_state_file(path: Path) -> bool:
+    """Skill install may update this one file without write access to app data."""
+    try:
+        resolved = Path(path).expanduser().resolve()
+        data = app_data_dir().resolve()
+    except OSError:
+        return False
+    return resolved == (data / "skills_state.json")
+
+
 def _assert_jail_path(file: object, allowed: list[Path], runtime: list[Path]) -> Path:
     path = Path(file).expanduser()  # type: ignore[arg-type]
     try:
@@ -62,6 +72,8 @@ def _assert_jail_path(file: object, allowed: list[Path], runtime: list[Path]) ->
         raise PermissionError(f"path outside script jail: {file}") from e
     if is_denied_secret_path(resolved):
         raise PermissionError(f"denied secret path: {resolved}")
+    if is_allowed_state_file(resolved):
+        return resolved
     if any(_is_under(resolved, root) for root in allowed):
         return resolved
     if any(_is_under(resolved, root) for root in runtime):

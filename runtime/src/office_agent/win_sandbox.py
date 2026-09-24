@@ -206,6 +206,7 @@ def run_in_appcontainer(
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     EXTENDED_STARTUPINFO_PRESENT = 0x00080000
     CREATE_NO_WINDOW = 0x08000000
+    CREATE_SUSPENDED = 0x00000004
     STARTF_USESTDHANDLES = 0x00000100
     PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES = 0x00020009
     HANDLE_FLAG_INHERIT = 0x00000001
@@ -254,7 +255,7 @@ def run_in_appcontainer(
         None,
         None,
         True,
-        EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW,
+        EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW | CREATE_SUSPENDED,
         ctypes.c_wchar_p(env_block),
         str(cwd),
         ctypes.byref(si),

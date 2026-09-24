@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from office_agent.script_jail import install_fs_jail, is_denied_secret_path
+from office_agent.script_jail import install_fs_jail, is_allowed_state_file, is_denied_secret_path
 from office_agent.skills import SkillRegistry
-from office_agent.tools import ToolExecutor, script_jail_roots
+from office_agent.tools import ToolExecutor, script_jail_roots, script_write_roots
 from office_agent.workspace import Workspace
 
 
@@ -24,6 +24,34 @@ def test_script_jail_roots_exclude_app_data_root(tmp_path: Path) -> None:
     assert (data / "skills").resolve() in roots
     assert (data / "shared-scripts").resolve() in roots
     assert ws.resolve() in roots
+
+
+def test_write_roots_exclude_app_data_dir(tmp_path: Path) -> None:
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    data = tmp_path / "data"
+    (data / "skills").mkdir(parents=True)
+    (data / "shared-scripts").mkdir()
+    home = ws / "script-home"
+    home.mkdir()
+    roots = {path.resolve() for path in script_write_roots(ws, data, home)}
+    assert data.resolve() not in roots
+    assert (data / "skills").resolve() in roots
+    assert (data / "skills_state.json").resolve() in roots
+    assert (data / "config.json").resolve() not in roots
+
+
+def test_skills_state_file_is_allowed_but_config_is_not(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    state = tmp_path / "skills_state.json"
+    state.write_text("{}\n", encoding="utf-8")
+    cfg = tmp_path / "config.json"
+    cfg.write_text("{}\n", encoding="utf-8")
+    assert is_allowed_state_file(state)
+    assert is_denied_secret_path(cfg)
+    assert not is_allowed_state_file(cfg)
 
 
 def test_config_json_under_app_data_is_denied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

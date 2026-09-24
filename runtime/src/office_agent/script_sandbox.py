@@ -94,7 +94,12 @@ def wrap_isolated_cmd(
             if resolved not in roots:
                 roots.append(resolved)
         write_rules = "\n".join(
-            f'(allow file-write* (subpath "{root}"))' for root in roots
+            (
+                f'(allow file-write* (literal "{root}"))'
+                if root.is_file()
+                else f'(allow file-write* (subpath "{root}"))'
+            )
+            for root in roots
         )
         profile = (
             "(version 1)\n"

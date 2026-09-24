@@ -90,6 +90,34 @@ def script_jail_roots(
     return roots
 
 
+def script_write_roots(workspace_root: Path, app_data: Path, script_home: Path) -> list[Path]:
+    """Directories a script may write. The app data root itself is not included.
+
+    skills_state.json is the one file outside those directories that skill
+    install must update. config.json stays outside this list.
+    """
+    data = Path(app_data)
+    state = data / "skills_state.json"
+    if not state.exists():
+        state.write_text('{"enabled":{}}\n', encoding="utf-8")
+    roots = [
+        Path(workspace_root),
+        Path(script_home),
+        data / "skills",
+        data / "shared-scripts",
+        state,
+    ]
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for path in roots:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(path)
+    return unique
+
+
 # Files an installed Skill may expose to the agent via read_skill.
 SKILL_TEXT_SUFFIXES = frozenset(
     {".md", ".txt", ".json", ".py", ".yaml", ".yml", ".csv", ".tmpl"}
@@ -566,24 +594,13 @@ class ToolExecutor:
                 cwd=cwd,
                 env=env,
                 read_roots=jail_roots,
-                write_roots=[
-                    self.workspace.root,
-                    script_home,
-                    self._app_data,
-                    self._app_data / "skills",
-                    self._app_data / "shared-scripts",
-                ],
+                write_roots=script_write_roots(self.workspace.root, self._app_data, script_home),
             )
         if isolate and sandbox_available():
             cmd = wrap_isolated_cmd(
                 cmd,
                 workspace=self.workspace.root,
-                write_roots=[
-                    script_home,
-                    self._app_data,
-                    self._app_data / "skills",
-                    self._app_data / "shared-scripts",
-                ],
+                write_roots=script_write_roots(self.workspace.root, self._app_data, script_home),
             )
         run_kwargs: dict = {
             "cwd": str(cwd),
