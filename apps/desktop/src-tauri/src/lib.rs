@@ -341,21 +341,29 @@ fn wait_runtime_port_free(timeout: Duration) -> bool {
     !runtime_already_up()
 }
 
-fn request_runtime_shutdown() {
+fn request_runtime_shutdown(token: &str) {
     if let Ok(mut stream) =
         TcpStream::connect_timeout(&"127.0.0.1:8765".parse().unwrap(), Duration::from_millis(500))
     {
         let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
         let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
-        let req = b"POST /shutdown HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-        let _ = stream.write_all(req);
+        let req = format!(
+            "POST /shutdown HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        let _ = stream.write_all(req.as_bytes());
         let mut buf = [0u8; 128];
         let _ = stream.read(&mut buf);
     }
 }
 
-fn stop_child(child: &mut Child) -> Option<i32> {
-    request_runtime_shutdown();
+fn runtime_token_from_app(app: &tauri::AppHandle) -> String {
+    app.try_state::<RuntimeAuthToken>()
+        .and_then(|state| state.inner().0.lock().ok().map(|guard| guard.clone()))
+        .unwrap_or_default()
+}
+
+fn stop_child(child: &mut Child, token: &str) -> Option<i32> {
+    request_runtime_shutdown(token);
     std::thread::sleep(Duration::from_millis(400));
     match child.try_wait() {
         Ok(Some(status)) => status.code(),
@@ -379,7 +387,7 @@ fn stop_owned_runtime(app: &tauri::AppHandle) {
     if let Some(state) = app.try_state::<RuntimeProcess>() {
         if let Ok(mut guard) = state.inner().0.lock() {
             if let Some(mut child) = guard.take() {
-                let returncode = stop_child(&mut child);
+                let returncode = stop_child(&mut child, &runtime_token_from_app(app));
                 let extra = match returncode {
                     Some(code) => format!(r#"{{"returncode":{code}}}"#),
                     None => r#"{"returncode":null}"#.to_string(),
@@ -391,7 +399,7 @@ fn stop_owned_runtime(app: &tauri::AppHandle) {
     }
     if ATTEMPTED_RUNTIME_SPAWN.load(Ordering::SeqCst) {
         // Spawn raced ahead of Mutex store — shut down our child.
-        request_runtime_shutdown();
+        request_runtime_shutdown(&runtime_token_from_app(app));
         log_event("sidecar_exit", "info", &boot_id, r#"{"returncode":null}"#);
     }
     // Else: skipped spawn (external runtime accepted our token) — leave 8765 alone.
@@ -695,9 +703,12 @@ fn try_spawn_runtime(app: &tauri::AppHandle, api_token: &str, boot_id: &str) -> 
         log_line(
             "[office-agent] stale runtime on 127.0.0.1:8765 (token rejected) — reclaiming",
         );
-        request_runtime_shutdown();
+        request_runtime_shutdown(api_token);
         if !wait_runtime_port_free(Duration::from_secs(3)) {
-            log_line("[office-agent] port 8765 still busy after reclaim shutdown; spawn may fail");
+            log_line(
+                "[office-agent] port 8765 still busy after reclaim shutdown; refusing to start",
+            );
+            std::process::exit(1);
         }
     }
 

@@ -82,6 +82,24 @@ def _tool_error(message: str) -> Exception:
     return ToolError(message)
 
 
+def confine_to_workspace(path: Path, root: Path) -> Path:
+    """When the runtime jail is active, reject paths outside the workspace root."""
+    if os.environ.get("OFFICE_AGENT_SCRIPT_JAIL") != "1":
+        return Path(path).expanduser()
+    return assert_within_root(path, root)
+
+
+def assert_within_root(path: Path, root: Path) -> Path:
+    """Resolve path and require it to stay under root. Shared by bundled scripts."""
+    resolved = Path(path).expanduser().resolve()
+    root_resolved = Path(root).expanduser().resolve()
+    try:
+        resolved.relative_to(root_resolved)
+    except ValueError as e:
+        raise ValueError(f"path outside workspace: {resolved}") from e
+    return resolved
+
+
 def assert_argv_within_roots(argv: list[str], roots: list[Path]) -> None:
     """
     For each arg that looks like a filesystem path (exists or has path sep

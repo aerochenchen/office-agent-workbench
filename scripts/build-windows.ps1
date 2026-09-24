@@ -210,7 +210,7 @@ function Build-Tauri {
                 throw "npm install failed"
             }
         }
-        $tauriArgs = @("tauri", "build")
+        $tauriArgs = @("tauri", "build", "--config", "src-tauri/tauri.release.conf.json")
         if ($MicrosoftStore) {
             $storeConf = Join-Path $SrcTauri "tauri.microsoftstore.conf.json"
             if (-not (Test-Path $storeConf)) {
@@ -273,6 +273,8 @@ function Build-Tauri {
                 }
             }
             Write-Host ("Installer: " + $exe.FullName) -ForegroundColor Green
+            & python (Join-Path $RepoRoot "scripts\check_release_placeholders.py") $exe.FullName
+            if ($LASTEXITCODE -ne 0) { throw "installer still contains {{product_name}}" }
         }
     }
     else {

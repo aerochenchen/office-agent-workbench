@@ -1,16 +1,22 @@
-"""Localhost API token middleware (optional via OFFICE_AGENT_API_TOKEN)."""
+"""Localhost API token middleware.
+
+The runtime always requires a Bearer token. If the launcher did not inject
+OFFICE_AGENT_API_TOKEN, a strong random token is generated and kept in-process
+so a direct launch cannot be called anonymously.
+"""
 
 from __future__ import annotations
 
 import os
+import secrets
 
 from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse
 
 API_TOKEN_ENV = "OFFICE_AGENT_API_TOKEN"
 
-# Probe / graceful stop without Bearer (Tauri shutdown uses raw HTTP).
-EXEMPT_PATHS = frozenset({"/health", "/shutdown"})
+# /health stays anonymous for liveness probes. /shutdown requires the token.
+EXEMPT_PATHS = frozenset({"/health"})
 
 
 def configured_api_token() -> str | None:
@@ -18,11 +24,23 @@ def configured_api_token() -> str | None:
     return raw or None
 
 
+def ensure_api_token() -> str:
+    """Return the process token, generating one when the launcher did not inject it.
+
+    The generated value is stored in the environment for this process only and is
+    not printed. Callers that do not already know it cannot authenticate.
+    """
+    existing = configured_api_token()
+    if existing:
+        return existing
+    token = secrets.token_urlsafe(32)
+    os.environ[API_TOKEN_ENV] = token
+    return token
+
+
 def install_api_token_middleware(app: FastAPI) -> None:
-    """When OFFICE_AGENT_API_TOKEN is set, require Bearer on all routes except exempt paths."""
-    expected = configured_api_token()
-    if expected is None:
-        return
+    """Require Bearer on every route except exempt paths and CORS preflight."""
+    expected = ensure_api_token()
 
     @app.middleware("http")
     async def _require_api_token(request: Request, call_next):

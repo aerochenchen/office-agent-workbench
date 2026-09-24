@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from docx import Document
+from office_agent.script_policy import confine_to_workspace
 
 WORK_REL = Path(".office-agent") / "work" / "multidoc-digest"
 
@@ -278,16 +279,16 @@ def main(argv: list[str] | None = None) -> int:
     cwd = Path.cwd()
     folder = Path(args.folder)
     if not folder.is_absolute():
-        folder = (cwd / folder).resolve()
-    else:
-        folder = folder.resolve()
+        folder = cwd / folder
+    folder = confine_to_workspace(folder, cwd)
     if not folder.is_dir():
         print(f"ERROR: folder not found: {folder}", file=sys.stderr)
         return 1
 
     work = Path(args.work_dir) if args.work_dir else default_work_dir(cwd)
     if not work.is_absolute():
-        work = (cwd / work).resolve()
+        work = cwd / work
+    work = confine_to_workspace(work, cwd)
     packs_dir = work / "packs"
     cards_dir = work / "cards"
     packs_dir.mkdir(parents=True, exist_ok=True)

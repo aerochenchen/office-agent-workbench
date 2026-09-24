@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 import zipfile
@@ -36,7 +37,13 @@ SKIP_PARTS = {"__pycache__", ".git"}
 SKIP_NAMES = {".DS_Store"}
 
 
+def _check_skill_id(skill_id: str) -> None:
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", skill_id):
+        raise ValueError(f"不安全的技能 id：{skill_id}")
+
+
 def to_draft(skill_id: str) -> dict[str, Any]:
+    _check_skill_id(skill_id)
     src = skills_dir() / skill_id
     dest = DRAFT_ROOT / skill_id
     if dest.exists():
@@ -55,6 +62,7 @@ def to_draft(skill_id: str) -> dict[str, Any]:
 
 
 def to_zip(skill_id: str, *, with_fixtures: bool) -> dict[str, Any]:
+    _check_skill_id(skill_id)
     src = skills_dir() / skill_id
     data, _ = read_skill_md(src)
     display = str(data.get("display_name") or skill_id).strip()

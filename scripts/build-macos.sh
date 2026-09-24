@@ -150,7 +150,7 @@ build_tauri() {
       npm install
     fi
     # Override conf targets (nsis) so Mac builds only produce DMG.
-    npx --yes tauri build --bundles dmg
+    npx --yes tauri build --bundles dmg --config src-tauri/tauri.release.conf.json
   )
 
   local dmg_dir="${CARGO_TARGET_DIR}/release/bundle/dmg"

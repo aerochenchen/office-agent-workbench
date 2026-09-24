@@ -103,3 +103,28 @@ def install_fs_jail(roots: list[Path]) -> None:
     builtins.open = guarded_open  # type: ignore[assignment]
     io.open = guarded_open  # type: ignore[assignment]
     os.open = guarded_os_open  # type: ignore[assignment]
+
+    def _deny_mutation(file, *args, **kwargs):
+        raise PermissionError(f"path mutation blocked in script jail: {file}")
+
+    os.remove = _deny_mutation  # type: ignore[assignment]
+    os.unlink = _deny_mutation  # type: ignore[assignment]
+    os.rename = _deny_mutation  # type: ignore[assignment]
+    os.replace = _deny_mutation  # type: ignore[assignment]
+
+    class _BlockedModule:
+        def __getattr__(self, name: str):
+            raise PermissionError(f"module blocked in script jail: {type(self).__name__}.{name}")
+
+    class _BlockedSubprocess(_BlockedModule):
+        pass
+
+    class _BlockedCtypes(_BlockedModule):
+        pass
+
+    class _BlockedSocket(_BlockedModule):
+        pass
+
+    sys.modules["subprocess"] = _BlockedSubprocess()  # type: ignore[assignment]
+    sys.modules["ctypes"] = _BlockedCtypes()  # type: ignore[assignment]
+    sys.modules["socket"] = _BlockedSocket()  # type: ignore[assignment]

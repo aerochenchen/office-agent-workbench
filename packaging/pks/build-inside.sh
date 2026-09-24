@@ -99,21 +99,24 @@ echo "==> cargo lock (keep existing lock if already patched)"
   fi
 )
 
-npx tauri build --bundles deb --config src-tauri/tauri.kylin.conf.json
+npx tauri build --bundles deb --config src-tauri/tauri.release.conf.json --config src-tauri/tauri.kylin.conf.json
 
-DEB="$(find "${SRC_TAURI}/target/release/bundle/deb" -name '*.deb' | head -n1)"
+# Fresh out dir so leftover debs cannot confuse find/mv.
+rm -f "${OUT}"/*.deb
+DEB="$(find "${SRC_TAURI}/target/release/bundle/deb" -name '*.deb' -print | head -n1)"
 test -n "${DEB}"
-cp -f "${DEB}" "${OUT}/"
+STAGED_DEB="${OUT}/tauri-built.deb"
+cp -f "${DEB}" "${STAGED_DEB}"
 # Tauri names the Package field after productName (文书通); dpkg rejects it.
-STAGED_DEB="$(find "${OUT}" -maxdepth 1 -name '*.deb' | head -n1)"
+# rewrite-deb-package-name.sh rewrites in place when out path omitted / same as in.
 bash "${PACKAGING}/pks/rewrite-deb-package-name.sh" "${STAGED_DEB}"
-FINAL_DEB="$(find "${OUT}" -maxdepth 1 -name '*.deb' | head -n1)"
-VERSION="$(dpkg-deb -f "${FINAL_DEB}" Version)"
-mv -f "${FINAL_DEB}" "${OUT}/wenshutong_${VERSION}_arm64.deb"
+VERSION="$(dpkg-deb -f "${STAGED_DEB}" Version)"
+DEST="${OUT}/wenshutong_${VERSION}_arm64.deb"
+mv -f "${STAGED_DEB}" "${DEST}"
 # smoke: binary exists inside package listing
-dpkg-deb -c "${OUT}/wenshutong_"*.deb | grep -E 'office-agent-runtime|文书通|wenshutong' | head
-dpkg-deb -I "${OUT}/wenshutong_"*.deb | grep -E '^ Package: wenshutong$'
+dpkg-deb -c "${DEST}" | grep -E 'office-agent-runtime|文书通|wenshutong' | head
+dpkg-deb -I "${DEST}" | grep -E '^ Package: wenshutong$'
 # Prefer WebKit 4.0 in Depends metadata (belt-and-suspenders).
-dpkg-deb -I "${OUT}/wenshutong_"*.deb | grep -i webkit || true
+dpkg-deb -I "${DEST}" | grep -i webkit || true
 
 echo "==> build-inside done: ${OUT}"

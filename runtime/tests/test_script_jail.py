@@ -3,6 +3,7 @@ from __future__ import annotations
 import builtins
 import io
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -44,14 +45,34 @@ def test_guarded_open_blocks_config_json_even_if_root_includes_app_data(
     real_open = builtins.open
     real_os_open = os.open
     real_io_open = io.open
+    real_remove = os.remove
+    real_unlink = os.unlink
+    real_rename = os.rename
+    real_replace = os.replace
+    saved_modules = {name: sys.modules.get(name) for name in ("subprocess", "ctypes", "socket")}
     try:
         install_fs_jail([tmp_path])
         with pytest.raises(PermissionError, match="denied secret"):
             cfg.read_text(encoding="utf-8")
+        with pytest.raises(PermissionError, match="path mutation blocked"):
+            os.remove(cfg)
+        with pytest.raises(PermissionError, match="module blocked"):
+            import subprocess as blocked_subprocess
+
+            blocked_subprocess.run(["python", "-c", "print(1)"])
     finally:
         builtins.open = real_open
         os.open = real_os_open
         io.open = real_io_open
+        os.remove = real_remove
+        os.unlink = real_unlink
+        os.rename = real_rename
+        os.replace = real_replace
+        for name, module in saved_modules.items():
+            if module is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
 
 
 def test_workspace_script_cannot_read_app_config(

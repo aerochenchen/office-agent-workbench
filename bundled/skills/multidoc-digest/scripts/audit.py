@@ -15,6 +15,8 @@ import re
 import sys
 from pathlib import Path
 
+from office_agent.script_policy import confine_to_workspace
+
 WORK_REL = Path(".office-agent") / "work" / "multidoc-digest"
 CITATION_RE = re.compile(r"〔(d\d{3}#s\d{2,})〕")
 DOC_FROM_CIT = re.compile(r"^(d\d{3})")
@@ -306,14 +308,16 @@ def main(argv: list[str] | None = None) -> int:
     cwd = Path.cwd()
     report_path = Path(args.report)
     if not report_path.is_absolute():
-        report_path = (cwd / report_path).resolve()
+        report_path = cwd / report_path
+    report_path = confine_to_workspace(report_path, cwd)
     if not report_path.is_file():
         print(f"ERROR: report not found: {report_path}", file=sys.stderr)
         return 1
 
     work = Path(args.work_dir) if args.work_dir else cwd / WORK_REL
     if not work.is_absolute():
-        work = (cwd / work).resolve()
+        work = cwd / work
+    work = confine_to_workspace(work, cwd)
 
     manifest_path = Path(args.manifest) if args.manifest else work / "manifest.jsonl"
     chunks_path = Path(args.chunks) if args.chunks else work / "chunks.jsonl"
@@ -323,15 +327,19 @@ def main(argv: list[str] | None = None) -> int:
             # re-bind locals carefully
             pass
     if not manifest_path.is_absolute():
-        manifest_path = (cwd / manifest_path).resolve()
+        manifest_path = cwd / manifest_path
+    manifest_path = confine_to_workspace(manifest_path, cwd)
     if not chunks_path.is_absolute():
-        chunks_path = (cwd / chunks_path).resolve()
+        chunks_path = cwd / chunks_path
+    chunks_path = confine_to_workspace(chunks_path, cwd)
     if not cards_dir.is_absolute():
-        cards_dir = (cwd / cards_dir).resolve()
+        cards_dir = cwd / cards_dir
+    cards_dir = confine_to_workspace(cards_dir, cwd)
 
     out_path = Path(args.output) if args.output else cwd / "工作成果" / "审计报告.md"
     if not out_path.is_absolute():
-        out_path = (cwd / out_path).resolve()
+        out_path = cwd / out_path
+    out_path = confine_to_workspace(out_path, cwd)
 
     report_text = report_path.read_text(encoding="utf-8")
     cited_ids = CITATION_RE.findall(report_text)

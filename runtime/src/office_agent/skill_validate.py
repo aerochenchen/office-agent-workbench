@@ -19,7 +19,62 @@ ALLOWED_TIERS = frozenset({"light", "heavy"})
 ALLOWED_PERMISSIONS = frozenset({"workspace_read", "workspace_write", "run_python"})
 REQUIRED_FIELDS = ("name", "description", "version", "tier")
 MAX_DESCRIPTION_CHARS = 60
-FORBIDDEN_IMPORT_ROOTS = frozenset({"requests", "httpx", "socket"})
+# Capability allowlist. Anything else is rejected, including network and process modules.
+ALLOWED_IMPORT_ROOTS = frozenset({
+    "argparse",
+    "base64",
+    "collections",
+    "copy",
+    "csv",
+    "dataclasses",
+    "datetime",
+    "difflib",
+    "docx",
+    "enum",
+    "functools",
+    "hashlib",
+    "html",
+    "io",
+    "itertools",
+    "json",
+    "math",
+    "office_agent",
+    "os",
+    "pathlib",
+    "pptx",
+    "random",
+    "re",
+    "shutil",
+    "skill_common",
+    "string",
+    "sys",
+    "tempfile",
+    "textwrap",
+    "time",
+    "tokenize",
+    "typing",
+    "uuid",
+    "validate",
+    "xml",
+    "yaml",
+    "zipfile",
+})
+FORBIDDEN_IMPORT_ROOTS = frozenset({
+    "aiohttp",
+    "ctypes",
+    "ftplib",
+    "http",
+    "httpx",
+    "importlib",
+    "multiprocessing",
+    "requests",
+    "smtplib",
+    "socket",
+    "ssl",
+    "subprocess",
+    "urllib",
+    "winreg",
+})
 EXPECTED_SECTION_KEYWORDS = ("何时", "步数预算")
 
 
@@ -109,18 +164,26 @@ def _check_body(body: str) -> list[str]:
     return warnings
 
 
+def _import_error(root: str, name: str) -> str | None:
+    if root in FORBIDDEN_IMPORT_ROOTS or root not in ALLOWED_IMPORT_ROOTS:
+        return f"import not allowed: {name}"
+    return None
+
+
 def _scan_forbidden_imports(tree: ast.AST) -> list[str]:
     found: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 root = alias.name.split(".")[0]
-                if root in FORBIDDEN_IMPORT_ROOTS:
-                    found.append(f"forbidden network import: {alias.name}")
+                msg = _import_error(root, alias.name)
+                if msg:
+                    found.append(msg)
         elif isinstance(node, ast.ImportFrom) and node.module:
             root = node.module.split(".")[0]
-            if root in FORBIDDEN_IMPORT_ROOTS:
-                found.append(f"forbidden network import: {node.module}")
+            msg = _import_error(root, node.module)
+            if msg:
+                found.append(msg)
     return sorted(set(found))
 
 

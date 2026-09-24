@@ -28,13 +28,23 @@ def app_state(tmp_path: Path, monkeypatch) -> ProcessState:
     )
 
 
-def test_no_token_env_allows_without_header(app_state: ProcessState):
+def test_missing_token_env_still_requires_bearer(app_state: ProcessState, monkeypatch):
+    monkeypatch.delenv("OFFICE_AGENT_API_TOKEN", raising=False)
+    monkeypatch.setenv("OFFICE_AGENT_TEST_OMIT_AUTH", "1")
     client = TestClient(create_app(app_state))
-    assert client.get("/config").status_code == 200
+    denied = client.get("/config")
+    assert denied.status_code == 401
+    from office_agent.auth import configured_api_token
+
+    token = configured_api_token()
+    assert token
+    ok = client.get("/config", headers={"Authorization": f"Bearer {token}"})
+    assert ok.status_code == 200
 
 
 def test_token_env_requires_bearer(app_state: ProcessState, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_API_TOKEN", "secret-token")
+    monkeypatch.setenv("OFFICE_AGENT_TEST_OMIT_AUTH", "1")
     client = TestClient(create_app(app_state))
 
     denied = client.get("/config")
@@ -51,6 +61,7 @@ def test_token_env_requires_bearer(app_state: ProcessState, monkeypatch):
 
 def test_auth_fail_writes_audit(app_state: ProcessState, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_API_TOKEN", "secret-token")
+    monkeypatch.setenv("OFFICE_AGENT_TEST_OMIT_AUTH", "1")
     client = TestClient(create_app(app_state))
     denied = client.get("/config")
     assert denied.status_code == 401
@@ -84,10 +95,14 @@ def test_health_exempt_when_token_configured(app_state: ProcessState, monkeypatc
     assert client.get("/health").json() == {"ok": True}
 
 
-def test_shutdown_exempt_when_token_configured(app_state: ProcessState, monkeypatch):
+def test_shutdown_requires_bearer(app_state: ProcessState, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_API_TOKEN", "secret-token")
+    monkeypatch.setenv("OFFICE_AGENT_TEST_OMIT_AUTH", "1")
     client = TestClient(create_app(app_state))
-    assert client.post("/shutdown").status_code == 200
+    denied = client.post("/shutdown")
+    assert denied.status_code == 401
+    ok = client.post("/shutdown", headers={"Authorization": "Bearer secret-token"})
+    assert ok.status_code == 200
 
 
 def test_wrong_bearer_returns_401(app_state: ProcessState, monkeypatch):

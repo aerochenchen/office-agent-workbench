@@ -75,9 +75,22 @@ EOF
 
 ---
 
+## Microsoft WebView2 Fixed Version Runtime
+
+Local-deploy Windows builds redistribute Microsoft Edge WebView2 Fixed Version
+Runtime under the Microsoft WebView2 runtime redistribution terms. The copy
+pinned in tauri.localdeploy.conf.json does not update itself; replace it when
+shipping a security fix. See docs/发版清单-代码签名与WebView2.md.
+
+---
+
 End of NOTICE.
 EOF
 } > "${NOTICE}"
+
+python "${ROOT}/scripts/generate_sbom.py" \
+  --out "${ROOT}/packaging/sbom.cdx.json" \
+  --licenses-dir "${ROOT}/packaging/third-party-licenses"
 
 echo "Wrote ${NOTICE}"
 wc -l "${NOTICE}"

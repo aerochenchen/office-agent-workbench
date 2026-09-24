@@ -12,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 
+from office_agent.script_policy import confine_to_workspace
+
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
@@ -182,8 +184,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", default="工作成果/汇报演示.pptx", help="Output pptx path")
     args = parser.parse_args(argv)
 
-    slides_path = Path(args.slides)
-    out_path = Path(args.out)
+    cwd = Path.cwd()
+    slides_path = confine_to_workspace(Path(args.slides), cwd)
+    out_path = confine_to_workspace(Path(args.out), cwd)
     if not slides_path.is_file():
         print(f"找不到页纲: {slides_path}", file=sys.stderr)
         return 1

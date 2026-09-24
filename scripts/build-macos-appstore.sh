@@ -37,9 +37,6 @@ EOF
 fi
 echo "${IDENTITIES}"
 
-SIGN_IDENTITY="$(echo "${IDENTITIES}" | head -1 | sed -E 's/.*"(.+)".*/\1/')"
-echo "Using identity: ${SIGN_IDENTITY}"
-
 if grep -q 'TEAM_ID' "${ENTITLEMENTS}"; then
   echo "Entitlements still contain TEAM_ID placeholder: ${ENTITLEMENTS}" >&2
   echo "Set your Team ID (Membership page) and replace TEAM_ID in that file." >&2
@@ -56,7 +53,6 @@ step "verify signing certificate is present in provisioning profile"
 PROFILE_TMP="$(mktemp -d)"
 trap 'rm -rf "${PROFILE_TMP}"' EXIT
 security cms -D -i "${PROFILE}" -o "${PROFILE_TMP}/profile.plist"
-SIGN_SHA1="$(security find-certificate -c "${SIGN_IDENTITY}" -Z 2>/dev/null | awk '/SHA-1 hash/ {print $3; exit}')"
 PROFILE_SHA1S=""
 for i in 0 1 2 3 4; do
   if plutil -extract "DeveloperCertificates.${i}" raw -o - "${PROFILE_TMP}/profile.plist" 2>/dev/null \
@@ -65,14 +61,27 @@ for i in 0 1 2 3 4; do
       | sed -E 's/.*=//; s/://g')"
   fi
 done
-if [[ " ${PROFILE_SHA1S} " != *" ${SIGN_SHA1} "* ]]; then
-  echo "Signing certificate is not contained in the provisioning profile." >&2
-  echo "  keychain cert SHA1 : ${SIGN_SHA1}" >&2
+SIGN_IDENTITY=""
+SIGN_SHA1=""
+while IFS= read -r line; do
+  [[ -z "${line}" ]] && continue
+  sha1="$(echo "${line}" | sed -E 's/^[[:space:]]*[0-9]+\) ([A-F0-9]+) .*/\1/')"
+  name="$(echo "${line}" | sed -E 's/.*\"(.+)\".*/\1/')"
+  if [[ " ${PROFILE_SHA1S} " == *" ${sha1} "* ]]; then
+    SIGN_IDENTITY="${name}"
+    SIGN_SHA1="${sha1}"
+    break
+  fi
+done <<< "${IDENTITIES}"
+if [[ -z "${SIGN_IDENTITY}" ]]; then
+  echo "No keychain signing identity matches the provisioning profile." >&2
   echo "  profile cert SHA1s :${PROFILE_SHA1S}" >&2
-  echo "Regenerate the Mac App Store profile with this certificate selected, then re-download it to:" >&2
+  echo "Regenerate the Mac App Store profile with your current Apple Distribution certificate, then re-download it to:" >&2
   echo "  ${PROFILE}" >&2
   exit 1
 fi
+echo "Using identity: ${SIGN_IDENTITY}"
+echo "Using cert SHA1: ${SIGN_SHA1}"
 echo "OK: ${SIGN_SHA1}"
 
 if [[ ! -x "${SRC_TAURI}/resources/runtime/office-agent-runtime" ]]; then
@@ -83,7 +92,8 @@ fi
 step "tauri build (app bundle, appstore config)"
 export CARGO_TARGET_DIR="${SRC_TAURI}/target"
 # Prefer the Distribution identity from the keychain
-export APPLE_SIGNING_IDENTITY="${SIGN_IDENTITY}"
+# Hash avoids ambiguous matches when revoked + replacement certs share the same name.
+export APPLE_SIGNING_IDENTITY="${SIGN_SHA1}"
 (
   cd "${DESKTOP}"
   if [[ ! -d node_modules/@tauri-apps/cli ]]; then
@@ -91,6 +101,7 @@ export APPLE_SIGNING_IDENTITY="${SIGN_IDENTITY}"
   fi
   # Apple Silicon first; universal can be added later when x86_64 target is installed.
   npx --yes tauri build --bundles app --target aarch64-apple-darwin \
+    --config src-tauri/tauri.release.conf.json \
     --config src-tauri/tauri.appstore.conf.json
 )
 
@@ -134,18 +145,18 @@ fi
 step "Sign sidecar libraries"
 RUNTIME_DIR="${APP_PATH}/Contents/Resources/resources/runtime"
 find "${RUNTIME_DIR}" -type f \( -name '*.dylib' -o -name '*.so' \) -print0 \
-  | xargs -0 codesign --force --options runtime --timestamp=none --sign "${SIGN_IDENTITY}"
+  | xargs -0 codesign --force --options runtime --timestamp=none --sign "${SIGN_SHA1}"
 
 step "Sign sidecar executable"
 codesign --force --options runtime --timestamp=none \
   --entitlements "${SIDECAR_ENTITLEMENTS}" \
-  --sign "${SIGN_IDENTITY}" \
+  --sign "${SIGN_SHA1}" \
   "${RUNTIME_DIR}/office-agent-runtime"
 
 step "Re-sign app with App Store entitlements"
 codesign --force --options runtime \
   --entitlements "${ENTITLEMENTS}" \
-  --sign "${SIGN_IDENTITY}" \
+  --sign "${SIGN_SHA1}" \
   "${APP_PATH}"
 
 step "productbuild .pkg"

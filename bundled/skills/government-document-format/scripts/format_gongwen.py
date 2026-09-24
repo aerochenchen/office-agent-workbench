@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from office_agent.script_policy import confine_to_workspace
+
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml import OxmlElement
@@ -733,6 +735,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        cwd = Path.cwd()
+        args.docx = confine_to_workspace(args.docx, cwd)
+        if args.out is not None:
+            args.out = confine_to_workspace(args.out, cwd)
+        if getattr(args, "roles", None) is not None:
+            args.roles = confine_to_workspace(args.roles, cwd)
         if args.command == "dump":
             if not args.docx.is_file():
                 raise FileNotFoundError(f"文件不存在: {args.docx}")

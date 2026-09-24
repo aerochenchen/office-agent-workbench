@@ -1,6 +1,7 @@
 from office_agent.config import AppConfig
 from office_agent.deployment import (
     PROFILE_LOCAL,
+    PROFILE_STANDARD,
     is_intranet_model_host,
     is_known_public_ai_host,
     resolve_deployment_profile,
@@ -28,13 +29,30 @@ def test_intranet_host_literals() -> None:
     assert not is_intranet_model_host("api.deepseek.com", resolve=False)
 
 
-def test_intranet_host_allows_any_ip_literal() -> None:
-    """专网常用非 RFC1918 号段，按 IP 字面量放行；公网厂商域名仍拒绝。"""
-    assert is_intranet_model_host("88.12.1.2", resolve=False)
-    assert is_intranet_model_host("1.1.1.1", resolve=False)
+def test_intranet_host_rejects_public_ip_literals() -> None:
+    assert not is_intranet_model_host("88.12.1.2", resolve=False)
+    assert not is_intranet_model_host("1.1.1.1", resolve=False)
     assert is_intranet_model_host("::1", resolve=False)
     assert not is_intranet_model_host("api.deepseek.com", resolve=False)
     assert not is_intranet_model_host("example.com", resolve=False)
+
+
+def test_env_cannot_downgrade_packaged_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "office_agent.deployment.read_packaged_deployment_profile",
+        lambda: PROFILE_LOCAL,
+    )
+    monkeypatch.setenv("OFFICE_AGENT_DEPLOYMENT", "standard")
+    assert resolve_deployment_profile("standard") == PROFILE_LOCAL
+
+
+def test_env_can_tighten_packaged_standard(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "office_agent.deployment.read_packaged_deployment_profile",
+        lambda: PROFILE_STANDARD,
+    )
+    monkeypatch.setenv("OFFICE_AGENT_DEPLOYMENT", "local")
+    assert resolve_deployment_profile("standard") == PROFILE_LOCAL
 
 
 def test_local_gateway_rejects_deepseek(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -61,23 +79,24 @@ def test_local_gateway_allows_private_ip() -> None:
     ModelGateway(cfg).assert_allowed()
 
 
-def test_local_gateway_allows_public_looking_ip() -> None:
+def test_local_gateway_rejects_public_ip() -> None:
     cfg = AppConfig(
-        api_base="http://88.12.1.2:9081/v1",
+        api_base="http://1.1.1.1/v1",
         api_key="x",
         model="Qwen3.8-27B",
-        allowed_hosts=["88.12.1.2", "127.0.0.1", "localhost"],
+        allowed_hosts=["1.1.1.1", "127.0.0.1", "localhost"],
         deployment_profile=PROFILE_LOCAL,
     )
-    ModelGateway(cfg).assert_allowed()
+    with pytest.raises(GatewayError, match="本地部署"):
+        ModelGateway(cfg).assert_allowed()
 
 
 def test_local_gateway_allows_empty_api_key() -> None:
     cfg = AppConfig(
-        api_base="http://88.12.1.2:9081/v1",
+        api_base="http://10.0.0.8:9081/v1",
         api_key="",
         model="Qwen3.8-27B",
-        allowed_hosts=["88.12.1.2", "127.0.0.1", "localhost"],
+        allowed_hosts=["10.0.0.8", "127.0.0.1", "localhost"],
         deployment_profile=PROFILE_LOCAL,
     )
     ModelGateway(cfg)

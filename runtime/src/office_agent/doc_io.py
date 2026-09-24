@@ -355,6 +355,8 @@ def _normalize_doc_win32_pywin32(src: Path, dest: Path) -> bool:
         return False
     word = win32com.client.Dispatch("Word.Application")
     word.Visible = False
+    # 3 = msoAutomationSecurityForceDisable
+    word.AutomationSecurity = 3
     try:
         doc = word.Documents.Open(str(src))
         # 16 = wdFormatXMLDocument (.docx)
@@ -376,6 +378,7 @@ def _normalize_doc_win32_powershell(src: Path, dest: Path) -> bool:
         "$src = $env:WST_DOC_SRC; $dest = $env:WST_DOC_DEST; "
         "$word = New-Object -ComObject Word.Application; "
         "$word.Visible = $false; $word.DisplayAlerts = 0; "
+        "$word.AutomationSecurity = 3; "
         "try { "
         "$doc = $word.Documents.Open($src, $false, $true); "
         "try { $doc.SaveAs2([string]$dest, 16) } "

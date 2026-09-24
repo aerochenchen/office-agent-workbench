@@ -430,6 +430,7 @@ class ToolExecutor:
             argv,
             self.workspace.root,
             allowed_roots=[skill_dir, scripts_dir],
+            force_isolate=True,
         )
 
     def _run_shared_script(self, args: dict) -> dict:
@@ -453,7 +454,51 @@ class ToolExecutor:
             argv,
             self.workspace.root,
             allowed_roots=[script_path.parent],
+            force_isolate=True,
         )
+
+    def _run_python_windows(
+        self,
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str],
+        read_roots: list[Path],
+        write_roots: list[Path],
+    ) -> dict:
+        from office_agent.win_sandbox import ScriptIsolationError, run_in_appcontainer
+
+        try:
+            proc = run_in_appcontainer(
+                cmd,
+                cwd=cwd,
+                env=env,
+                timeout=SCRIPT_TIMEOUT_SEC,
+                read_roots=read_roots,
+                write_roots=write_roots,
+            )
+        except ScriptIsolationError as e:
+            raise ToolError(f"脚本隔离失败，已拒绝执行: {e}") from e
+        except subprocess.TimeoutExpired as e:
+            stdout, _ = truncate_output(e.stdout if isinstance(e.stdout, str) else "")
+            stderr, _ = truncate_output(e.stderr if isinstance(e.stderr, str) else "")
+            return {
+                "ok": False,
+                "exit_code": -1,
+                "stdout": stdout,
+                "stderr": (stderr + "\nscript timeout").strip(),
+                "error": f"script timeout after {SCRIPT_TIMEOUT_SEC}s",
+                "error_code": "script_timeout",
+            }
+        stdout, out_cut = truncate_output(proc.stdout)
+        stderr, err_cut = truncate_output(proc.stderr)
+        return {
+            "ok": proc.returncode == 0,
+            "exit_code": proc.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "truncated": out_cut or err_cut,
+        }
 
     def _run_python(
         self,
@@ -462,6 +507,7 @@ class ToolExecutor:
         cwd: Path,
         *,
         allowed_roots: list[Path] | None = None,
+        force_isolate: bool = False,
     ) -> dict:
         argv_roots = [self.workspace.root.resolve()]
         jail_roots = script_jail_roots(
@@ -509,13 +555,36 @@ class ToolExecutor:
                 str(script),
                 *argv,
             ]
-        isolate = bool(self.require_script_sandbox)
-        if isolate and not sandbox_available() and sys.platform != "win32":
+        isolate = bool(self.require_script_sandbox) or force_isolate
+        if isolate and not sandbox_available():
             raise ToolError(
-                "本地部署要求脚本在隔离进程中运行，当前系统缺少 unshare/sandbox-exec"
+                "脚本隔离不可用，已拒绝执行。需要 unshare、sandbox-exec 或 Windows AppContainer"
+            )
+        if isolate and sys.platform == "win32":
+            return self._run_python_windows(
+                cmd,
+                cwd=cwd,
+                env=env,
+                read_roots=jail_roots,
+                write_roots=[
+                    self.workspace.root,
+                    script_home,
+                    self._app_data,
+                    self._app_data / "skills",
+                    self._app_data / "shared-scripts",
+                ],
             )
         if isolate and sandbox_available():
-            cmd = wrap_isolated_cmd(cmd, workspace=self.workspace.root)
+            cmd = wrap_isolated_cmd(
+                cmd,
+                workspace=self.workspace.root,
+                write_roots=[
+                    script_home,
+                    self._app_data,
+                    self._app_data / "skills",
+                    self._app_data / "shared-scripts",
+                ],
+            )
         run_kwargs: dict = {
             "cwd": str(cwd),
             "capture_output": True,

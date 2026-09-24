@@ -59,15 +59,25 @@ def sandbox_available() -> bool:
         return shutil.which("unshare") is not None
     if sys.platform == "darwin":
         return shutil.which("sandbox-exec") is not None
+    if sys.platform == "win32":
+        from office_agent.win_sandbox import windows_isolation_available
+
+        return windows_isolation_available()
     return False
 
 
-def wrap_isolated_cmd(cmd: list[str], *, workspace: Path) -> list[str]:
+def wrap_isolated_cmd(
+    cmd: list[str],
+    *,
+    workspace: Path,
+    write_roots: list[Path] | None = None,
+) -> list[str]:
     """Prefix cmd with OS isolation when the tool exists.
 
     Linux: new empty net namespace (no outbound/inbound except what we add).
     macOS: sandbox-exec profile denying network.
-    Other platforms: return cmd unchanged (caller may fail-closed).
+    Windows uses AppContainer in win_sandbox.run_in_appcontainer, not a prefix.
+    Other platforms: return cmd unchanged (caller must fail-closed).
     """
     if sys.platform.startswith("linux"):
         unshare = shutil.which("unshare")
@@ -78,7 +88,14 @@ def wrap_isolated_cmd(cmd: list[str], *, workspace: Path) -> list[str]:
         sandbox_exec = shutil.which("sandbox-exec")
         if not sandbox_exec:
             return cmd
-        ws = str(workspace.resolve())
+        roots = [workspace.resolve()]
+        for extra in write_roots or []:
+            resolved = extra.resolve()
+            if resolved not in roots:
+                roots.append(resolved)
+        write_rules = "\n".join(
+            f'(allow file-write* (subpath "{root}"))' for root in roots
+        )
         profile = (
             "(version 1)\n"
             "(deny default)\n"
@@ -89,7 +106,7 @@ def wrap_isolated_cmd(cmd: list[str], *, workspace: Path) -> list[str]:
             "(allow mach-lookup)\n"
             "(allow file-ioctl)\n"
             "(allow file-read*)\n"
-            f'(allow file-write* (subpath "{ws}"))\n'
+            f"{write_rules}\n"
             '(allow file-write* (subpath "/private/tmp"))\n'
             '(allow file-write* (subpath "/tmp"))\n'
             "(deny network*)\n"

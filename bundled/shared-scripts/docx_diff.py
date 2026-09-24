@@ -15,6 +15,8 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from office_agent.script_policy import confine_to_workspace
+
 
 def _paragraphs(path: Path) -> tuple[list[str], list[str]]:
     from docx import Document
@@ -130,6 +132,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        cwd = Path.cwd()
+        args.old = confine_to_workspace(args.old, cwd)
+        args.new = confine_to_workspace(args.new, cwd)
+        if args.out is not None:
+            args.out = confine_to_workspace(args.out, cwd)
         if not args.old.is_file():
             raise FileNotFoundError(f"文件不存在: {args.old}")
         if not args.new.is_file():

@@ -69,10 +69,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    # M11：非回环绑定必须已配置 API token，否则拒绝启动。
-    from office_agent.auth import configured_api_token
+    # 无启动器注入时自行生成令牌。非回环绑定仍要求调用方显式提供令牌。
+    from office_agent.auth import configured_api_token, ensure_api_token
 
-    assert_bind_safety(args.host, configured_api_token())
+    injected = configured_api_token()
+    ensure_api_token()
+    assert_bind_safety(args.host, injected)
 
     # Import after argparse so ``--help`` works without pulling the full stack.
     import uvicorn

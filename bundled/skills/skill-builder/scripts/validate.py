@@ -46,7 +46,21 @@ EXPECTED_SECTIONS = {
     "步数预算": "步数预算",
     "变更记录": "变更记录",
 }
-FORBIDDEN_IMPORTS = {"requests", "urllib.request", "urllib3", "httpx", "socket"}
+FORBIDDEN_IMPORTS = {
+    "aiohttp",
+    "ctypes",
+    "ftplib",
+    "http",
+    "httpx",
+    "requests",
+    "smtplib",
+    "socket",
+    "subprocess",
+    "urllib",
+    "urllib.request",
+    "urllib3",
+    "winreg",
+}
 REFERENCE_PATH_RE = re.compile(r"\b((?:scripts|references|templates)/[\w./-]+)")
 FENCED_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")

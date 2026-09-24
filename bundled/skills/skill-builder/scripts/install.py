@@ -4,7 +4,7 @@
 Usage:
     python install.py <草稿目录> [--no-enable] [--force]
 
-先跑 validate；有 error 拒装（--force 可跳过，仅用于救急）。
+先跑 validate；有 error 一律拒装。--force 只用于覆盖已安装的同名技能。
 已存在同名技能会先备份到 ~/.office-agent/skill-backups/。
 """
 
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 import time
@@ -53,7 +54,7 @@ def _backup(dest: Path, version: str) -> str | None:
 
 def install(draft: Path, *, enabled: bool = True, force: bool = False) -> dict[str, Any]:
     report = validate(draft)
-    if not report["ok"] and not force:
+    if not report["ok"]:
         return {
             "ok": False,
             "error": "校验未通过，拒绝安装",
@@ -62,7 +63,16 @@ def install(draft: Path, *, enabled: bool = True, force: bool = False) -> dict[s
         }
 
     skill_id = draft.name
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", skill_id):
+        return {"ok": False, "error": f"不安全的技能 id：{skill_id}", "errors": ["unsafe skill id"]}
     dest = skills_dir() / skill_id
+    if dest.exists() and not force:
+        return {
+            "ok": False,
+            "error": "同名技能已存在。--force 只覆盖已安装版本，不能跳过校验",
+            "errors": ["skill already installed"],
+            "warnings": report["warnings"],
+        }
     previous = None
     if dest.exists():
         try:
@@ -93,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="把技能草稿安装到应用数据目录")
     parser.add_argument("draft", help="草稿目录（相对工作区根）")
     parser.add_argument("--no-enable", action="store_true", help="安装但不启用")
-    parser.add_argument("--force", action="store_true", help="忽略校验 error 强行安装")
+    parser.add_argument("--force", action="store_true", help="覆盖已安装的同名技能，不跳过校验")
     args = parser.parse_args(argv)
 
     draft = Path(args.draft).resolve()

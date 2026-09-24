@@ -17,6 +17,8 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from office_agent.script_policy import confine_to_workspace
+
 WORK_REL = Path(".office-agent") / "work" / "multidoc-digest"
 
 # Simple CJK + alnum tokenizer
@@ -268,20 +270,25 @@ def main(argv: list[str] | None = None) -> int:
     cwd = Path.cwd()
     work = Path(args.work_dir) if args.work_dir else cwd / WORK_REL
     if not work.is_absolute():
-        work = (cwd / work).resolve()
+        work = cwd / work
+    work = confine_to_workspace(work, cwd)
 
     cards_dir = Path(args.cards) if args.cards else work / "cards"
     if not cards_dir.is_absolute():
-        cards_dir = (cwd / cards_dir).resolve()
+        cards_dir = cwd / cards_dir
+    cards_dir = confine_to_workspace(cards_dir, cwd)
     chunks_path = Path(args.chunks) if args.chunks else work / "chunks.jsonl"
     if not chunks_path.is_absolute():
-        chunks_path = (cwd / chunks_path).resolve()
+        chunks_path = cwd / chunks_path
+    chunks_path = confine_to_workspace(chunks_path, cwd)
     manifest_path = Path(args.manifest) if args.manifest else work / "manifest.jsonl"
     if not manifest_path.is_absolute():
-        manifest_path = (cwd / manifest_path).resolve()
+        manifest_path = cwd / manifest_path
+    manifest_path = confine_to_workspace(manifest_path, cwd)
     out_path = Path(args.output) if args.output else work / "outline.json"
     if not out_path.is_absolute():
-        out_path = (cwd / out_path).resolve()
+        out_path = cwd / out_path
+    out_path = confine_to_workspace(out_path, cwd)
 
     cards = load_cards(cards_dir)
     if not cards:
