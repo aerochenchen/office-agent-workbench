@@ -9,7 +9,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = "133.0.3065.92",
+    [string]$Version = "151.0.4129.107",
     [string]$OutRoot = ""
 )
 
@@ -28,13 +28,13 @@ if (Test-Path $Marker) {
     return
 }
 
-$CabName = "$FolderName.cab"
-$CabPath = Join-Path $env:TEMP $CabName
-$Url = "https://github.com/westinyang/WebView2RuntimeArchive/releases/download/$Version/$CabName"
+$NupkgName = "webview2.runtime.x64.$Version.nupkg"
+$NupkgPath = Join-Path $env:TEMP $NupkgName
+$Url = "https://api.nuget.org/v3-flatcontainer/webview2.runtime.x64/$Version/webview2.runtime.x64.$Version.nupkg"
 
 Write-Host "Downloading WebView2 Fixed Runtime $Version ..."
 Write-Host "  $Url"
-Invoke-WebRequest -Uri $Url -OutFile $CabPath -UseBasicParsing
+Invoke-WebRequest -Uri $Url -OutFile $NupkgPath -UseBasicParsing
 
 if (Test-Path $OutRoot) {
     Remove-Item -Recurse -Force $OutRoot
@@ -44,16 +44,14 @@ New-Item -ItemType Directory -Path $OutRoot -Force | Out-Null
 $ExtractTmp = Join-Path $env:TEMP ("webview2-fixed-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $ExtractTmp -Force | Out-Null
 try {
-    Write-Host "Extracting CAB -> $ExtractTmp"
-    & expand.exe $CabPath -F:* $ExtractTmp | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "expand.exe failed with exit $LASTEXITCODE"
-    }
+    Write-Host "Extracting nupkg -> $ExtractTmp"
+    Copy-Item -Path $NupkgPath -Destination (Join-Path $ExtractTmp "runtime.zip")
+    Expand-Archive -Path (Join-Path $ExtractTmp "runtime.zip") -DestinationPath $ExtractTmp -Force
 
     $found = Get-ChildItem -Path $ExtractTmp -Recurse -Filter "msedgewebview2.exe" |
         Select-Object -First 1
     if (-not $found) {
-        throw "msedgewebview2.exe not found after extracting $CabName"
+        throw "msedgewebview2.exe not found after extracting $NupkgName"
     }
     $runtimeRoot = $found.Directory.FullName
     New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
@@ -61,7 +59,7 @@ try {
 }
 finally {
     Remove-Item -Recurse -Force $ExtractTmp -ErrorAction SilentlyContinue
-    Remove-Item -Force $CabPath -ErrorAction SilentlyContinue
+    Remove-Item -Force $NupkgPath -ErrorAction SilentlyContinue
 }
 
 if (-not (Test-Path $Marker)) {

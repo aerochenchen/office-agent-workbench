@@ -195,6 +195,10 @@ function Stage-Resources {
     }
     Write-Host "Staged runtime -> $StagedRuntime"
     Write-Host "Staged bundled -> $StagedBundled"
+    & (Join-Path $RepoRoot "scripts\sign-windows.ps1") -Files @(
+        (Join-Path $StagedRuntime "office-agent-runtime.exe")
+    )
+    if ($LASTEXITCODE -ne 0) { throw "failed to sign office-agent-runtime.exe" }
 }
 
 function Build-Tauri {
@@ -210,7 +214,11 @@ function Build-Tauri {
                 throw "npm install failed"
             }
         }
-        $tauriArgs = @("tauri", "build", "--config", "src-tauri/tauri.release.conf.json")
+        $tauriArgs = @(
+            "tauri", "build",
+            "--config", "src-tauri/tauri.release.conf.json",
+            "--config", "src-tauri/tauri.sign.conf.json"
+        )
         if ($MicrosoftStore) {
             $storeConf = Join-Path $SrcTauri "tauri.microsoftstore.conf.json"
             if (-not (Test-Path $storeConf)) {
@@ -239,7 +247,7 @@ function Build-Tauri {
                 $ErrorActionPreference = $prevEap
                 throw "Local deploy config missing: $localConf"
             }
-            $fixedMarker = Join-Path $SrcTauri "webview2-runtime\Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64\msedgewebview2.exe"
+            $fixedMarker = Join-Path $SrcTauri "webview2-runtime\Microsoft.WebView2.FixedVersionRuntime.151.0.4129.107.x64\msedgewebview2.exe"
             if (-not (Test-Path $fixedMarker)) {
                 $ErrorActionPreference = $prevEap
                 throw "Fixed WebView2 runtime missing at $fixedMarker"
@@ -273,6 +281,16 @@ function Build-Tauri {
                 }
             }
             Write-Host ("Installer: " + $exe.FullName) -ForegroundColor Green
+            $signTargets = @($exe.FullName)
+            $releaseDir = Join-Path $SrcTauri "target\release"
+            $desktopExe = Get-ChildItem -Path $releaseDir -Filter "*.exe" -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -notmatch 'runtime|uninstall' } |
+                Select-Object -First 1
+            if ($desktopExe) { $signTargets += $desktopExe.FullName }
+            $uninstaller = Join-Path $nsisDir "uninstall.exe"
+            if (Test-Path $uninstaller) { $signTargets += $uninstaller }
+            & (Join-Path $RepoRoot "scripts\sign-windows.ps1") -Files $signTargets
+            if ($LASTEXITCODE -ne 0) { throw "failed to sign installer binaries" }
             & python (Join-Path $RepoRoot "scripts\check_release_placeholders.py") $exe.FullName
             if ($LASTEXITCODE -ne 0) { throw "installer still contains {{product_name}}" }
         }

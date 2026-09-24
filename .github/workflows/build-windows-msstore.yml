@@ -52,7 +52,18 @@ jobs:
 
       - name: Build Windows NSIS installer (Microsoft Store config)
         shell: pwsh
-        run: .\scripts\build-windows.ps1 -MicrosoftStore
+        env:
+          WENSHUTONG_SIGN_PFX_B64: ${{ secrets.WENSHUTONG_SIGN_PFX_B64 }}
+          WENSHUTONG_SIGN_PASSWORD: ${{ secrets.WENSHUTONG_SIGN_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WENSHUTONG_SIGN_PFX_B64)) {
+            throw "Missing secret WENSHUTONG_SIGN_PFX_B64. Store a base64 Authenticode PFX that signtool can use on EXE files. A Microsoft Store MSIX dev certificate cannot sign this installer."
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP "wenshutong-codesign.pfx"
+          $b64 = ($env:WENSHUTONG_SIGN_PFX_B64 -replace '\s','')
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($b64))
+          $env:WENSHUTONG_SIGN_PFX = $pfx
+          .\scripts\build-windows.ps1 -MicrosoftStore
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4

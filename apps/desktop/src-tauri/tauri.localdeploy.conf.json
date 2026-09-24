@@ -3,7 +3,7 @@
     "windows": {
       "webviewInstallMode": {
         "type": "fixedRuntime",
-        "path": "./webview2-runtime/Microsoft.WebView2.FixedVersionRuntime.133.0.3065.92.x64"
+        "path": "./webview2-runtime/Microsoft.WebView2.FixedVersionRuntime.151.0.4129.107.x64"
       },
       "nsis": {
         "installMode": "both"

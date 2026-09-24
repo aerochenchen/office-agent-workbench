@@ -14,6 +14,7 @@ npm-debug.log*
 
 # Tauri / Rust
 apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/webview2-runtime/
 apps/desktop/src-tauri/gen/schemas/
 
 # Local / generated

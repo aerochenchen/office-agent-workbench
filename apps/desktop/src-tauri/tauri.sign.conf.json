@@ -1,0 +1,5 @@
+{
+  "bundle": {
+    "beforeBundleCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/sign-before-bundle.ps1"
+  }
+}
