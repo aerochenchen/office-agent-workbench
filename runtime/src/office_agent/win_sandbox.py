@@ -8,6 +8,7 @@ created, the caller must refuse to run the script.
 from __future__ import annotations
 
 import ctypes
+import os
 import subprocess
 import sys
 from ctypes import wintypes
@@ -101,6 +102,75 @@ def _grant_roots(sid: str, read_roots: list[Path], write_roots: list[Path]) -> N
         _grant(root, sid, "(OI)(CI)(GR)")
     for root in write_roots:
         _grant(root, sid, "(OI)(CI)(M)")
+
+
+def _interpreter_read_roots(cmd: list[str]) -> list[Path]:
+    """Directories the AppContainer must read so the interpreter can start.
+
+    A venv python.exe also needs its pyvenv.cfg and the base install named by home=.
+    """
+    if not cmd:
+        return []
+    exe = Path(cmd[0])
+    if not exe.is_absolute():
+        return []
+    roots: list[Path] = []
+    seen: set[Path] = set()
+
+    def add(path: Path) -> None:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            return
+        if resolved in seen or not resolved.exists():
+            return
+        seen.add(resolved)
+        roots.append(resolved)
+
+    add(exe.parent)
+    venv_root = exe.parent.parent if exe.parent.name.lower() == "scripts" else exe.parent
+    add(venv_root)
+    cfg = venv_root / "pyvenv.cfg"
+    if cfg.is_file():
+        try:
+            for line in cfg.read_text(encoding="utf-8", errors="replace").splitlines():
+                if line.lower().startswith("home"):
+                    _, _, value = line.partition("=")
+                    add(Path(value.strip().strip('"').strip("'")))
+                    break
+        except OSError:
+            pass
+    return roots
+
+
+def _pythonpath_read_roots(env: dict[str, str]) -> list[Path]:
+    raw = env.get("PYTHONPATH", "")
+    roots: list[Path] = []
+    seen: set[Path] = set()
+    for part in raw.split(os.pathsep):
+        if not part:
+            continue
+        path = Path(part)
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.exists():
+            continue
+        seen.add(resolved)
+        roots.append(resolved)
+    return roots
+
+
+def _env_block(env: dict[str, str]) -> ctypes.Array[ctypes.c_wchar]:
+    """Double-null-terminated UTF-16 environment. Skip entries CreateProcessW rejects."""
+    parts: list[str] = []
+    for key, value in env.items():
+        if not key or "=" in key or "\0" in key:
+            continue
+        parts.append(f"{key}={str(value).replace(chr(0), '')}")
+    text = "\0".join(parts) + "\0\0"
+    return ctypes.create_unicode_buffer(text)
 
 
 class _SECURITY_CAPABILITIES(ctypes.Structure):
@@ -201,10 +271,15 @@ def run_in_appcontainer(
     if not windows_isolation_available():
         raise ScriptIsolationError("Windows AppContainer APIs are unavailable")
     sid_ptr, sid_text = _container_sid()
+    for root in _interpreter_read_roots(cmd):
+        _grant(root, sid_text, "(OI)(CI)(RX)")
+    for root in _pythonpath_read_roots(env):
+        _grant(root, sid_text, "(OI)(CI)(GR)")
     _grant_roots(sid_text, read_roots, write_roots)
 
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
     EXTENDED_STARTUPINFO_PRESENT = 0x00080000
+    CREATE_UNICODE_ENVIRONMENT = 0x00000400
     CREATE_NO_WINDOW = 0x08000000
     CREATE_SUSPENDED = 0x00000004
     STARTF_USESTDHANDLES = 0x00000100
@@ -247,16 +322,16 @@ def run_in_appcontainer(
     si.lpAttributeList = ctypes.cast(attr, ctypes.c_void_p)
     pi = _PROCESS_INFORMATION()
 
-    cmdline = subprocess.list2cmdline(cmd)
-    env_block = "\0".join(f"{k}={v}" for k, v in env.items()) + "\0\0"
+    cmdline = ctypes.create_unicode_buffer(subprocess.list2cmdline(cmd))
+    env_block = _env_block(env)
     ok = kernel.CreateProcessW(
         None,
-        ctypes.c_wchar_p(cmdline),
+        cmdline,
         None,
         None,
         True,
-        EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW | CREATE_SUSPENDED,
-        ctypes.c_wchar_p(env_block),
+        EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW | CREATE_SUSPENDED,
+        env_block,
         str(cwd),
         ctypes.byref(si),
         ctypes.byref(pi),

@@ -1192,8 +1192,9 @@ def test_skill_install_audits(client: TestClient, tmp_path: Path, app_state: Pro
         "---\nname: audit-skill\ndescription: install audit\nversion: 0.1.0\ntier: light\n"
         "permissions:\n  - run_python\n---\n\n# y\n"
     )
-    (src / "SKILL.md").write_text(skill_md, encoding="utf-8")
-    expected_sha = hashlib.sha256(skill_md.encode("utf-8")).hexdigest()
+    skill_file = src / "SKILL.md"
+    skill_file.write_text(skill_md, encoding="utf-8", newline="\n")
+    expected_sha = hashlib.sha256(skill_file.read_bytes()).hexdigest()
 
     r = client.post("/skills/install", json={"path": str(src), "enabled": True})
     assert r.status_code == 200
