@@ -74,7 +74,7 @@
   margin: 0;
   padding: 8px 10px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--ink-1);
   font: inherit;
@@ -90,7 +90,7 @@
 }
 
 .settings-nav-item--active {
-  background: var(--accent-teal-soft);
+  background: color-mix(in srgb, var(--accent-teal-soft) 62%, var(--paper-1));
   color: var(--ink-0);
   font-weight: 600;
 }
@@ -104,7 +104,7 @@
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  padding: var(--space-4);
+  padding: var(--space-4) calc(var(--space-4) + var(--space-1));
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -129,45 +129,54 @@
 
 .settings-section-title {
   margin: 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-lg);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink-1);
-  text-transform: uppercase;
+  letter-spacing: 0;
+  color: var(--ink-0);
+  text-transform: none;
 }
 
 .settings-subsection-title {
   margin: 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-md);
   font-weight: 600;
-  color: var(--ink-1);
-  letter-spacing: 0.04em;
+  color: var(--ink-0);
+  letter-spacing: 0;
 }
 
 .settings-subsection {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  margin-top: var(--space-1);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--line-1);
+  margin-top: 0;
+  padding-top: var(--space-4);
+  border-top: none;
 }
 
 .settings-callout {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--line-1);
-  border-radius: var(--radius-sm);
-  background: var(--paper-1);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--line-1) 80%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--paper-0) 28%, var(--paper-2));
   font-size: var(--font-size-xs);
-  color: var(--ink-1);
-  line-height: 1.55;
+  color: var(--ink-2);
+  line-height: 1.6;
 }
 
 .settings-field-block {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-pane .field {
   gap: 6px;
+}
+
+.settings-pane .field-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
 }
 
 .field {
@@ -211,6 +220,20 @@
   font-size: var(--font-size-sm);
 }
 
+.settings-pane .field-input {
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border-color: var(--line-0);
+  background: color-mix(in srgb, var(--paper-0) 22%, var(--paper-2));
+  font-size: var(--font-size-md);
+  color: var(--ink-0);
+}
+
+.settings-pane .field-input::placeholder {
+  color: var(--ink-2);
+}
+
 .field-error {
   margin: 0;
   color: var(--status-error);
@@ -222,14 +245,14 @@
   padding-left: 1px;
   font-size: var(--font-size-xs);
   color: var(--ink-2);
-  line-height: 1.45;
+  line-height: 1.6;
 }
 
 .settings-permission-hint {
   margin: 0;
   font-size: var(--font-size-xs);
-  color: var(--ink-1);
-  line-height: 1.45;
+  color: var(--ink-2);
+  line-height: 1.6;
 }
 
 .settings-about {
@@ -433,6 +456,18 @@
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--line-1);
+}
+
+.modal--settings .modal-footer .btn {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+}
+
+.modal--settings .modal-footer .btn--ghost {
+  background: var(--paper-2);
+  border-color: var(--line-0);
 }
 
 @media (max-width: 560px) {
