@@ -1,5 +1,7 @@
 .chat-pane {
   background: var(--paper-1);
+  /* Keep the thread and composer on one measure when the skills pane is collapsed. */
+  --chat-measure: 760px;
 }
 
 .chat-status {
@@ -118,6 +120,8 @@
 
 .chat-scroll {
   padding: var(--space-4);
+  padding-left: max(var(--space-4), calc((100% - var(--chat-measure)) / 2));
+  padding-right: max(var(--space-4), calc((100% - var(--chat-measure)) / 2));
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -443,13 +447,15 @@
   flex-direction: column;
   gap: var(--space-2);
   padding-top: var(--space-2);
+  padding-left: max(var(--space-4), calc((100% - var(--chat-measure)) / 2));
+  padding-right: max(var(--space-4), calc((100% - var(--chat-measure)) / 2));
 }
 
 .attach-chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
-  padding: 0 var(--space-3);
+  padding: 0;
 }
 
 .attach-chip {
@@ -491,7 +497,7 @@
 }
 
 .attach-hint {
-  padding: 0 var(--space-3);
+  padding: 0;
   font-size: var(--font-size-xs);
   color: var(--status-error);
 }
@@ -500,7 +506,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0 var(--space-3);
+  padding: 0;
 }
 
 .attach-paste-label {
@@ -528,7 +534,7 @@
 
 .chat-input-row {
   flex: 0 0 auto;
-  padding: 0 var(--space-3) var(--space-3);
+  padding: 0 0 var(--space-3);
   display: flex;
   gap: var(--space-2);
   align-items: flex-end;
@@ -613,4 +619,8 @@
 
 .chat-input-row > .btn {
   flex: 0 0 auto;
+}
+
+.chat-send.btn--primary:disabled {
+  opacity: 1;
 }

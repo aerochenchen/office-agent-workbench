@@ -64,7 +64,7 @@ function App() {
   const [sending, setSending] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [skillsCollapsed, setSkillsCollapsed] = useState(false);
+  const [skillsCollapsed, setSkillsCollapsed] = useState(true);
   const [draftPrefill, setDraftPrefill] = useState<string | null>(null);
   const [config, setConfig] = useState<RuntimeConfig>(DEFAULT_CONFIG);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestEvent | null>(null);

@@ -50,6 +50,26 @@ pid_alive() {
   [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
 }
 
+# Desktop mode: Tauri injects OFFICE_AGENT_API_TOKEN and will not attach to a
+# runtime that holds a different token. /shutdown also requires that token, so
+# a pre-started or leftover listener makes the shell exit. Free the port and
+# let the shell spawn the runtime.
+prepare_desktop_runtime_port() {
+  if ! curl -sf "http://127.0.0.1:8765/health" >/dev/null 2>&1; then
+    return 0
+  fi
+  log "释放 8765 上的旧运行时（令牌与本次桌面壳不一致，壳无法回收）"
+  local pids
+  pids="$(lsof -tiTCP:8765 -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -n "$pids" ]]; then
+    # shellcheck disable=SC2086
+    kill $pids 2>/dev/null || true
+    sleep 0.3
+    # shellcheck disable=SC2086
+    kill -9 $pids 2>/dev/null || true
+  fi
+}
+
 ensure_runtime() {
   if curl -sf "http://127.0.0.1:8765/health" >/dev/null 2>&1; then
     log "Runtime 已在 8765 运行，跳过启动"
@@ -113,7 +133,11 @@ start_tauri() {
   exec npm run tauri -- dev
 }
 
-ensure_runtime
+if [[ "$MODE" == "desktop" ]]; then
+  prepare_desktop_runtime_port
+else
+  ensure_runtime
+fi
 
 if [[ "$MODE" == "runtime" ]]; then
   log "仅 Runtime 模式，完成。日志：${STATE_DIR}/runtime.log"

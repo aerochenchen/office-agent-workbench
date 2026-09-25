@@ -8,6 +8,7 @@ import {
   GUIDE_EMPTY_HEADLINE_NO_FOLDER,
   GUIDE_EMPTY_HEADLINE_WITH_FOLDER,
   GUIDE_HINTS,
+  GUIDE_MORE_HELP,
   GUIDE_PILLARS,
   guideEmptyHeadline,
   listCapabilityLeaves,
@@ -21,6 +22,7 @@ const here = fileURLToPath(new URL(".", import.meta.url));
 function collectUserCopy(): string[] {
   return [
     ...GUIDE_PILLARS.flatMap((p) => [p.title, p.summary, p.body]),
+    GUIDE_MORE_HELP,
     ...Object.values(GUIDE_HINTS),
     GUIDE_EMPTY_HEADLINE_NO_FOLDER,
     GUIDE_EMPTY_HEADLINE_WITH_FOLDER,
@@ -78,6 +80,10 @@ describe("guide copy", () => {
       label: "继续工作计划",
       saying: "按工作计划未完成项继续",
     });
+  });
+
+  it("settings guide footer points at the studio WeChat Channels account", () => {
+    expect(GUIDE_MORE_HELP).toBe("更多使用说明，请查看微信视频号「立人达创新工作室」。");
   });
 
   it("index.html boot splash mirrors GUIDE_PILLARS title+summary", () => {

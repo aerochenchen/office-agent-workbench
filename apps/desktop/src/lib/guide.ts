@@ -1,5 +1,7 @@
 /** User-facing product guide — welcome, micro-hints, and settings「使用说明」. */
 
+import { STUDIO_NAME } from "./brand";
+
 export interface GuidePillar {
   id: string;
   title: string;
@@ -32,32 +34,30 @@ export const GUIDE_PILLARS: readonly GuidePillar[] = [
   {
     id: "local",
     title: "本地可控",
-    summary: "材料在文件夹里办，用什么模型自己定。",
+    summary: "选定文件夹后，只在这里读取、整理、写作。",
     body:
-      "选定文件夹后，材料在本机该文件夹内读取与生成，不越界到文件夹外。大模型接口由你在设置中自行配置（地址、密钥、模型名），不绑定某一家公网云服务。",
+      "选定文件夹后，原始材料、参考信息和成果都放在这里。文书通只在这个文件夹里读取、整理、写作。",
   },
   {
-    id: "light",
-    title: "轻量可跑",
-    summary: "标准包轻，老旧机也能用。",
+    id: "privacy",
+    title: "尊重隐私",
+    summary: "记录和材料留在本机，开发者不收集。",
     body:
-      "标准安装包刻意做薄，面向日常办公电脑与配置一般的老旧机；对话与轻量技能即可开箱使用。更重的能力（如本地检索写作）按需选装，不拖垮全员机器。",
+      "聊天记录、原始材料和成果都留在本机。文书通没有自己的服务器，开发者不收集用户信息。",
+  },
+  {
+    id: "forms",
+    title: "文数皆通",
+    summary: "文字、数字和图表，都可以试一试。",
+    body:
+      "文字、数字和图表，以这三种形式为载体的知识、信息、资料都可以试一试用文书通处理。",
   },
   {
     id: "method",
     title: "方法沉淀",
-    summary: "好流程变成可复用技能。",
+    summary: "好流程固化成技能，经验留得下来。",
     body:
-      "把反复验证过的工作方法与流程固化成技能：规则写清、重活脚本化，安装后可反复调用。"
-      + "单位称谓与术语可写入文件夹内 `.office-agent/glossary.md`，校对与起草时对照使用。"
-      + "经验留在单位里，而不是每次从零写提示词。",
-  },
-  {
-    id: "skills",
-    title: "能力插拔",
-    summary: "专项技能可安装、可分享。",
-    body:
-      "排版、汇总、写作等专项能力以技能包形式提供，可在本机灵活安装、启停与分享。底座统一，能力按岗位与场景叠加。",
+      "把反复验证过的工作方法与流程固化成技能：规则写清、重活脚本化，安装后可反复调用。将经验留存，而不是每次重新再来。",
   },
 ] as const;
 
@@ -248,8 +248,10 @@ export function listCapabilityLeaves(): CapabilityLeaf[] {
   return CAPABILITY_TREE.flatMap((b) => [...b.children]);
 }
 
+/** Footer of settings「使用说明」, with the studio WeChat Channels QR. */
+export const GUIDE_MORE_HELP = `更多使用说明，请查看微信视频号「${STUDIO_NAME}」。`;
+
 export const GUIDE_HINTS = {
-  noWorkspace: "打开文件夹后，对话与成果会保存在本地；办事时文书通只在该文件夹内读写。",
   bootWaiting: "首次启动约需数秒，请稍候。",
   noSessions: "暂无对话。点击上方「新建对话」开始。",
   noSkills: "可导入本地技能包增强能力；安装与运行均在本机。",

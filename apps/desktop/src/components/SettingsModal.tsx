@@ -9,7 +9,7 @@ import {
   STUDIO_WEBSITE_URL,
   SUPPORT_EMAIL,
 } from "../lib/brand";
-import { GUIDE_PILLARS } from "../lib/guide";
+import { GUIDE_MORE_HELP, GUIDE_PILLARS } from "../lib/guide";
 import type { PermissionMode, RuntimeConfig } from "../lib/types";
 import { openHttpsUrl, readOssNoticeText } from "../lib/tauri";
 import {
@@ -455,6 +455,16 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                     </li>
                   ))}
                 </ul>
+                <div className="settings-guide-more">
+                  <p className="settings-guide-item-body">{GUIDE_MORE_HELP}</p>
+                  <img
+                    className="settings-guide-qr"
+                    src="/wechat-channels-qr.jpg"
+                    alt={`微信视频号「${STUDIO_NAME}」二维码`}
+                    width={168}
+                    height={168}
+                  />
+                </div>
               </section>
             )}
 

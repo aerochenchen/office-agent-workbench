@@ -135,9 +135,6 @@ export default function SessionList({
       </div>
 
       <div className="pane-body session-list-body">
-        {!workspacePath && (
-          <div className="empty-hint">{GUIDE_HINTS.noWorkspace}</div>
-        )}
         {workspacePath && sessions.length === 0 && (
           <div className="empty-hint">{GUIDE_HINTS.noSessions}</div>
         )}

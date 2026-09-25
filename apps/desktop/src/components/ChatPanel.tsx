@@ -484,7 +484,7 @@ export default function ChatPanel({
           ) : (
             <button
               type="submit"
-              className="btn btn--primary"
+              className="btn btn--primary chat-send"
               disabled={disabled || !draft.trim()}
             >
               发送
