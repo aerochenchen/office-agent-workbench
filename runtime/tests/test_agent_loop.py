@@ -111,6 +111,7 @@ def test_tool_schema_names_match_executor():
         "workspace_read",
         "workspace_write",
         "workspace_extract",
+        "workspace_look",
         "run_workspace_script",
         "read_skill",
         "run_skill_script",
@@ -546,7 +547,9 @@ def test_image_rejection_stops_with_plain_reply(tmp_path: Path, monkeypatch):
             super().chat(messages, tools)
             raise GatewayError("Error code: 400 - content must be a string, image_url is not supported")
 
-    gateway = RejectVision(responses=[_completion(content="不会用到")])
+    gateway = RejectVision(
+        responses=[_completion(content="不会用到"), _completion(content="重试也不会用到")]
+    )
     result = run_agent(
         user_message="看一下这张图",
         attached_paths=["scan.png"],
@@ -589,6 +592,50 @@ def test_image_attachment_sent_as_data_url_when_vision_on(tmp_path: Path, monkey
     assert "scan.png" in stored
     assert "base64" not in stored
     assert "data:image" not in json.dumps(result.messages, ensure_ascii=False)
+
+
+def test_workspace_look_sends_image_then_falls_back_to_text(tmp_path: Path, monkeypatch):
+    from office_agent.gateway import GatewayError
+
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "scan.png").write_bytes(_TINY_PNG)
+    executor = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+
+    class Scripted:
+        def __init__(self) -> None:
+            self.calls: list[list[dict[str, Any]]] = []
+
+        def chat(self, messages, tools=None):
+            self.calls.append([dict(m) for m in messages])
+            step = len(self.calls)
+            if step == 1:
+                return _completion(
+                    tool_calls=[_tool_call("c1", "workspace_look", {"path": "scan.png"})]
+                )
+            if step == 2:
+                raise GatewayError("image_url is not supported")
+            return _completion(content="按正文写了说明。未核对的图：scan.png")
+
+    gateway = Scripted()
+    result = run_agent(
+        user_message="根据文件夹里的材料写说明",
+        attached_paths=[],
+        gateway=gateway,
+        tools=executor,
+        catalog=[],
+        max_steps=4,
+    )
+    sent = gateway.calls[1][-1]["content"]
+    assert isinstance(sent, list)
+    assert sent[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert "未核对" in result.final_text
+    assert "base64" not in json.dumps(result.messages, ensure_ascii=False)
+    retry = gateway.calls[2][-1]["content"]
+    assert isinstance(retry, str)
+    assert "不接受图片" in retry
 
 
 def test_on_event_emits_tool_and_status(tmp_path: Path, monkeypatch):

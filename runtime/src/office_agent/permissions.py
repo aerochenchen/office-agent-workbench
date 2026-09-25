@@ -51,6 +51,7 @@ SENSITIVE_READ_TOOLS = frozenset(
     {
         "workspace_read",
         "workspace_extract",
+        "workspace_look",
     }
 )
 
@@ -144,6 +145,7 @@ class PermissionGate:
             "workspace_write",
             "workspace_extract",
             "workspace_read",
+            "workspace_look",
         ):
             return f"{tool}:{args.get('path', '')}"
         return f"{tool}"

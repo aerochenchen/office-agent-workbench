@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
+import io
 import os
 import subprocess
 import sys
 import tempfile
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -157,6 +160,74 @@ def relocate_write_path(rel: str) -> str:
 _relocate_process_path = relocate_write_path
 
 
+_LOOK_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+
+
+def _load_look_bytes(
+    path: Path,
+    *,
+    page: int | None,
+    slide: int | None,
+    index: int,
+) -> tuple[bytes, str, str]:
+    suffix = path.suffix.lower()
+    if suffix in _LOOK_MIME:
+        return path.read_bytes(), _LOOK_MIME[suffix], path.name
+    if suffix == ".pdf":
+        if page is None or page < 1:
+            raise ValueError("查看 PDF 需要指定页码")
+        from office_agent.doc_io import _pdf_render_page_image
+
+        image = _pdf_render_page_image(path, page - 1)
+        if image is None:
+            raise ValueError("这一页无法导出成图片")
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        return buf.getvalue(), "image/png", f"{path.name} 第{page}页"
+    if suffix == ".pptx":
+        if slide is None or slide < 1:
+            raise ValueError("查看 PPT 需要指定页码")
+        from pptx import Presentation
+        from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+        prs = Presentation(str(path))
+        slides = list(prs.slides)
+        if slide > len(slides):
+            raise ValueError("页码超出演示文稿")
+        pictures = [
+            shape
+            for shape in slides[slide - 1].shapes
+            if getattr(shape, "shape_type", None) == MSO_SHAPE_TYPE.PICTURE
+        ]
+        if index < 1 or index > len(pictures):
+            raise ValueError("这一页没有可导出的图片")
+        image = pictures[index - 1].image
+        mime = image.content_type or "image/png"
+        if mime not in {"image/png", "image/jpeg", "image/webp"}:
+            raise ValueError("这一页的图不是 PNG、JPG 或 WEBP，未能查看")
+        return image.blob, mime, f"{path.name} 第{slide}页"
+    if suffix == ".docx":
+        with zipfile.ZipFile(path) as archive:
+            names = sorted(
+                name
+                for name in archive.namelist()
+                if name.startswith("word/media/")
+                and Path(name).suffix.lower() in _LOOK_MIME
+            )
+        if index < 1 or index > len(names):
+            raise ValueError("文档里没有可查看的图片")
+        with zipfile.ZipFile(path) as archive:
+            raw = archive.read(names[index - 1])
+        mime = _LOOK_MIME[Path(names[index - 1]).suffix.lower()]
+        return raw, mime, f"{path.name} 第{index}张图"
+    raise ValueError("只能查看 PNG、JPG、WEBP，或 Word、PDF、PPT 中的图")
+
+
 class ToolExecutor:
     def __init__(
         self,
@@ -195,6 +266,9 @@ class ToolExecutor:
             self.gate.destination_host = destination_host
         for rel in attached_paths or []:
             self.gate.allow_read_path(rel)
+        self.pending_looks: list[dict[str, str]] = []
+        self.looks_used = 0
+        self.block_looks = False
 
     def execute(self, name: str, args: dict) -> dict:
         handlers = {
@@ -202,6 +276,7 @@ class ToolExecutor:
             "workspace_read": self._workspace_read,
             "workspace_write": self._workspace_write,
             "workspace_extract": self._workspace_extract,
+            "workspace_look": self._workspace_look,
             "run_workspace_script": self._run_workspace_script,
             "read_skill": self._read_skill,
             "run_skill_script": self._run_skill_script,
@@ -366,6 +441,42 @@ class ToolExecutor:
         except ValueError:
             pass
         return payload
+
+    def take_pending_looks(self) -> list[dict[str, str]]:
+        looks = self.pending_looks
+        self.pending_looks = []
+        return looks
+
+    def _workspace_look(self, args: dict) -> dict:
+        """Prepare one image from the open folder. Bytes stay out of the tool text."""
+        if self.block_looks:
+            return {"ok": False, "error": "当前模型不接受图片"}
+        if self.looks_used >= 4:
+            return {"ok": False, "error": "本轮最多查看 4 张图"}
+        rel = str(args.get("path") or "")
+        if not rel:
+            return {"ok": False, "error": "缺少文件路径"}
+        path = self.workspace.resolve(rel)
+        if not path.is_file():
+            return {"ok": False, "error": f"not a file: {rel}"}
+        try:
+            page = int(args["page"]) if args.get("page") not in (None, "") else None
+            slide = int(args["slide"]) if args.get("slide") not in (None, "") else None
+            index = int(args.get("index") or 1)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "页码或序号不是整数"}
+        try:
+            raw, mime, label = _load_look_bytes(path, page=page, slide=slide, index=index)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        if len(raw) > 8 * 1024 * 1024:
+            return {"ok": False, "error": "超过 8MB，未发送"}
+        encoded = base64.standard_b64encode(raw).decode("ascii")
+        self.looks_used += 1
+        self.pending_looks.append(
+            {"label": label, "data_url": f"data:{mime};base64,{encoded}"}
+        )
+        return {"ok": True, "label": label, "note": "图像已准备，将在下一步交给模型"}
 
     def _workspace_write(self, args: dict) -> dict:
         rel = relocate_write_path(str(args["path"]))

@@ -649,3 +649,40 @@ def test_extract_pdf_ocr_max_pages_sets_truncated(tmp_path: Path, monkeypatch):
     assert len(ocr_units) == 1
     assert result.truncated is True
     assert any("上限" in w for w in result.warnings)
+
+
+_TINY_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+def test_extract_docx_marks_embedded_picture(tmp_path: Path):
+    src = tmp_path / "图文.docx"
+    png = tmp_path / "dot.png"
+    png.write_bytes(_TINY_PNG)
+    doc = Document()
+    doc.add_paragraph("现场见下图")
+    doc.add_picture(str(png))
+    doc.save(src)
+    result = extract_file(src, tmp_path)
+    blob = "\n".join(u.text for u in result.units)
+    assert "图中内容未读取" in blob
+
+
+def test_extract_pptx_marks_picture_only_slide(tmp_path: Path):
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    src = tmp_path / "汇报.pptx"
+    png = tmp_path / "dot.png"
+    png.write_bytes(_TINY_PNG)
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.shapes.add_picture(str(png), Inches(1), Inches(1), Inches(1), Inches(1))
+    prs.save(src)
+    result = extract_file(src, tmp_path)
+    assert result.ok is True
+    assert result.format == "pptx"
+    assert "几乎无文字" in result.units[0].text

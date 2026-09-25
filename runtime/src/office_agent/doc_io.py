@@ -3,7 +3,7 @@
 
 - .doc  → .docx (soffice / textutil / Word COM on Windows)
 - .xls  → .xlsx (xlrd → openpyxl)
-- extract: .docx / .xlsx / .pdf → list of units with stable unit_id anchors
+- extract: .docx / .xlsx / .pdf / .pptx → list of units with stable unit_id anchors
 - PDF pages with no text layer: printed-text OCR via pypdfium2 render + RapidOCR
 """
 
@@ -166,6 +166,8 @@ def normalize_path(
         return src, "xlsx", warnings
     if suffix == ".pdf":
         return src, "pdf", warnings
+    if suffix == ".pptx":
+        return src, "pptx", warnings
     if suffix == ".doc":
         out = _normalize_doc(src, workspace_root, force=force)
         return out, "docx", warnings
@@ -174,7 +176,7 @@ def normalize_path(
         return out, "xlsx", warnings
     raise DocIOError(
         f"unsupported format for normalize: {suffix} "
-        "(supported: .doc .docx .xls .xlsx .pdf)"
+        "(supported: .doc .docx .xls .xlsx .pdf .pptx)"
     )
 
 
@@ -418,6 +420,9 @@ def extract_docx(
     structure: list[dict[str, Any]] = []
     for i, para in enumerate(doc.paragraphs):
         text = para.text.strip()
+        xml = para._p.xml
+        if "w:drawing" in xml or "w:pict" in xml:
+            text = f"{text}\n[含图片，图中内容未读取]" if text else "[含图片，图中内容未读取]"
         if not text:
             continue
         style_name = para.style.name if para.style else "Normal"
@@ -986,6 +991,10 @@ def extract_pdf(
                     body = pdfium_body
                     has_text_layer = True
 
+            image_count = len(getattr(page, "images", None) or [])
+            if has_text_layer and image_count and body:
+                body = f"{body}\n[本页另有图片，图中内容未读取]"
+
             if not has_text_layer:
                 if max_ocr_pages > 0 and ocr_used >= max_ocr_pages:
                     skipped_ocr_pages.append(page_no)
@@ -999,6 +1008,12 @@ def extract_pdf(
                         ocr_pages.append(page_no)
                     else:
                         no_text_pages.append(page_no)
+                        if image_count:
+                            _append_body(
+                                page_no,
+                                "[本页几乎无文字，有图未查看]",
+                                source="image",
+                            )
                 else:
                     no_text_pages.append(page_no)
             else:
@@ -1085,6 +1100,65 @@ def extract_pdf(
     return units, truncated, warnings
 
 
+def extract_pptx(
+    path: Path,
+    doc_key: str,
+    *,
+    max_chars: int,
+    max_units: int,
+) -> tuple[list[ExtractUnit], bool, list[str]]:
+    """Slide title and body text. Pictures are marked, not sent."""
+    from pptx import Presentation
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+    prs = Presentation(str(path))
+    units: list[ExtractUnit] = []
+    total_chars = 0
+    truncated = False
+    for slide_no, slide in enumerate(prs.slides, start=1):
+        if len(units) >= max_units or total_chars >= max_chars:
+            truncated = True
+            break
+        lines: list[str] = []
+        pictures = 0
+        for shape in slide.shapes:
+            if getattr(shape, "shape_type", None) == MSO_SHAPE_TYPE.PICTURE:
+                pictures += 1
+            if getattr(shape, "has_text_frame", False):
+                text = (shape.text_frame.text or "").strip()
+                if text:
+                    lines.append(text)
+        body = "\n".join(lines).strip()
+        if pictures and len(body) < 24:
+            marker = f"[本页几乎无文字，有{pictures}张图未查看]"
+            body = f"{body}\n{marker}" if body else marker
+        elif pictures:
+            body = f"{body}\n[本页另有{pictures}张图片，图中内容未读取]"
+        if not body:
+            continue
+        if total_chars + len(body) > max_chars:
+            remain = max_chars - total_chars
+            if remain <= 0:
+                truncated = True
+                break
+            body = body[:remain] + "…"
+            truncated = True
+        units.append(
+            ExtractUnit(
+                unit_id=f"{doc_key}#u{len(units) + 1:02d}",
+                kind="slide",
+                locator=f"第{slide_no}页",
+                text=body,
+                tags=_tags_for(body),
+                meta={"slide": slide_no, "pictures": pictures},
+            )
+        )
+        total_chars += len(body)
+        if truncated:
+            break
+    return units, truncated, []
+
+
 def extract_file(
     path: Path,
     workspace_root: Path | None = None,
@@ -1142,6 +1216,13 @@ def extract_file(
                 max_chars=max_chars,
                 max_units=max_units,
                 granularity=granularity,
+            )
+        elif fmt == "pptx":
+            units, truncated, w2 = extract_pptx(
+                modern,
+                doc_key,
+                max_chars=max_chars,
+                max_units=max_units,
             )
         elif fmt == "pdf":
             units, truncated, w2 = extract_pdf(
