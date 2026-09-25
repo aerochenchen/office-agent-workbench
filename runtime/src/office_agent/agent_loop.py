@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from office_agent.cancel import CancelToken, CancelledError
+from office_agent.gateway import GatewayError
 from office_agent.tools import ToolExecutor, list_shared_script_names
 
 EventCallback = Callable[[dict[str, Any]], None]
@@ -561,11 +564,146 @@ def _build_system_prompt(
     )
 
 
-def _build_user_content(user_message: str, attached_paths: list[str]) -> str:
+_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+_IMAGE_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+_IMAGE_MAX_COUNT = 4
+_VISION_ON_MODEL_NOTE = (
+    "图片已包含在本条消息中，请直接根据图像回答，不要用读取工具打开这些图片文件。"
+)
+_VISION_REJECT_REPLY = "当前模型不接受图片。请换用支持视觉的模型后再发。"
+
+
+def _image_data_url(workspace: Any | None, rel: str) -> tuple[str | None, str | None]:
+    mime = _IMAGE_MIME.get(Path(rel).suffix.lower())
+    if mime is None:
+        return None, "不是支持的图片格式"
+    if workspace is None:
+        return None, "尚未打开文件夹"
+    try:
+        path = workspace.resolve(rel)
+    except Exception:
+        return None, "路径不在当前文件夹内"
+    if not path.is_file():
+        return None, "文件不存在"
+    try:
+        size = path.stat().st_size
+        raw = path.read_bytes() if size <= _IMAGE_MAX_BYTES else b""
+    except OSError:
+        return None, "无法读取文件"
+    if size == 0:
+        return None, "文件是空的"
+    if size > _IMAGE_MAX_BYTES:
+        return None, "超过 8MB，未发送"
+    encoded = base64.standard_b64encode(raw).decode("ascii")
+    return f"data:{mime};base64,{encoded}", None
+
+
+def _build_user_content(
+    user_message: str,
+    attached_paths: list[str],
+    *,
+    workspace: Any | None = None,
+) -> str | list[dict[str, Any]]:
+    """Text plus image data URLs for png/jpg/webp in the open folder."""
     if not attached_paths:
         return user_message
-    paths_text = "\n".join(f"- {p}" for p in attached_paths)
-    return f"{user_message}\n\n用户附带的文件路径：\n{paths_text}"
+    images = [p for p in attached_paths if Path(p).suffix.lower() in _IMAGE_SUFFIXES]
+    others = [p for p in attached_paths if Path(p).suffix.lower() not in _IMAGE_SUFFIXES]
+    chunks: list[str] = [user_message]
+    image_parts: list[dict[str, Any]] = []
+    if images:
+        shown = images[:_IMAGE_MAX_COUNT]
+        extra = images[_IMAGE_MAX_COUNT:]
+        lines = "\n".join(f"- {p}" for p in shown)
+        chunks.append(f"附带图片：\n{lines}")
+        failures: list[str] = []
+        for rel in shown:
+            data_url, err = _image_data_url(workspace, rel)
+            if err or data_url is None:
+                failures.append(f"- {Path(rel).name}：{err or '无法读取'}")
+                continue
+            image_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+        if failures:
+            chunks.append("以下图片未能读取：\n" + "\n".join(failures))
+        if extra:
+            chunks.append(
+                f"其余图片本次未发送（单次最多 {_IMAGE_MAX_COUNT} 张）：\n"
+                + "\n".join(f"- {p}" for p in extra)
+            )
+    text = "\n\n".join(chunk for chunk in chunks if chunk)
+    hidden: list[str] = []
+    if others:
+        hidden.append("用户附带的文件路径：\n" + "\n".join(f"- {p}" for p in others))
+    elif images:
+        hidden.append("用户附带的文件路径：\n（无其他文件）")
+    if image_parts:
+        hidden.append(_VISION_ON_MODEL_NOTE)
+    if hidden:
+        text = f"{text}\n\n" + "\n".join(hidden)
+    if image_parts:
+        return [{"type": "text", "text": text}, *image_parts]
+    return text
+
+
+def _messages_have_image(messages: list[dict[str, Any]]) -> bool:
+    for msg in messages:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "image_url":
+                return True
+    return False
+
+
+def _is_vision_rejection(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    needles = (
+        "image",
+        "vision",
+        "multimodal",
+        "image_url",
+        "expected a string",
+        "expected string",
+        "must be a string",
+        "invalid type",
+        "unsupported content",
+        "content type",
+        "图片",
+        "图像",
+        "视觉",
+    )
+    return any(needle in text for needle in needles)
+
+
+def _text_from_content_parts(content: list[Any]) -> str:
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, str):
+            parts.append(item)
+        elif isinstance(item, dict) and isinstance(item.get("text"), str):
+            parts.append(item["text"])
+    return "".join(parts)
+
+
+def _messages_for_storage(
+    messages: list[dict[str, Any]], new_from: int
+) -> list[dict[str, Any]]:
+    """Drop image bytes. Session history keeps the text and path marker only."""
+    stored: list[dict[str, Any]] = []
+    for msg in messages[new_from:]:
+        content = msg.get("content")
+        if msg.get("role") == "user" and isinstance(content, list):
+            stored.append({**msg, "content": _text_from_content_parts(content)})
+        else:
+            stored.append(msg)
+    return stored
 
 
 def _history_without_system(history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -801,6 +939,7 @@ def run_agent(
     turn_id: str | None = None,
     *,
     onboarding: bool = False,
+    workspace: Any | None = None,
 ) -> AgentResult:
     """Run one user turn. ``history`` is prior session turns (no system message)."""
 
@@ -809,6 +948,12 @@ def run_agent(
             on_event(payload)
 
     prior = _history_without_system(history)
+    ws = workspace if workspace is not None else (tools.workspace if tools is not None else None)
+    user_content = _build_user_content(
+        user_message,
+        attached_paths,
+        workspace=ws,
+    )
     allow_scripts = bool(tools is not None and tools.allow_workspace_scripts)
     shared_names = list_shared_script_names() if not onboarding else []
     system = (
@@ -823,7 +968,7 @@ def run_agent(
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system},
         *prior,
-        {"role": "user", "content": _build_user_content(user_message, attached_paths)},
+        {"role": "user", "content": user_content},
     ]
     # Messages newly produced this turn (exclude revived history + system)
     new_from = 1 + len(prior)
@@ -836,7 +981,19 @@ def run_agent(
             if cancel is not None:
                 cancel.check()
             emit({"type": "status", "phase": "planning"})
-            response = gateway.chat(messages, tools=tool_arg)
+            try:
+                response = gateway.chat(messages, tools=tool_arg)
+            except GatewayError as e:
+                if _messages_have_image(messages) and _is_vision_rejection(e):
+                    final_text = _VISION_REJECT_REPLY
+                    messages.append({"role": "assistant", "content": final_text})
+                    emit({"type": "status", "phase": "finishing"})
+                    return AgentResult(
+                        final_text=final_text,
+                        messages=_messages_for_storage(messages, new_from),
+                        tool_events=tool_events,
+                    )
+                raise
             message = response.choices[0].message
             messages.append(_assistant_message_from_response(message))
 
@@ -852,8 +1009,8 @@ def run_agent(
                     )
                     emit({"type": "status", "phase": "finishing"})
                     return AgentResult(
-                        messages=messages[new_from:],
                         final_text=final_text,
+                        messages=_messages_for_storage(messages, new_from),
                         tool_events=tool_events,
                     )
                 emit({"type": "status", "phase": "tools"})
@@ -911,15 +1068,15 @@ def run_agent(
                         final_text = str(result.get("summary") or "")
                         emit({"type": "status", "phase": "finishing"})
                         return AgentResult(
-                            messages=messages[new_from:],
                             final_text=final_text,
+                            messages=_messages_for_storage(messages, new_from),
                             tool_events=tool_events,
                         )
                 if stop_for_user:
                     emit({"type": "status", "phase": "finishing"})
                     return AgentResult(
-                        messages=messages[new_from:],
                         final_text=final_text,
+                        messages=_messages_for_storage(messages, new_from),
                         tool_events=tool_events,
                     )
                 continue
@@ -928,8 +1085,8 @@ def run_agent(
                 final_text = message.content.strip()
                 emit({"type": "status", "phase": "finishing"})
                 return AgentResult(
-                    messages=messages[new_from:],
                     final_text=final_text,
+                    messages=_messages_for_storage(messages, new_from),
                     tool_events=tool_events,
                 )
     except CancelledError:
@@ -940,8 +1097,8 @@ def run_agent(
             final_text = "已取消生成。"
         emit({"type": "status", "phase": "finishing"})
         return AgentResult(
-            messages=messages[new_from:],
             final_text=final_text,
+            messages=_messages_for_storage(messages, new_from),
             tool_events=tool_events,
         )
 
@@ -952,7 +1109,7 @@ def run_agent(
         )
     emit({"type": "status", "phase": "finishing"})
     return AgentResult(
-        messages=messages[new_from:],
         final_text=final_text,
+        messages=_messages_for_storage(messages, new_from),
         tool_events=tool_events,
     )
