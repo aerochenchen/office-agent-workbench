@@ -30,7 +30,7 @@
   gap: var(--space-2);
   margin: 0 var(--space-2);
   padding: var(--space-2) var(--space-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--ink-0);
 }
@@ -40,7 +40,7 @@
 }
 
 .session-row--active {
-  background: var(--accent-teal-soft);
+  background: color-mix(in srgb, var(--accent-teal) 12%, var(--accent-teal-soft));
 }
 
 .session-row--blocked {
@@ -53,11 +53,11 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .session-title {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -150,7 +150,7 @@
 
 .session-workspace-path {
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--ink-1);
   line-height: 1.4;
   white-space: nowrap;

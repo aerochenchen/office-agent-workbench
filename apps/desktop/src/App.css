@@ -155,7 +155,7 @@
   justify-content: center;
 }
 
-/* 左栏、右栏里的三个文字按钮：白底实体，打开文件夹再铺一层浅青绿。 */
+/* 侧栏文字按钮：淡青绿，和当前对话同一套颜色，不再用白底浮起。 */
 .btn--pane {
   display: flex;
   align-items: center;
@@ -163,24 +163,17 @@
   min-height: 38px;
   padding: 0 var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--paper-2);
-  color: var(--ink-0);
-  border-color: var(--line-0);
-  box-shadow:
-    0 1px 2px rgba(30, 40, 35, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  transition:
-    background var(--motion-fast),
-    box-shadow var(--motion-fast),
-    transform 100ms ease;
+  background: color-mix(in srgb, var(--accent-teal-soft) 68%, var(--paper-0));
+  color: var(--accent-teal);
+  border-color: var(--status-ok-line);
+  box-shadow: none;
+  transition: background var(--motion-fast), transform 100ms ease;
 }
 
 .btn--pane:hover:not(:disabled) {
-  border-color: var(--line-0);
-  background: color-mix(in srgb, var(--accent-teal-soft) 72%, var(--paper-2));
-  box-shadow:
-    0 2px 6px rgba(30, 40, 35, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-color: var(--status-ok-line);
+  background: var(--accent-teal-soft);
+  box-shadow: none;
 }
 
 .btn--pane:active:not(:disabled) {
@@ -188,9 +181,9 @@
 }
 
 .btn--pane:disabled {
-  color: var(--ink-0);
-  background: var(--paper-2);
-  border-color: var(--line-0);
+  color: var(--accent-teal);
+  background: color-mix(in srgb, var(--accent-teal-soft) 68%, var(--paper-0));
+  border-color: var(--status-ok-line);
   opacity: 0.55;
   cursor: not-allowed;
 }
