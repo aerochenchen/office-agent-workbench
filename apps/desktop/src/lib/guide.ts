@@ -253,7 +253,6 @@ export const GUIDE_MORE_HELP = `更多使用说明，请查看微信视频号「
 
 export const GUIDE_HINTS = {
   bootWaiting: "首次启动约需数秒，请稍候。",
-  noSessions: "暂无对话。点击上方「新建对话」开始。",
   noSkills: "可导入本地技能包增强能力；安装与运行均在本机。",
   noEnabledSkills: "暂无启用中的技能；可在技能管理中启用或导入。",
   newSessionNeedsFolder: "打开文件夹后可新建并保存对话",

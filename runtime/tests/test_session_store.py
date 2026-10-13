@@ -27,6 +27,18 @@ def test_create_list_delete_sessions(tmp_path: Path, monkeypatch):
     assert store.delete_session(b) is False
 
 
+def test_list_all_sessions_keeps_every_workspace(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    store = SessionStore()
+    a = store.create_session("/tmp/project-a")
+    b = store.create_session("/tmp/project-b")
+    store.append_messages(b, [{"role": "user", "content": "后写的"}])
+    listed = store.list_all_sessions()
+    assert [row["id"] for row in listed] == [b, a]
+    assert {row["workspace_path"] for row in listed} == {"/tmp/project-a", "/tmp/project-b"}
+    assert len(store.list_sessions("/tmp/project-a")) == 1
+
+
 def test_normalize_session_title():
     assert normalize_session_title("") == DEFAULT_TITLE
     assert normalize_session_title("   ") == DEFAULT_TITLE

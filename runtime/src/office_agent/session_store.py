@@ -271,6 +271,15 @@ class SessionStore:
             ).fetchall()
         return [self._row_to_meta(r) for r in rows]
 
+    def list_all_sessions(self) -> list[dict[str, Any]]:
+        """Every saved chat, across folders. The sidebar keeps this list when the open folder changes."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, workspace_path, title, created_at, updated_at FROM sessions "
+                "ORDER BY updated_at DESC, created_at DESC",
+            ).fetchall()
+        return [self._row_to_meta(r) for r in rows]
+
     def delete_session(self, session_id: str) -> bool:
         with self._connect() as conn:
             cur = conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))

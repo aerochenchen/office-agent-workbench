@@ -366,7 +366,13 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         return {"entries": ws.list_dir(".")}
 
     @app.get("/sessions")
-    def list_sessions(workspace_path: str | None = None) -> dict[str, Any]:
+    def list_sessions(
+        workspace_path: str | None = None,
+        scope: str | None = None,
+    ) -> dict[str, Any]:
+        # scope=all is the persistent sidebar: every folder's chats, not the open folder only.
+        if scope == "all":
+            return {"sessions": office.sessions.list_all_sessions()}
         if workspace_path:
             path = str(Path(workspace_path).expanduser().resolve())
         else:

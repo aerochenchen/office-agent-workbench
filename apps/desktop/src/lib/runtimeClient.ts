@@ -469,6 +469,11 @@ export const runtimeClient = {
     return request(`/sessions${q}`);
   },
 
+  /** Chats in every folder. The sidebar uses this so switching folders does not replace the list. */
+  listAllSessions(): Promise<{ sessions: SessionMeta[] }> {
+    return request("/sessions?scope=all");
+  },
+
   createSession(workspacePath?: string): Promise<{ ok: boolean; session: SessionMeta }> {
     return request("/sessions", {
       method: "POST",

@@ -463,7 +463,7 @@ export default function ChatPanel({
                   ? "处理中，完成后可继续…"
                   : workspaceOpen
                     ? "描述要办的事…"
-                    : "描述要办的事，或点上方一句…"
+                    : "探索智能体的无限可能"
               }
               value={draft}
               disabled={disabled}

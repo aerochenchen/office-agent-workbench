@@ -2,27 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import type { SessionMeta } from "../lib/types";
 import { GUIDE_HINTS } from "../lib/guide";
 import { normalizeSessionTitle } from "../lib/sessionTitle";
+import { normalizeWorkspaceKey, pathsEqual, type WorkspaceGroup } from "../lib/workspaceSidebar";
 import "./SessionList.css";
 
 interface Props {
+  groups: WorkspaceGroup[];
+  collapsedPaths: ReadonlySet<string>;
   workspacePath: string | null;
   workspaceError: string | null;
-  sessions: SessionMeta[];
   activeSessionId: string | undefined;
   sending: boolean;
   runtimeReady: boolean;
   onPickWorkspace: () => void;
+  onOpenWorkspace: (path: string) => void;
+  onToggleWorkspace: (path: string) => void;
+  onArchiveWorkspace: (path: string) => void;
   onNewSession: () => void;
-  onSelectSession: (id: string) => void;
+  onSelectSession: (session: SessionMeta) => void;
   onDeleteSession: (id: string) => void;
   onRenameSession: (id: string, title: string) => void | Promise<void>;
 }
 
-type MenuState = {
-  sessionId: string;
-  x: number;
-  y: number;
-};
+type MenuState =
+  | { kind: "session"; sessionId: string; x: number; y: number }
+  | { kind: "folder"; path: string; name: string; x: number; y: number };
 
 function formatRelativeTime(ts: number): string {
   if (!ts) return "";
@@ -36,19 +39,31 @@ function formatRelativeTime(ts: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function basename(path: string): string {
-  const parts = path.replace(/\\/g, "/").split("/");
-  return parts.filter(Boolean).pop() || path;
+function FolderIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path
+        d="M1.5 3.5A1 1 0 0 1 2.5 2.5h3.2l1 1.4h5.3a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3.5Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.1"
+      />
+    </svg>
+  );
 }
 
 export default function SessionList({
+  groups,
+  collapsedPaths,
   workspacePath,
   workspaceError,
-  sessions,
   activeSessionId,
   sending,
   runtimeReady,
   onPickWorkspace,
+  onOpenWorkspace,
+  onToggleWorkspace,
+  onArchiveWorkspace,
   onNewSession,
   onSelectSession,
   onDeleteSession,
@@ -61,6 +76,7 @@ export default function SessionList({
   const menuRef = useRef<HTMLDivElement>(null);
   const renameCommitLock = useRef(false);
   const menuDisabled = sending || !runtimeReady;
+  const sessions = groups.flatMap((g) => g.sessions);
 
   useEffect(() => {
     if (!renamingId) return;
@@ -113,7 +129,7 @@ export default function SessionList({
   return (
     <section className="pane session-pane">
       <div className="pane-header">
-        <span className="pane-title">对话</span>
+        <span className="pane-title">文件夹</span>
       </div>
 
       <div className="session-toolbar">
@@ -127,81 +143,143 @@ export default function SessionList({
               ? GUIDE_HINTS.newSessionNeedsFolder
               : sending
                 ? "请等待当前回复结束"
-                : undefined
+                : "在当前文件夹新建对话"
           }
         >
           新建对话
         </button>
+        <button
+          type="button"
+          className="btn btn--pane btn--pane-accent btn--full"
+          disabled={!runtimeReady || sending}
+          onClick={onPickWorkspace}
+        >
+          打开文件夹
+        </button>
+        {workspaceError && <div className="session-workspace-error">{workspaceError}</div>}
       </div>
 
       <div className="pane-body session-list-body">
-        {workspacePath && sessions.length === 0 && (
-          <div className="empty-hint">{GUIDE_HINTS.noSessions}</div>
-        )}
-        <ul className="session-list">
-          {sessions.map((s) => {
-            const active = s.id === activeSessionId;
-            const blocked = sending && s.id !== activeSessionId;
-            const renaming = renamingId === s.id;
-            return (
-              <li key={s.id}>
-                <div
-                  className={`session-row${active ? " session-row--active" : ""}${
-                    blocked ? " session-row--blocked" : ""
-                  }${renaming ? " session-row--renaming" : ""}`}
-                  onClick={() => {
-                    if (blocked || renaming) return;
-                    onSelectSession(s.id);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    if (renamingId && renamingId !== s.id) {
-                      cancelRename();
-                    }
-                    setMenu({ sessionId: s.id, x: e.clientX, y: e.clientY });
-                  }}
-                  onKeyDown={(e) => {
-                    if (renaming) return;
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      if (!blocked) onSelectSession(s.id);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-current={active ? "true" : undefined}
+        {groups.map((group) => {
+          const current = pathsEqual(group.path, workspacePath);
+          const collapsed = collapsedPaths.has(normalizeWorkspaceKey(group.path));
+          const switchBlocked = sending && !current;
+          return (
+            <div
+              key={group.path}
+              className={`workspace-group${current ? " workspace-group--current" : ""}`}
+            >
+              <div
+                className="workspace-head"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ kind: "folder", path: group.path, name: group.name, x: e.clientX, y: e.clientY });
+                }}
+              >
+                <button
+                  type="button"
+                  className={`workspace-chevron${collapsed ? "" : " workspace-chevron--open"}`}
+                  aria-expanded={!collapsed}
+                  aria-label={collapsed ? `展开 ${group.name}` : `收起 ${group.name}`}
+                  onClick={() => onToggleWorkspace(group.path)}
                 >
-                  <div className="session-row-main">
-                    {renaming ? (
-                      <input
-                        ref={renameInputRef}
-                        className="session-rename-input"
-                        value={draft}
-                        aria-label="重命名对话"
-                        onChange={(e) => setDraft(e.currentTarget.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => {
-                          e.stopPropagation();
-                          if (e.key === "Enter") {
+                  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                    <path
+                      d="M6 4l4 4-4 4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="workspace-open"
+                  title={group.path}
+                  disabled={switchBlocked}
+                  onClick={() => {
+                    if (switchBlocked) return;
+                    if (current) onToggleWorkspace(group.path);
+                    else onOpenWorkspace(group.path);
+                  }}
+                >
+                  <span className="workspace-open-icon">
+                    <FolderIcon />
+                  </span>
+                  <span className="workspace-open-name">{group.name}</span>
+                </button>
+              </div>
+              {!collapsed && (
+                <ul className="session-list workspace-sessions">
+                  {group.sessions.map((s) => {
+                    const active = s.id === activeSessionId && current;
+                    const blocked = sending && s.id !== activeSessionId;
+                    const renaming = renamingId === s.id;
+                    return (
+                      <li key={s.id}>
+                        <div
+                          className={`session-row${active ? " session-row--active" : ""}${
+                            blocked ? " session-row--blocked" : ""
+                          }${renaming ? " session-row--renaming" : ""}`}
+                          onClick={() => {
+                            if (blocked || renaming) return;
+                            onSelectSession(s);
+                          }}
+                          onContextMenu={(e) => {
                             e.preventDefault();
-                            void commitRename(s);
-                          } else if (e.key === "Escape") {
-                            e.preventDefault();
-                            cancelRename();
-                          }
-                        }}
-                        onBlur={() => void commitRename(s)}
-                      />
-                    ) : (
-                      <span className="session-title">{s.title}</span>
-                    )}
-                    <span className="session-time">{formatRelativeTime(s.updated_at)}</span>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                            if (renamingId && renamingId !== s.id) {
+                              cancelRename();
+                            }
+                            setMenu({ kind: "session", sessionId: s.id, x: e.clientX, y: e.clientY });
+                          }}
+                          onKeyDown={(e) => {
+                            if (renaming) return;
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              if (!blocked) onSelectSession(s);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          aria-current={active ? "true" : undefined}
+                        >
+                          <div className="session-row-main">
+                            {renaming ? (
+                              <input
+                                ref={renameInputRef}
+                                className="session-rename-input"
+                                value={draft}
+                                aria-label="重命名对话"
+                                onChange={(e) => setDraft(e.currentTarget.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    void commitRename(s);
+                                  } else if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    cancelRename();
+                                  }
+                                }}
+                                onBlur={() => void commitRename(s)}
+                              />
+                            ) : (
+                              <span className="session-title">{s.title}</span>
+                            )}
+                            <span className="session-time">{formatRelativeTime(s.updated_at)}</span>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {menu && (
@@ -211,7 +289,21 @@ export default function SessionList({
           style={{ left: menu.x, top: menu.y }}
           role="menu"
         >
-          {(() => {
+          {menu.kind === "folder" ? (
+            <button
+              type="button"
+              className="session-context-item"
+              role="menuitem"
+              title="从左侧隐藏。对话仍保留，再次打开此文件夹后会重新出现。"
+              onClick={() => {
+                const path = menu.path;
+                setMenu(null);
+                onArchiveWorkspace(path);
+              }}
+            >
+              归档
+            </button>
+          ) : (() => {
             const target = sessions.find((s) => s.id === menu.sessionId);
             if (!target) return null;
             return (
@@ -245,26 +337,6 @@ export default function SessionList({
           })()}
         </div>
       )}
-
-      <div className="session-workspace-bar">
-        <div className="session-workspace-label">当前文件夹</div>
-        {workspacePath ? (
-          <div className="session-workspace-path" title={workspacePath}>
-            {basename(workspacePath)}
-          </div>
-        ) : (
-          <div className="session-workspace-path session-workspace-path--empty">未打开</div>
-        )}
-        {workspaceError && <div className="session-workspace-error">{workspaceError}</div>}
-        <button
-          type="button"
-          className="btn btn--pane btn--pane-accent btn--full"
-          disabled={!runtimeReady}
-          onClick={onPickWorkspace}
-        >
-          {workspacePath ? "更换文件夹" : "打开文件夹"}
-        </button>
-      </div>
     </section>
   );
 }

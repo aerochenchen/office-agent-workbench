@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/theme.css";
 import "./App.css";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
@@ -20,6 +20,19 @@ import {
   shouldRetrySkillsRefresh,
 } from "./lib/skillsRefresh";
 import { sessionMessagesToChat } from "./lib/sessionMessages";
+import {
+  normalizeWorkspaceKey,
+  pathsEqual,
+  pickRestoreWorkspace,
+  pickSessionInWorkspace,
+  readSidebarMemory,
+  visibleWorkspaceGroups,
+  withArchivedFolder,
+  withRememberedSession,
+  withToggledCollapse,
+  writeSidebarMemory,
+  type SidebarMemory,
+} from "./lib/workspaceSidebar";
 import { getRuntimeToken, isTauriRuntime, logDesktopEvent, pickFolder } from "./lib/tauri";
 import { initUiPreferences } from "./lib/uiPreferences";
 import type {
@@ -59,6 +72,7 @@ function App() {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [sidebarMemory, setSidebarMemory] = useState<SidebarMemory>(() => readSidebarMemory());
   const [skills, setSkills] = useState<SkillMeta[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -74,9 +88,22 @@ function App() {
   const healthRef = useRef<HealthState>(health);
   const sendingRef = useRef(false);
   const streamHandleRef = useRef<ChatStreamHandle | null>(null);
+  const messagesRef = useRef(messages);
+  const workspacePathRef = useRef(workspacePath);
+  const bootRestoreStarted = useRef(false);
   sessionIdRef.current = sessionId;
   healthRef.current = health;
   sendingRef.current = sending;
+  messagesRef.current = messages;
+  workspacePathRef.current = workspacePath;
+
+  const commitMemory = useCallback((recipe: (prev: SidebarMemory) => SidebarMemory) => {
+    setSidebarMemory((prev) => {
+      const next = recipe(prev);
+      writeSidebarMemory(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     initUiPreferences();
@@ -201,21 +228,16 @@ function App() {
     };
   }, [health, refreshSkills]);
 
-  const refreshSessions = useCallback(async (wsPath?: string | null) => {
-    const path = wsPath ?? workspacePath;
-    if (!path) {
-      setSessions([]);
-      return [];
-    }
+  const refreshSessions = useCallback(async () => {
     try {
-      const { sessions: list } = await runtimeClient.listSessions(path);
+      const { sessions: list } = await runtimeClient.listAllSessions();
       setSessions(list);
       return list;
     } catch {
       setSessions([]);
       return [];
     }
-  }, [workspacePath]);
+  }, []);
 
   const loadSessionMessages = useCallback(async (id: string) => {
     const res = await runtimeClient.getSessionMessages(id);
@@ -228,40 +250,103 @@ function App() {
     needsConfig: needsModelSetup(config),
   });
 
-  const handleOpenPath = useCallback(
-    async (path: string) => {
+  const rememberOpen = useCallback(
+    (path: string, sessionIdToRemember: string) => {
+      commitMemory((prev) => withRememberedSession(prev, path, sessionIdToRemember));
+    },
+    [commitMemory],
+  );
+
+  const openWorkspaceSession = useCallback(
+    async (
+      path: string,
+      preferredSessionId: string | null,
+      options?: { keepOnboardingMessages?: boolean },
+    ) => {
       if (!runtimeReady) {
         setWorkspaceError("本地服务未就绪，请关闭后重新打开本应用。");
         return;
       }
+      if (sendingRef.current) return;
       setWorkspaceError(null);
       try {
         const res = await runtimeClient.openWorkspace(path);
+        const list = await refreshSessions();
+        const memory = readSidebarMemory();
+        const preferred =
+          preferredSessionId ??
+          memory.lastSessionByWorkspace[normalizeWorkspaceKey(res.path)] ??
+          null;
+        const existing = pickSessionInWorkspace(list, res.path, preferred);
+        const keepOnboarding =
+          Boolean(options?.keepOnboardingMessages) &&
+          messagesRef.current.length > 0 &&
+          !workspacePathRef.current;
         setWorkspacePath(res.path);
-        // 第一期取舍：入门对话非空时保留界面 messages，并新建文件夹会话（勿复用 list[0]，
-        // 否则 UI 消息与磁盘会话错配）；入门轮次不写入该会话历史。无对话时再加载/创建。
-        const retainUiMessages = messages.length > 0;
-        if (retainUiMessages) {
+
+        if (!existing && keepOnboarding) {
           const created = await runtimeClient.createSession(res.path);
           setSessionId(created.session.id);
-          await refreshSessions(res.path);
-        } else {
-          const list = await refreshSessions(res.path);
-          if (list.length > 0) {
-            setSessionId(list[0].id);
-            await loadSessionMessages(list[0].id);
-          } else {
-            const created = await runtimeClient.createSession(res.path);
-            setSessionId(created.session.id);
-            setMessages([]);
-            await refreshSessions(res.path);
-          }
+          rememberOpen(res.path, created.session.id);
+          await refreshSessions();
+          return;
+        }
+
+        if (!existing) {
+          const created = await runtimeClient.createSession(res.path);
+          setSessionId(created.session.id);
+          setMessages([]);
+          rememberOpen(res.path, created.session.id);
+          await refreshSessions();
+          return;
+        }
+
+        setSessionId(existing.id);
+        setMessages([]);
+        rememberOpen(existing.workspace_path || res.path, existing.id);
+        try {
+          await loadSessionMessages(existing.id);
+        } catch (err) {
+          setMessages([
+            {
+              id: nextId(),
+              role: "error",
+              content: err instanceof RuntimeClientError ? err.message : "加载对话失败",
+            },
+          ]);
         }
       } catch (err) {
         setWorkspaceError(err instanceof RuntimeClientError ? err.message : "打开文件夹失败");
       }
     },
-    [runtimeReady, loadSessionMessages, refreshSessions, messages.length],
+    [runtimeReady, refreshSessions, loadSessionMessages, rememberOpen],
+  );
+
+  const openWorkspaceSessionRef = useRef(openWorkspaceSession);
+  openWorkspaceSessionRef.current = openWorkspaceSession;
+
+  useEffect(() => {
+    if (health !== "ok" || bootRestoreStarted.current) return;
+    bootRestoreStarted.current = true;
+    void (async () => {
+      const list = await refreshSessions();
+      if (workspacePathRef.current) return;
+      const saved = readSidebarMemory();
+      const groups = visibleWorkspaceGroups(list, saved.archived);
+      const path = pickRestoreWorkspace(groups, saved);
+      if (!path || workspacePathRef.current) return;
+      const preferred = saved.lastSessionByWorkspace[normalizeWorkspaceKey(path)] ?? null;
+      await openWorkspaceSessionRef.current(path, preferred);
+    })();
+  }, [health, refreshSessions]);
+
+  const handleOpenPath = useCallback(
+    async (path: string) => {
+      await openWorkspaceSession(path, null, {
+        keepOnboardingMessages: messagesRef.current.length > 0,
+      });
+    },
+    [openWorkspaceSession],
   );
 
   const handlePickFolder = useCallback(async () => {
@@ -275,7 +360,8 @@ function App() {
       const created = await runtimeClient.createSession(workspacePath);
       setSessionId(created.session.id);
       setMessages([]);
-      await refreshSessions(workspacePath);
+      rememberOpen(workspacePath, created.session.id);
+      await refreshSessions();
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -286,15 +372,28 @@ function App() {
         },
       ]);
     }
-  }, [workspacePath, sending, runtimeReady, refreshSessions]);
+  }, [workspacePath, sending, runtimeReady, refreshSessions, rememberOpen]);
 
   const handleSelectSession = useCallback(
-    async (id: string) => {
-      if (sending && id !== sessionIdRef.current) return;
-      if (id === sessionIdRef.current) return;
-      setSessionId(id);
+    async (session: SessionMeta) => {
+      if (sending && session.id !== sessionIdRef.current) return;
+      if (
+        session.id === sessionIdRef.current &&
+        pathsEqual(session.workspace_path, workspacePathRef.current)
+      ) {
+        return;
+      }
+      if (
+        session.workspace_path &&
+        !pathsEqual(session.workspace_path, workspacePathRef.current)
+      ) {
+        await openWorkspaceSession(session.workspace_path, session.id);
+        return;
+      }
+      setSessionId(session.id);
+      if (session.workspace_path) rememberOpen(session.workspace_path, session.id);
       try {
-        await loadSessionMessages(id);
+        await loadSessionMessages(session.id);
       } catch (err) {
         setMessages([
           {
@@ -305,29 +404,34 @@ function App() {
         ]);
       }
     },
-    [sending, loadSessionMessages],
+    [sending, loadSessionMessages, openWorkspaceSession, rememberOpen],
   );
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
       if (sending || !runtimeReady) return;
+      const target = sessions.find((s) => s.id === id);
       try {
         await runtimeClient.deleteSession(id);
-        const list = await refreshSessions(workspacePath);
-        if (id === sessionIdRef.current) {
-          if (list.length > 0) {
-            setSessionId(list[0].id);
-            await loadSessionMessages(list[0].id);
-          } else if (workspacePath) {
-            const created = await runtimeClient.createSession(workspacePath);
-            setSessionId(created.session.id);
-            setMessages([]);
-            await refreshSessions(workspacePath);
-          } else {
-            setSessionId(undefined);
-            setMessages([]);
-          }
+        const list = await refreshSessions();
+        if (id !== sessionIdRef.current) return;
+        const next = target ? pickSessionInWorkspace(list, target.workspace_path, null) : null;
+        if (next) {
+          setSessionId(next.id);
+          rememberOpen(next.workspace_path, next.id);
+          await loadSessionMessages(next.id);
+          return;
         }
+        if (workspacePath && target && pathsEqual(target.workspace_path, workspacePath)) {
+          const created = await runtimeClient.createSession(workspacePath);
+          setSessionId(created.session.id);
+          setMessages([]);
+          rememberOpen(workspacePath, created.session.id);
+          await refreshSessions();
+          return;
+        }
+        setSessionId(undefined);
+        setMessages([]);
       } catch (err) {
         setMessages((prev) => [
           ...prev,
@@ -339,7 +443,30 @@ function App() {
         ]);
       }
     },
-    [sending, runtimeReady, workspacePath, refreshSessions, loadSessionMessages],
+    [sending, runtimeReady, sessions, workspacePath, refreshSessions, loadSessionMessages, rememberOpen],
+  );
+
+  const handleToggleWorkspace = useCallback(
+    (path: string) => {
+      commitMemory((prev) => withToggledCollapse(prev, path));
+    },
+    [commitMemory],
+  );
+
+  const handleArchiveWorkspace = useCallback(
+    (path: string) => {
+      commitMemory((prev) => withArchivedFolder(prev, path));
+    },
+    [commitMemory],
+  );
+
+  const workspaceGroups = useMemo(
+    () => visibleWorkspaceGroups(sessions, sidebarMemory.archived),
+    [sessions, sidebarMemory.archived],
+  );
+  const collapsedPaths = useMemo(
+    () => new Set(sidebarMemory.collapsed),
+    [sidebarMemory.collapsed],
   );
 
   const handleRenameSession = useCallback(
@@ -388,6 +515,8 @@ function App() {
         const created = await runtimeClient.createSession(workspacePath);
         activeId = created.session.id;
         setSessionId(activeId);
+        rememberOpen(workspacePath, activeId);
+        void refreshSessions();
       }
 
       const pendingMsg: ChatMessage = {
@@ -415,7 +544,10 @@ function App() {
           },
           {
             onStarted: (sid, turnId) => {
-              if (sid) setSessionId(sid);
+              if (sid) {
+                setSessionId(sid);
+                if (workspacePath) rememberOpen(workspacePath, sid);
+              }
               if (turnId) {
                 patchAssistant((m) => ({ ...m, turnId }));
               }
@@ -476,7 +608,7 @@ function App() {
                 stepsExpanded: false,
                 statusPhase: "finishing",
               }));
-              if (workspacePath) void refreshSessions(workspacePath);
+              void refreshSessions();
             },
             onError: (message) => {
               setPermissionRequest(null);
@@ -504,7 +636,7 @@ function App() {
         setSending(false);
       }
     },
-    [workspacePath, runtimeReady, refreshSessions, config],
+    [workspacePath, runtimeReady, refreshSessions, config, rememberOpen],
   );
 
   const handleStop = useCallback(async () => {
@@ -671,15 +803,19 @@ function App() {
 
       <div className={`workbench${skillsCollapsed ? " skills-collapsed" : ""}`}>
         <SessionList
+          groups={workspaceGroups}
+          collapsedPaths={collapsedPaths}
           workspacePath={workspacePath}
           workspaceError={workspaceError}
-          sessions={sessions}
           activeSessionId={sessionId}
           sending={sending}
           runtimeReady={runtimeReady}
           onPickWorkspace={handlePickFolder}
+          onOpenWorkspace={(path) => void openWorkspaceSession(path, null)}
+          onToggleWorkspace={handleToggleWorkspace}
+          onArchiveWorkspace={handleArchiveWorkspace}
           onNewSession={() => void handleNewSession()}
-          onSelectSession={(id) => void handleSelectSession(id)}
+          onSelectSession={(session) => void handleSelectSession(session)}
           onDeleteSession={(id) => void handleDeleteSession(id)}
           onRenameSession={(id, title) => void handleRenameSession(id, title)}
         />

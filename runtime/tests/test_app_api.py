@@ -695,6 +695,25 @@ def test_sessions_api_list_create_delete(client: TestClient, tmp_path: Path):
     assert client.get(f"/sessions/{sid}").status_code == 404
 
 
+def test_sessions_api_scope_all_spans_folders(client: TestClient, tmp_path: Path):
+    ws_a = tmp_path / "folder-a"
+    ws_b = tmp_path / "folder-b"
+    ws_a.mkdir()
+    ws_b.mkdir()
+    client.post("/workspace/open", json={"path": str(ws_a)})
+    sid_a = client.post("/sessions", json={}).json()["session"]["id"]
+    sid_b = client.post("/sessions", json={"workspace_path": str(ws_b)}).json()["session"]["id"]
+
+    current = client.get("/sessions")
+    assert current.status_code == 200
+    assert {s["id"] for s in current.json()["sessions"]} == {sid_a}
+
+    listed = client.get("/sessions", params={"scope": "all"})
+    assert listed.status_code == 200
+    ids = {s["id"] for s in listed.json()["sessions"]}
+    assert ids == {sid_a, sid_b}
+
+
 def test_sessions_api_rename(client: TestClient, tmp_path: Path, app_state: ProcessState):
     ws = tmp_path / "ws"
     ws.mkdir()

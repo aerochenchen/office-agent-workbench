@@ -9,6 +9,101 @@
   flex: 0 0 auto;
   padding: var(--space-2) var(--space-3);
   border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.workspace-group {
+  margin: 0 0 var(--space-1);
+}
+
+.workspace-group--current .workspace-open-name {
+  color: var(--ink-0);
+}
+
+.workspace-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 var(--space-2);
+  min-width: 0;
+}
+
+.workspace-chevron {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-chevron svg {
+  transform: rotate(0deg);
+  transition: transform var(--motion-fast);
+}
+
+.workspace-chevron--open svg {
+  transform: rotate(90deg);
+}
+
+.workspace-chevron:hover {
+  background: color-mix(in srgb, var(--ink-0) 6%, var(--paper-0));
+  color: var(--ink-0);
+}
+
+.workspace-open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--ink-1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.workspace-open:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink-0) 6%, var(--paper-0));
+}
+
+.workspace-group--current .workspace-open,
+.workspace-group--current .workspace-open:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-teal) 16%, var(--paper-0));
+}
+
+.workspace-open:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.workspace-open-icon {
+  flex: 0 0 auto;
+  display: flex;
+  color: var(--ink-2);
+}
+
+.workspace-open-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .session-list-body {
@@ -24,23 +119,34 @@
   padding: 0;
 }
 
+.session-list.workspace-sessions {
+  margin-top: var(--space-3);
+  margin-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .session-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin: 0 var(--space-2);
-  padding: var(--space-2) var(--space-2);
+  box-sizing: border-box;
+  height: 38px;
+  margin: 0 var(--space-2) 0 0;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--ink-0);
 }
 
 .session-row:hover {
-  background: var(--paper-2);
+  background: color-mix(in srgb, var(--ink-0) 6%, var(--paper-0));
 }
 
-.session-row--active {
-  background: color-mix(in srgb, var(--accent-teal) 12%, var(--accent-teal-soft));
+.session-row--active,
+.session-row--active:hover {
+  background: color-mix(in srgb, var(--accent-teal) 16%, var(--paper-0));
 }
 
 .session-row--blocked {
@@ -52,18 +158,22 @@
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .session-title {
-  font-size: var(--font-size-md);
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-size-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .session-time {
+  flex: 0 0 auto;
   font-size: var(--font-size-xs);
   color: var(--ink-2);
 }
@@ -131,35 +241,6 @@
   color: var(--ink-2);
   cursor: not-allowed;
   opacity: 0.65;
-}
-
-.session-workspace-bar {
-  flex: 0 0 auto;
-  border-top: 1px solid var(--line-1);
-  padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  background: var(--paper-0);
-}
-
-.session-workspace-label {
-  font-size: var(--font-size-xs);
-  color: var(--ink-2);
-}
-
-.session-workspace-path {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  color: var(--ink-1);
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.session-workspace-path--empty {
-  color: var(--ink-2);
 }
 
 .session-workspace-error {
