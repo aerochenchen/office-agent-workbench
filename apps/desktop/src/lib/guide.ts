@@ -214,6 +214,11 @@ export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
         label: "演示文稿",
         saying: "根据这份材料生成一套 PPT，并写一份对应的汇报稿",
       },
+      {
+        id: "ppt-maker",
+        label: "PPT制作",
+        saying: "把材料做成幻灯片，或修改已有的 PPT",
+      },
     ],
   },
   {

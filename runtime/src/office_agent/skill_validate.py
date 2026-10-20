@@ -170,17 +170,23 @@ def _import_error(root: str, name: str) -> str | None:
     return None
 
 
-def _scan_forbidden_imports(tree: ast.AST) -> list[str]:
+def _scan_forbidden_imports(
+    tree: ast.AST, *, extra_roots: frozenset[str] = frozenset()
+) -> list[str]:
     found: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 root = alias.name.split(".")[0]
+                if root in extra_roots and root not in FORBIDDEN_IMPORT_ROOTS:
+                    continue
                 msg = _import_error(root, alias.name)
                 if msg:
                     found.append(msg)
         elif isinstance(node, ast.ImportFrom) and node.module:
             root = node.module.split(".")[0]
+            if root in extra_roots and root not in FORBIDDEN_IMPORT_ROOTS:
+                continue
             msg = _import_error(root, node.module)
             if msg:
                 found.append(msg)
@@ -192,6 +198,9 @@ def _check_scripts(skill_dir: Path) -> list[str]:
     scripts_dir = skill_dir / "scripts"
     if not scripts_dir.is_dir():
         return errors
+    # A script may import another script in the same directory. Those files
+    # are scanned on their own, so this does not open a path to new libraries.
+    local_roots = frozenset(path.stem for path in scripts_dir.glob("*.py"))
     for script in sorted(scripts_dir.glob("*.py")):
         rel = script.relative_to(skill_dir).as_posix()
         source = script.read_text(encoding="utf-8", errors="replace")
@@ -200,7 +209,10 @@ def _check_scripts(skill_dir: Path) -> list[str]:
         except SyntaxError as e:
             errors.append(f"{rel} syntax error: line {e.lineno} {e.msg}")
             continue
-        errors.extend(f"{rel}: {msg}" for msg in _scan_forbidden_imports(tree))
+        errors.extend(
+            f"{rel}: {msg}"
+            for msg in _scan_forbidden_imports(tree, extra_roots=local_roots)
+        )
     return errors
 
 

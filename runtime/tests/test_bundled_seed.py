@@ -53,6 +53,7 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
         "sheet-to-brief",
         "one-to-three",
         "brief-deck",
+        "ppt-maker",
         "chart-generation",
         "skill-builder",
     }
@@ -92,6 +93,8 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert one.get("display_name") == "一文三用"
     deck = next(s for s in skills if s["id"] == "brief-deck")
     assert deck.get("display_name") == "汇报成套"
+    ppt = next(s for s in skills if s["id"] == "ppt-maker")
+    assert ppt.get("display_name") == "PPT制作"
     chart = next(s for s in skills if s["id"] == "chart-generation")
     assert chart.get("display_name") == "图表生成"
     assert (tmp_path / "shared-scripts" / "format_gongwen.py").is_file()
@@ -106,6 +109,7 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert (tmp_path / "skills" / "sheet-to-brief" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "one-to-three" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "brief-deck" / "scripts" / "build_pptx.py").is_file()
+    assert (tmp_path / "skills" / "ppt-maker" / "scripts" / "pptx_create.py").is_file()
     assert (tmp_path / "skills" / "chart-generation" / "SKILL.md").is_file()
     assert (
         tmp_path / "skills" / "chart-generation" / "references" / "chart-catalog.md"

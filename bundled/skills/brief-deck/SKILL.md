@@ -26,7 +26,7 @@ target_file_type: .pptx
 ## 何时用 / 不用
 
 - **用**：整理汇报提纲；生成演示文稿 + 汇报稿；已有提纲要落成 pptx。
-- **不用**：只要正式配色/换皮（走 `office-visual-design`）；只要报告+答问不要幻灯（走 `one-to-three`）；红头公文（走 `government-document-format`）。
+- **不用**：只要正式配色/换皮（走 `office-visual-design`）；要表格、图表、改已有幻灯片或套单位模板（走 `ppt-maker`）；只要报告+答问不要幻灯（走 `one-to-three`）；红头公文（走 `government-document-format`）。
 
 ## 输入与产出
 

@@ -123,6 +123,29 @@ def test_validate_script_syntax_and_forbidden_import(tmp_path: Path):
     assert any("requests" in e for e in result["errors"])
 
 
+def test_validate_allows_sibling_script_import_only(tmp_path: Path):
+    skill = _write_skill(
+        tmp_path / "siblings",
+        name="siblings",
+        description="d",
+        version="0.0.1",
+        tier="light",
+        display_name="同目录",
+        permissions="run_python",
+    )
+    scripts = skill / "scripts"
+    scripts.mkdir()
+    (scripts / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (scripts / "main.py").write_text(
+        "import helper\nimport requests\nprint(helper.VALUE)\n",
+        encoding="utf-8",
+    )
+    result = validate_skill_dir(skill)
+    assert result["ok"] is False
+    assert any("requests" in e for e in result["errors"])
+    assert not any("helper" in e for e in result["errors"])
+
+
 def test_validate_missing_skill_md(tmp_path: Path):
     d = tmp_path / "empty"
     d.mkdir()

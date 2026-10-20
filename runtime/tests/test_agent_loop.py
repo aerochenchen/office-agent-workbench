@@ -197,6 +197,14 @@ def test_work_prompt_includes_local_use_and_colleague_tone():
     assert "内网使用" not in text
 
 
+def test_system_prompt_routes_general_pptx_to_ppt_maker():
+    text = _build_system_prompt([])
+    assert "ppt-maker" in text
+    assert "PPT制作" in text
+    assert "禁止当场重写 python-pptx" in text
+    assert "不要回答没有" in text
+
+
 def test_system_prompt_includes_plan_discipline():
     text = _build_system_prompt([])
     assert "plan_create" in text
