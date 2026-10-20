@@ -140,11 +140,15 @@ def load_config() -> AppConfig:
         allow_scripts = False
         require_sandbox = True
         host = model_host_from_api_base(api_base)
-        if host and is_known_public_ai_host(host):
+        if host and (
+            is_known_public_ai_host(host) or not is_intranet_model_host(host)
+        ):
             api_base = ""
             allowed = ["127.0.0.1", "localhost"]
     permission_mode = str(data.get("permission_mode", DEFAULT_CONFIG.permission_mode))
     if profile == PROFILE_LOCAL and permission_mode == "standard" and "permission_mode" not in data:
+        permission_mode = "cautious"
+    if profile == PROFILE_LOCAL and permission_mode in {"trust", "trust_workspace"}:
         permission_mode = "cautious"
     raw_key = str(data.get("api_key", DEFAULT_CONFIG.api_key))
     cfg = AppConfig(
@@ -455,8 +459,16 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             },
         }
 
+    def _reject_local_skill_import() -> None:
+        if office.config.resolved_profile() == PROFILE_LOCAL:
+            raise HTTPException(
+                status_code=403,
+                detail="本地部署版本不允许安装第三方技能",
+            )
+
     @app.post("/skills/inspect")
     def inspect_skill(body: InstallSkillBody) -> dict[str, Any]:
+        _reject_local_skill_import()
         src = Path(body.path).expanduser()
         try:
             meta, validation = office.registry.inspect_with_validation(src)
@@ -480,6 +492,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
     @app.post("/skills/install")
     def install_skill(body: InstallSkillBody) -> dict[str, Any]:
+        _reject_local_skill_import()
         src = Path(body.path).expanduser()
         try:
             meta = office.registry.install_path(
@@ -565,6 +578,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             "allow_workspace_scripts": cfg.allow_workspace_scripts,
         }
 
+        local = cfg.resolved_profile() == PROFILE_LOCAL
         # Validate the whole body before mutating in-memory config.
         permission_mode: str | None = None
         if body.permission_mode is not None:
@@ -574,10 +588,20 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     status_code=400,
                     detail="permission_mode must be cautious|standard|trust_workspace",
                 )
+            if local and permission_mode in {"trust", "trust_workspace"}:
+                raise HTTPException(
+                    status_code=400,
+                    detail="本地部署版本不允许信任模式",
+                )
+        if local and body.allow_workspace_scripts is True:
+            raise HTTPException(
+                status_code=400,
+                detail="本地部署版本不允许开启工作区脚本",
+            )
         new_base: str | None = None
         if body.api_base is not None:
             new_base = body.api_base.strip()
-            if cfg.resolved_profile() == PROFILE_LOCAL and new_base:
+            if local and new_base:
                 host = model_host_from_api_base(new_base)
                 if not is_intranet_model_host(host):
                     office.audit.record_event(
@@ -609,6 +633,9 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             cfg.permission_mode = permission_mode
         if body.allow_workspace_scripts is not None:
             cfg.allow_workspace_scripts = bool(body.allow_workspace_scripts)
+        if local:
+            cfg.allow_workspace_scripts = False
+            cfg.require_script_sandbox = True
 
         changes: dict[str, Any] = {}
         keys: list[str] = []

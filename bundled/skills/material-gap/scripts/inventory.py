@@ -104,6 +104,12 @@ def main(argv: list[str] | None = None) -> int:
     out_path = Path(args.out)
     if not out_path.is_absolute():
         out_path = cwd / out_path
+    out_path = out_path.resolve()
+    try:
+        out_path.relative_to(cwd.resolve())
+    except ValueError:
+        print(f"ERROR: path escapes workspace: {args.out}", file=sys.stderr)
+        return 1
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     summary = {
