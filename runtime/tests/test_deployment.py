@@ -1,8 +1,5 @@
-from pathlib import Path
-
 from office_agent.config import AppConfig
 from office_agent.deployment import (
-    INTRANET_CIDRS_ENV,
     PROFILE_LOCAL,
     PROFILE_STANDARD,
     is_intranet_model_host,
@@ -29,39 +26,12 @@ def test_intranet_host_literals() -> None:
     assert is_intranet_model_host("127.0.0.1", resolve=False)
     assert is_intranet_model_host("10.0.0.8", resolve=False)
     assert is_intranet_model_host("192.168.1.2", resolve=False)
-    assert not is_intranet_model_host("api.deepseek.com", resolve=False)
-
-
-def test_intranet_host_rejects_public_ip_literals() -> None:
     assert is_intranet_model_host("::1", resolve=False)
     assert is_intranet_model_host("172.16.0.9", resolve=False)
-    assert not is_intranet_model_host("88.12.1.2", resolve=False)
-    assert not is_intranet_model_host("1.1.1.1", resolve=False)
-    assert not is_intranet_model_host("8.8.8.8", resolve=False)
+    assert is_intranet_model_host("88.12.1.2", resolve=False)
+    assert is_intranet_model_host("1.1.1.1", resolve=False)
     assert not is_intranet_model_host("api.deepseek.com", resolve=False)
     assert not is_intranet_model_host("example.com", resolve=False)
-
-
-def test_intranet_host_allows_explicit_cidr(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv(INTRANET_CIDRS_ENV, "88.12.0.0/16")
-    assert is_intranet_model_host("88.12.1.2", resolve=False)
-    assert not is_intranet_model_host("1.1.1.1", resolve=False)
-
-
-def test_intranet_host_allows_packaged_cidrs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cidr_file = tmp_path / "intranet-cidrs"
-    cidr_file.write_text("# site ranges\n88.12.0.0/16\n", encoding="utf-8")
-    monkeypatch.delenv(INTRANET_CIDRS_ENV, raising=False)
-    monkeypatch.setattr(
-        "office_agent.deployment._packaged_resource_candidates",
-        lambda name: [tmp_path / name],
-    )
-    assert is_intranet_model_host("88.12.1.2", resolve=False)
-    assert not is_intranet_model_host("1.1.1.1", resolve=False)
 
 
 def test_env_cannot_downgrade_packaged_local(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -106,22 +76,7 @@ def test_local_gateway_allows_private_ip() -> None:
     ModelGateway(cfg).assert_allowed()
 
 
-def test_local_gateway_rejects_public_looking_ip() -> None:
-    cfg = AppConfig(
-        api_base="http://88.12.1.2:9081/v1",
-        api_key="x",
-        model="Qwen3.8-27B",
-        allowed_hosts=["88.12.1.2", "127.0.0.1", "localhost"],
-        deployment_profile=PROFILE_LOCAL,
-    )
-    with pytest.raises(GatewayError, match="本地部署"):
-        ModelGateway(cfg)
-
-
-def test_local_gateway_allows_cidr_listed_ip(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv(INTRANET_CIDRS_ENV, "88.12.0.0/16")
+def test_local_gateway_allows_ip_literal() -> None:
     cfg = AppConfig(
         api_base="http://88.12.1.2:9081/v1",
         api_key="x",

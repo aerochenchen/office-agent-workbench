@@ -137,7 +137,6 @@ def load_config() -> AppConfig:
     allow_scripts = bool(data.get("allow_workspace_scripts", DEFAULT_CONFIG.allow_workspace_scripts))
     require_sandbox = bool(data.get("require_script_sandbox", DEFAULT_CONFIG.require_script_sandbox))
     if profile == PROFILE_LOCAL:
-        allow_scripts = False
         require_sandbox = True
         host = model_host_from_api_base(api_base)
         if host and (
@@ -147,8 +146,6 @@ def load_config() -> AppConfig:
             allowed = ["127.0.0.1", "localhost"]
     permission_mode = str(data.get("permission_mode", DEFAULT_CONFIG.permission_mode))
     if profile == PROFILE_LOCAL and permission_mode == "standard" and "permission_mode" not in data:
-        permission_mode = "cautious"
-    if profile == PROFILE_LOCAL and permission_mode in {"trust", "trust_workspace"}:
         permission_mode = "cautious"
     raw_key = str(data.get("api_key", DEFAULT_CONFIG.api_key))
     cfg = AppConfig(
@@ -588,16 +585,6 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     status_code=400,
                     detail="permission_mode must be cautious|standard|trust_workspace",
                 )
-            if local and permission_mode in {"trust", "trust_workspace"}:
-                raise HTTPException(
-                    status_code=400,
-                    detail="本地部署版本不允许信任模式",
-                )
-        if local and body.allow_workspace_scripts is True:
-            raise HTTPException(
-                status_code=400,
-                detail="本地部署版本不允许开启工作区脚本",
-            )
         new_base: str | None = None
         if body.api_base is not None:
             new_base = body.api_base.strip()
@@ -634,7 +621,6 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         if body.allow_workspace_scripts is not None:
             cfg.allow_workspace_scripts = bool(body.allow_workspace_scripts)
         if local:
-            cfg.allow_workspace_scripts = False
             cfg.require_script_sandbox = True
 
         changes: dict[str, Any] = {}

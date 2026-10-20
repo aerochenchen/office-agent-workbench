@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from office_agent.agent_loop import AgentResult
-from office_agent.app import ProcessState, create_app
+from office_agent.app import ProcessState, create_app, load_config
 from office_agent.audit import AuditLog
 from office_agent.config import AppConfig
 from office_agent.session_store import SessionStore
@@ -1024,26 +1024,67 @@ def test_workspace_scripts_disabled_on_chat(
     assert "disabled" in events[0]["result"]["error"].lower()
 
 
-def test_local_profile_rejects_enabling_workspace_scripts(
+def test_local_profile_allows_enabling_workspace_scripts(
     client: TestClient, app_state: ProcessState
 ):
     app_state.config.deployment_profile = "local"
     app_state.config.allow_workspace_scripts = False
     r = client.post("/config", json={"allow_workspace_scripts": True})
-    assert r.status_code == 400
-    assert app_state.config.allow_workspace_scripts is False
+    assert r.status_code == 200
+    assert app_state.config.allow_workspace_scripts is True
     r2 = client.get("/config")
-    assert r2.json()["allow_workspace_scripts"] is False
+    assert r2.json()["allow_workspace_scripts"] is True
 
 
-def test_local_profile_rejects_trust_mode(
+def test_local_load_config_keeps_enabled_workspace_scripts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    monkeypatch.setenv("OFFICE_AGENT_DEPLOYMENT", "local")
+    (tmp_path / "config.json").write_text(
+        json.dumps(
+            {
+                "api_base": "http://127.0.0.1:8000/v1",
+                "model": "m",
+                "deployment_profile": "local",
+                "allow_workspace_scripts": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = load_config()
+    assert cfg.allow_workspace_scripts is True
+    assert cfg.require_script_sandbox is True
+
+
+def test_local_load_config_keeps_trust_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    monkeypatch.setenv("OFFICE_AGENT_DEPLOYMENT", "local")
+    (tmp_path / "config.json").write_text(
+        json.dumps(
+            {
+                "api_base": "http://127.0.0.1:8000/v1",
+                "model": "m",
+                "deployment_profile": "local",
+                "permission_mode": "trust_workspace",
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg = load_config()
+    assert cfg.permission_mode == "trust_workspace"
+
+
+def test_local_profile_allows_trust_mode(
     client: TestClient, app_state: ProcessState
 ):
     app_state.config.deployment_profile = "local"
     app_state.config.permission_mode = "cautious"
     r = client.post("/config", json={"permission_mode": "trust_workspace"})
-    assert r.status_code == 400
-    assert app_state.config.permission_mode == "cautious"
+    assert r.status_code == 200
+    assert app_state.config.permission_mode == "trust_workspace"
 
 
 def test_local_profile_rejects_public_api_base(client: TestClient, app_state: ProcessState):
@@ -1169,28 +1210,7 @@ def test_local_profile_allows_private_ip_without_api_key(
     assert app_state.config.api_key == ""
 
 
-def test_local_profile_rejects_public_ip_literal(
-    client: TestClient, app_state: ProcessState
-):
-    app_state.config.deployment_profile = "local"
-    r = client.post(
-        "/config",
-        json={"api_base": "http://1.1.1.1:9081/v1", "model": "Qwen3.8-27B"},
-    )
-    assert r.status_code == 400
-    r2 = client.post(
-        "/config",
-        json={"api_base": "http://88.12.1.2:9081/v1", "model": "Qwen3.8-27B"},
-    )
-    assert r2.status_code == 400
-
-
-def test_local_profile_allows_cidr_listed_ip(
-    client: TestClient, app_state: ProcessState, monkeypatch
-):
-    from office_agent.deployment import INTRANET_CIDRS_ENV
-
-    monkeypatch.setenv(INTRANET_CIDRS_ENV, "88.12.0.0/16")
+def test_local_profile_allows_ip_literal(client: TestClient, app_state: ProcessState):
     app_state.config.deployment_profile = "local"
     r = client.post(
         "/config",

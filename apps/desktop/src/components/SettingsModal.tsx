@@ -123,9 +123,11 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
   const editable = tab === "appearance" || tab === "model" || tab === "permission";
   const viewingNotice = noticeText !== null;
 
+  const permissionModeOptions = PERMISSION_MODE_OPTIONS;
+
   const permissionHint = useMemo(
-    () => PERMISSION_MODE_OPTIONS.find((o) => o.value === permissionMode)?.hint,
-    [permissionMode],
+    () => permissionModeOptions.find((o) => o.value === permissionMode)?.hint,
+    [permissionMode, permissionModeOptions],
   );
 
   if (!open) return null;
@@ -413,7 +415,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                     value={permissionMode}
                     onChange={(e) => setPermissionMode(e.currentTarget.value as PermissionMode)}
                   >
-                    {PERMISSION_MODE_OPTIONS.map((opt) => (
+                    {permissionModeOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>

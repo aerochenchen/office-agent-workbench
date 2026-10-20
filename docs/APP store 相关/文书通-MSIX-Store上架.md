@@ -2,7 +2,7 @@
 
 对应规格：`docs/superpowers/specs/2026-08-06-msix-store-listing-design.md`。  
 **产品类型：MSIX。** 不要往旧 EXE/MSI 草稿上传本包。  
-**当前目标版本：`1.6.0.0`**（与桌面 `APP_VERSION` / `tauri.conf.json` 对齐；第 4 段必须为 0）。
+**当前目标版本：`1.7.0.0`**（与桌面 `APP_VERSION` / `tauri.conf.json` 对齐；第 4 段必须为 0）。
 
 ## 1. Partner Center：产品与身份（已建则跳过）
 
@@ -18,18 +18,18 @@
 
 4. 定价：免费；市场尽量全球；列表语言先做简体中文
 
-## 2. 打出商店包（1.6.0）
+## 2. 打出商店包（1.7.0）
 
 1. Actions → **Build Windows MSIX Store** → Run workflow  
-2. 填入上表三项身份 + 版本 **`1.6.0.0`**  
+2. 填入上表三项身份 + 版本 **`1.7.0.0`**  
 3. 下载包（二选一）：
    - Actions → 该 run → Artifacts → `wenshutong-windows-msix-store`
-   - 或 **Releases** → 标签 `msix-store-1.6.0.0`（Artifact 配额满时仍可从 Release 取 `Wenshutong_1.6.0.0_x64.msix` + `store-devcert.pfx`）
+   - 或 **Releases** → 标签 `msix-store-1.7.0.0`（Artifact 配额满时仍可从 Release 取 `Wenshutong_1.7.0.0_x64.msix` + `store-devcert.pfx`）
 
 ## 3. 提交前本机核对（Windows）
 
 1. 以管理员身份启动 PowerShell 后，信任 `store-devcert.pfx`（若 Artifact 含证书）：`winapp cert install .\store-devcert.pfx`
-2. `Add-AppxPackage .\Wenshutong_1.6.0.0_x64.msix`  
+2. `Add-AppxPackage .\Wenshutong_1.7.0.0_x64.msix`  
 3. Smoke：启动 → 配模型对话 → 开文件夹 → 技能 → PDF / 扫描 PDF OCR → 设置→关于→举报  
 4. 截图（Desktop PNG ≥1366×768，建议 ≥4 张；设置页勿含真实 Key）
 
@@ -46,7 +46,7 @@
 | 驱动/NT/辅助功能/笔墨 | 否 |
 | 年龄分级 | IARC 问卷（生产力 + 用户内容/联网如实填） |
 
-Packages：上传 **`Wenshutong_1.6.0.0_x64.msix`**（替换旧 1.5 包）→ 更新 Store listing / What’s new → Notes for certification → Submit。
+Packages：上传 **`Wenshutong_1.7.0.0_x64.msix`**（替换旧 1.6 包）→ 更新 Store listing / What’s new → Notes for certification → Submit。
 
 ## 5. 简体中文列表
 
@@ -93,7 +93,7 @@ Packages：上传 **`Wenshutong_1.6.0.0_x64.msix`**（替换旧 1.5 包）→ �
 一句话：让大模型进入真实文书工作流——本地可控，轻量可跑，方法可沉淀，能力可插拔。
 ```
 
-### 此版本的新增内容（1.6.0）
+### 此版本的新增内容（1.7.0）
 
 ```
 • 扫描类 PDF 印刷体页面支持 RapidOCR 识别，便于抽取正文
@@ -112,7 +112,7 @@ Packages：上传 **`Wenshutong_1.6.0.0_x64.msix`**（替换旧 1.5 包）→ �
 
 ```
 Date: 2026-09-15
-Version: 1.6.0.0 (MSIX update from 1.5.0.0)
+Version: 1.7.0.0 (MSIX update from 1.6.0.0)
 
 Product: 「文书通」 (Wenshutong) — local productivity agent for office documents on Windows (MSIX).
 Publisher listing: Lirenda / 立人达创新工作室 (www.lirenda.cn)
