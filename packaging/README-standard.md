@@ -122,7 +122,7 @@ cd runtime
 
 ## 依赖原则
 
-- `runtime/requirements.txt` 仅声明 FastAPI、uvicorn、openai、pydantic、PyYAML、httpx 等轻依赖。  
+- `runtime/requirements.txt` 声明轻依赖（FastAPI、uvicorn、openai、pydantic、PyYAML、httpx 等）及图表用 `matplotlib`（无 plotly/kaleido，控制安装包体积）。  
 - 发版前**必须**在仓库根目录依次执行：
   1. `./scripts/check_licenses.sh` — 扫描 `runtime/.venv`（Python）与 `apps/desktop`（npm），GPL/AGPL 失败退出；LGPL 允许。
   2. `./scripts/generate_notice.sh` — 生成/更新仓库根 `NOTICE`（人类可读的 Python + npm 摘要），并由打包脚本随标准包分发。

@@ -50,6 +50,8 @@ hiddenimports: list = list(
         "onnxruntime",
         "cv2",
         "omegaconf",
+        "matplotlib",
+        "matplotlib.backends.backend_agg",
     ]
 )
 
@@ -75,6 +77,7 @@ for pkg in (
     "onnxruntime",
     "cv2",
     "omegaconf",
+    "matplotlib",
 ):
     try:
         d, b, h = collect_all(pkg)
@@ -91,7 +94,8 @@ a = Analysis(
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    hooksconfig={},
+    # Headless Agg only — skip GUI backends to keep the sidecar lean.
+    hooksconfig={"matplotlib": {"backends": "Agg"}},
     runtime_hooks=[],
     excludes=["torch", "transformers", "sentence_transformers", "pytest"],
     win_no_prefer_redirects=False,

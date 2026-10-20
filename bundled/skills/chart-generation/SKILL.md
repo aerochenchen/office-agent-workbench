@@ -1,13 +1,15 @@
 ---
 name: chart-generation
 description: 把表格、Excel、CSV、数字等数据自动转成最合适的图表，可按需换图型；用于展示、分析、汇报。
-version: 1.0.0
+version: 1.1.0
 tier: light
 display_name: 图表生成
 ---
 # Chart Generation
 
 A general-purpose workflow for turning any kind of source material into the chart that best communicates it — and for re-rendering the same data as a different chart type on request.
+
+**Runtime note (文书通):** Standard / local-deploy Runtime ships **matplotlib** (Agg → PNG). Do **not** assume plotly, kaleido, or seaborn are installed. Prefer matplotlib for all static report charts; if a chart type is awkward in matplotlib, pick a simpler equivalent rather than pulling heavy optional libraries or hand-drawing with PIL.
 
 ## Why a dedicated workflow matters
 
@@ -51,10 +53,10 @@ If the data supports it and the goal genuinely benefits from more than one angle
 
 ### 3. Build it
 
-Pick a concrete implementation based on where the output is going — see `references/implementation.md` for library choices, setup, and code patterns for both static/report output and interactive/web output. In short:
+Pick a concrete implementation based on where the output is going — see `references/implementation.md` for library choices, setup, and code patterns. In short:
 
-- **Static output (reports, documents, presentations, print):** Python with matplotlib/seaborn for simple charts, or plotly for anything that benefits from more polish; export as an image or embed directly into the docx/pptx/pdf skill's workflow if one of those is also in play.
-- **Interactive output (dashboards, artifacts, chat-embedded visuals):** Prefer the environment's native visualization tool if one is available (e.g. a visualizer/widget tool). Otherwise build with Chart.js, ECharts, or Recharts in an HTML/React artifact.
+- **Static output (reports, documents, presentations, print):** Python **matplotlib** with `matplotlib.use("Agg")` before `pyplot`, save PNG (dpi≥150), then embed via docx/pptx skills when needed. Do not use plotly/kaleido or PIL-as-chart-engine.
+- **Interactive output:** Only if the user explicitly wants HTML; keep it offline-safe (no CDN). Otherwise prefer a PNG.
 
 Regardless of tool, every chart needs: a clear title, labeled axes (with units), a legend when there's more than one series, readable tick density (don't cram 50 unlabeled x-axis ticks), and a sensible sort order (usually by value, not alphabetical, unless the categories are inherently ordered like time or a scale).
 
@@ -79,9 +81,9 @@ When the user asks to see the same data differently ("换个图"、"用柱状图
 ## Reference files
 
 - `references/chart-catalog.md` — full catalog of mainstream chart types grouped by purpose (comparison, trend, composition, distribution, relationship, ranking, flow/hierarchy, geographic, single-value, text), with when-to-use, common misuse, and data-shape requirements for each.
-- `references/implementation.md` — library and tool choices for static vs. interactive output, with setup notes and code patterns for matplotlib/seaborn/plotly (Python) and Chart.js/ECharts/Recharts (JS/web).
+- `references/implementation.md` — 文书通 Runtime 以 matplotlib 为默认静态出图；无 plotly/kaleido；含 Agg、中文字体与降级约定。
 
 ## 变更记录
+- 1.1.0 — 对齐标准底座：内嵌 matplotlib；明确禁止依赖 plotly/kaleido/PIL 手绘；复杂图降级为常规统计图。
 - 1.0.0 — 版本升为 1.0.0（正式版），description 保持中文，正文不变。
-
 - 0.1.1 — description 由英文改写为中文（界面展示用），正文内容不变。
