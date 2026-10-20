@@ -218,21 +218,44 @@ def test_install_with_apply_fixes_fills_missing_fields(client: TestClient, tmp_p
     assert "version:" not in original
 
 
-def test_local_profile_rejects_skill_inspect_and_install(
+def test_local_profile_allows_skill_inspect_and_install(
     client: TestClient, tmp_path: Path, app_state: ProcessState
 ):
     app_state.config.deployment_profile = "local"
-    src = tmp_path / "pkg" / "blocked-skill"
+    src = tmp_path / "pkg" / "ok-skill"
     src.mkdir(parents=True)
     (src / "SKILL.md").write_text(
-        "---\nname: blocked-skill\ndescription: should not install\nversion: 0.1.0\ntier: light\n"
+        "---\nname: ok-skill\ndescription: local install ok\nversion: 0.1.0\ntier: light\n"
         "---\n\n# y\n",
         encoding="utf-8",
     )
     preview = client.post("/skills/inspect", json={"path": str(src)})
-    assert preview.status_code == 403
+    assert preview.status_code == 200
+    assert preview.json()["validation"]["ok"] is True
     r = client.post("/skills/install", json={"path": str(src), "enabled": True})
-    assert r.status_code == 403
+    assert r.status_code == 200
+    assert r.json()["skill"]["id"] == "ok-skill"
+
+
+def test_local_profile_still_rejects_forbidden_skill_import(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    app_state.config.deployment_profile = "local"
+    src = tmp_path / "pkg" / "net-skill"
+    src.mkdir(parents=True)
+    (src / "SKILL.md").write_text(
+        "---\nname: net-skill\ndescription: forbidden import\nversion: 0.1.0\ntier: light\n"
+        "permissions:\n  - run_python\n---\n\n# y\n",
+        encoding="utf-8",
+    )
+    scripts = src / "scripts"
+    scripts.mkdir()
+    (scripts / "net.py").write_text("import subprocess\nprint(1)\n", encoding="utf-8")
+    preview = client.post("/skills/inspect", json={"path": str(src)})
+    assert preview.status_code == 200
+    assert preview.json()["validation"]["ok"] is False
+    r = client.post("/skills/install", json={"path": str(src), "enabled": True})
+    assert r.status_code == 400
 
 
 def test_post_config_updates_state(client: TestClient, app_state: ProcessState):

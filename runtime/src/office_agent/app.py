@@ -456,16 +456,8 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             },
         }
 
-    def _reject_local_skill_import() -> None:
-        if office.config.resolved_profile() == PROFILE_LOCAL:
-            raise HTTPException(
-                status_code=403,
-                detail="本地部署版本不允许安装第三方技能",
-            )
-
     @app.post("/skills/inspect")
     def inspect_skill(body: InstallSkillBody) -> dict[str, Any]:
-        _reject_local_skill_import()
         src = Path(body.path).expanduser()
         try:
             meta, validation = office.registry.inspect_with_validation(src)
@@ -489,7 +481,6 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
 
     @app.post("/skills/install")
     def install_skill(body: InstallSkillBody) -> dict[str, Any]:
-        _reject_local_skill_import()
         src = Path(body.path).expanduser()
         try:
             meta = office.registry.install_path(
