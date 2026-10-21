@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/theme.css";
+import "./styles/scrollbar.css";
 import "./App.css";
+import { installWindowsScrollbars } from "./lib/windowsScrollbar";
 import { APP_NAME, APP_TAGLINE } from "./lib/brand";
 import { dismissBootSplash, shouldDismissBootSplash } from "./lib/bootSplash";
 import {
@@ -108,6 +110,8 @@ function App() {
   useEffect(() => {
     initUiPreferences();
   }, []);
+
+  useEffect(() => installWindowsScrollbars(), []);
 
   useEffect(() => {
     if (!isTauriRuntime() || shouldDismissBootSplash(health)) {
