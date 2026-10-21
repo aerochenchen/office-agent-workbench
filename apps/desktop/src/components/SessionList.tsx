@@ -3,6 +3,7 @@ import type { SessionMeta } from "../lib/types";
 import { GUIDE_HINTS } from "../lib/guide";
 import { normalizeSessionTitle } from "../lib/sessionTitle";
 import { normalizeWorkspaceKey, pathsEqual, type WorkspaceGroup } from "../lib/workspaceSidebar";
+import { FolderIcon, NewChatIcon } from "./icons";
 import "./SessionList.css";
 
 interface Props {
@@ -39,19 +40,6 @@ function formatRelativeTime(ts: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function FolderIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-      <path
-        d="M1.5 3.5A1 1 0 0 1 2.5 2.5h3.2l1 1.4h5.3a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H2.5a1 1 0 0 1-1-1V3.5Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.1"
-      />
-    </svg>
-  );
-}
-
 export default function SessionList({
   groups,
   collapsedPaths,
@@ -77,6 +65,12 @@ export default function SessionList({
   const renameCommitLock = useRef(false);
   const menuDisabled = sending || !runtimeReady;
   const sessions = groups.flatMap((g) => g.sessions);
+  const newSessionDisabled = !workspacePath || sending || !runtimeReady;
+  const newSessionTitle = !workspacePath
+    ? GUIDE_HINTS.newSessionNeedsFolder
+    : sending
+      ? "请等待当前回复结束"
+      : "在当前文件夹新建对话";
 
   useEffect(() => {
     if (!renamingId) return;
@@ -129,29 +123,34 @@ export default function SessionList({
   return (
     <section className="pane session-pane" aria-label="文件夹">
       <div className="session-toolbar">
-        <button
-          type="button"
-          className="btn btn--pane btn--full"
-          disabled={!workspacePath || sending || !runtimeReady}
-          onClick={onNewSession}
-          title={
-            !workspacePath
-              ? GUIDE_HINTS.newSessionNeedsFolder
-              : sending
-                ? "请等待当前回复结束"
-                : "在当前文件夹新建对话"
-          }
-        >
-          新建对话
-        </button>
-        <button
-          type="button"
-          className="btn btn--pane btn--pane-accent btn--full"
-          disabled={!runtimeReady || sending}
-          onClick={onPickWorkspace}
-        >
-          打开文件夹
-        </button>
+        <div className="session-toolbar-row">
+          <button
+            type="button"
+            className="session-tool session-tool--primary"
+            disabled={!runtimeReady || sending}
+            onClick={onPickWorkspace}
+          >
+            <span className="session-tool-icon">
+              <FolderIcon size={17} />
+            </span>
+            打开文件夹
+          </button>
+          <button
+            type="button"
+            className="session-tool session-tool--secondary"
+            aria-disabled={newSessionDisabled || undefined}
+            title={newSessionTitle}
+            onClick={() => {
+              if (newSessionDisabled) return;
+              onNewSession();
+            }}
+          >
+            <span className="session-tool-icon">
+              <NewChatIcon size={17} />
+            </span>
+            新建对话
+          </button>
+        </div>
         {workspaceError && <div className="session-workspace-error">{workspaceError}</div>}
       </div>
 

@@ -44,6 +44,7 @@ import type {
   SkillInspectResult,
   SkillMeta,
 } from "./lib/types";
+import { SettingsIcon, SkillsIcon } from "./components/icons";
 import SessionList from "./components/SessionList";
 import ChatPanel from "./components/ChatPanel";
 import SkillManager from "./components/SkillManager";
@@ -64,51 +65,6 @@ let messageSeq = 0;
 function nextId(): string {
   messageSeq += 1;
   return `m${messageSeq}`;
-}
-
-function SkillsIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-      <path
-        d="M8 2.1 13.2 4.8 8 7.5 2.8 4.8 8 2.1Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.15"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M2.8 7.75 8 10.45 13.2 7.75"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.15"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M2.8 10.65 8 13.35 13.2 10.65"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.15"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-      <path
-        d="M6.55 1.65h2.9l.24 1.48c.4.1.77.28 1.1.5l1.38-.8 1.45 1.45-.8 1.38c.22.33.4.7.5 1.1l1.48.24v2.9l-1.48.24c-.1.4-.28.77-.5 1.1l.8 1.38-1.45 1.45-1.38-.8c-.33.22-.7.4-1.1.5l-.24 1.48h-2.9l-.24-1.48a3.7 3.7 0 0 1-1.1-.5l-1.38.8-1.45-1.45.8-1.38a3.7 3.7 0 0 1-.5-1.1l-1.48-.24v-2.9l1.48-.24c.1-.4.28-.77.5-1.1l-.8-1.38 1.45-1.45 1.38.8c.33-.22.7-.4 1.1-.5l.24-1.48Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.15"
-        strokeLinejoin="round"
-      />
-      <circle cx="8" cy="8" r="1.7" fill="none" stroke="currentColor" strokeWidth="1.15" />
-    </svg>
-  );
 }
 
 function App() {

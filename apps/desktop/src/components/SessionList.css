@@ -7,11 +7,78 @@
 
 .session-toolbar {
   flex: 0 0 auto;
-  padding: var(--space-2) var(--space-3);
-  border-bottom: none;
+  padding: var(--space-2) var(--space-2) var(--space-1);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
+}
+
+.session-toolbar-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-tool {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: calc(var(--tree-width) * 3 / 5);
+  max-width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--font-size-md);
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.session-tool-icon {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.session-tool--secondary {
+  border: 1px solid #d9dfd9;
+  background: var(--paper-1);
+  color: var(--ink-0);
+}
+
+.session-tool--secondary:hover:not([aria-disabled="true"]) {
+  background: var(--accent-teal-soft);
+}
+
+.session-tool--primary {
+  border: 1px solid var(--accent-teal);
+  background: var(--accent-teal);
+  color: var(--paper-2);
+}
+
+.session-tool--primary:hover:not(:disabled) {
+  border-color: var(--accent-teal-hover);
+  background: var(--accent-teal-hover);
+}
+
+.session-tool:focus-visible {
+  outline: 2px solid var(--accent-teal);
+  outline-offset: 1px;
+}
+
+.session-tool:disabled,
+.session-tool[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .workspace-group {
