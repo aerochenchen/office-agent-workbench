@@ -47,6 +47,7 @@ from office_agent.workspace import (
     SandboxError,
     Workspace,
 )
+from office_agent.xlsx_check import xlsx_package_errors
 
 
 class ToolError(ValueError):
@@ -922,6 +923,21 @@ class ToolExecutor:
                 "summary": summary,
                 "missing": missing,
                 "empty": empty,
+            }
+        structure_errors: list[str] = []
+        for rel, path in resolved.items():
+            if Path(rel).suffix.lower() != ".xlsx":
+                continue
+            structure_errors.extend(xlsx_package_errors(path, rel))
+        if structure_errors:
+            return {
+                "ok": False,
+                "error": (
+                    "交付物不是可打开的 Excel（"
+                    + "；".join(structure_errors)
+                    + "）。请用技能脚本重新生成，不要手写工作表 XML。"
+                ),
+                "summary": summary,
             }
         unverified = False
         office_suffixes = {".docx", ".xlsx", ".pptx"}

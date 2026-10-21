@@ -55,6 +55,10 @@ def test_build_report_writes_xlsx_and_draft(tmp_path: Path):
     assert Path(summary["xlsx"]).is_file()
     assert Path(summary["draft"]).is_file()
 
+    from office_agent.xlsx_check import xlsx_package_errors
+
+    assert xlsx_package_errors(out, "审查报告.xlsx") == []
+
     wb = load_workbook(out)
     ws = wb.active
     assert ws.title == "规范制度发布前审查报告"

@@ -424,15 +424,36 @@ def test_finish_rejects_missing_deliverables(tmp_path: Path, monkeypatch):
     assert result.get("finished") is not True
 
 
+def _write_xlsx(path: Path, sheet_xml: str, *, workbook: bool = True, sheet: bool = True) -> None:
+    import zipfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        if workbook:
+            archive.writestr("xl/workbook.xml", "<workbook/>")
+        if sheet:
+            archive.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+
+
+_VALID_SHEET = """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData/>
+<mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells>
+<printOptions gridLines="0"/>
+<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+<pageSetup paperSize="9" orientation="portrait"/>
+</worksheet>
+"""
+
+
 def test_finish_accepts_existing_nonempty_deliverables(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     (tmp_path / "skills").mkdir()
     ws = tmp_path / "ws"
     ws.mkdir()
-    out = ws / "工作成果"
-    out.mkdir()
-    target = out / "产品汇总.xlsx"
-    target.write_bytes(b"PK\x03\x04fake-xlsx")
+    target = ws / "工作成果" / "产品汇总.xlsx"
+    _write_xlsx(target, _VALID_SHEET)
     ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
     result = ex.execute(
         "finish",
@@ -444,6 +465,96 @@ def test_finish_accepts_existing_nonempty_deliverables(tmp_path: Path, monkeypat
     assert result["ok"] is True
     assert result["finished"] is True
     assert result["deliverables"] == ["工作成果/产品汇总.xlsx"]
+
+
+def test_finish_rejects_xlsx_that_is_not_a_workbook(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    out = ws / "工作成果"
+    out.mkdir()
+    (out / "坏表.xlsx").write_bytes(b"PK\x03\x04fake-xlsx")
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "finish",
+        {"summary": "已写入", "deliverables": ["工作成果/坏表.xlsx"]},
+    )
+    assert result["ok"] is False
+    assert result.get("finished") is not True
+    assert "坏表.xlsx" in result["error"]
+    assert "压缩包" in result["error"]
+
+
+def test_finish_rejects_xlsx_missing_worksheet(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    target = ws / "工作成果" / "缺表.xlsx"
+    _write_xlsx(target, _VALID_SHEET, sheet=False)
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "finish",
+        {"summary": "已写入", "deliverables": ["工作成果/缺表.xlsx"]},
+    )
+    assert result["ok"] is False
+    assert "缺表.xlsx" in result["error"]
+    assert "工作表" in result["error"]
+
+
+def test_finish_rejects_print_options_after_page_setup(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    sheet = """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData/>
+<pageMargins left="0.55" right="0.55" top="0.59" bottom="0.51" header="0.3" footer="0.3"/>
+<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>
+<printOptions gridLines="0"/>
+</worksheet>
+"""
+    target = ws / "工作成果" / "错序.xlsx"
+    _write_xlsx(target, sheet)
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "finish",
+        {"summary": "已写入", "deliverables": ["工作成果/错序.xlsx"]},
+    )
+    assert result["ok"] is False
+    assert result.get("finished") is not True
+    error = result["error"]
+    assert "错序.xlsx" in error
+    assert "sheet1.xml" in error
+    assert "printOptions" in error
+    assert "pageSetup" in error
+    assert "第 6 行" in error
+
+
+def test_finish_rejects_invalid_merge_ref(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    (tmp_path / "skills").mkdir()
+    ws = tmp_path / "ws"
+    sheet = """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData/>
+<mergeCells count="1"><mergeCell ref="23:43"/></mergeCells>
+<printOptions gridLines="0"/>
+<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+<pageSetup paperSize="9"/>
+</worksheet>
+"""
+    target = ws / "工作成果" / "坏合并.xlsx"
+    _write_xlsx(target, sheet)
+    ex = ToolExecutor(Workspace(ws), SkillRegistry(), permission_mode="trust")
+    result = ex.execute(
+        "finish",
+        {"summary": "已写入", "deliverables": ["工作成果/坏合并.xlsx"]},
+    )
+    assert result["ok"] is False
+    assert "23:43" in result["error"]
+    assert "合并" in result["error"]
+    assert "sheet1.xml" in result["error"]
 
 
 def test_finish_rejects_empty_deliverable_file(tmp_path: Path, monkeypatch):
