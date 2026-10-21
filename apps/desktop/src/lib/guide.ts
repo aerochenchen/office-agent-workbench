@@ -125,6 +125,11 @@ export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
         label: "术语统一",
         saying: "把文中的单位名称和术语统一一遍",
       },
+      {
+        id: "regulation-pre-review",
+        label: "制度发布前审查",
+        saying: "对这份制度做发布前审查",
+      },
     ],
   },
   {

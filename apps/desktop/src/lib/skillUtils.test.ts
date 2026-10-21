@@ -23,6 +23,7 @@ describe("BUNDLED_SKILL_IDS", () => {
     expect(BUNDLED_SKILL_IDS.has("ppt-maker")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("chart-generation")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("skill-builder")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("regulation-pre-review")).toBe(true);
   });
 });
 

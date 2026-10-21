@@ -197,6 +197,13 @@ def test_work_prompt_includes_local_use_and_colleague_tone():
     assert "内网使用" not in text
 
 
+def test_system_prompt_routes_regulation_pre_review():
+    text = _build_system_prompt([])
+    assert "regulation-pre-review" in text
+    assert "build_report.py" in text
+    assert "禁止导出 PDF" in text
+
+
 def test_system_prompt_routes_general_pptx_to_ppt_maker():
     text = _build_system_prompt([])
     assert "ppt-maker" in text

@@ -56,6 +56,7 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
         "ppt-maker",
         "chart-generation",
         "skill-builder",
+        "regulation-pre-review",
     }
     skills: list = []
     with TestClient(create_app()) as client:
@@ -97,6 +98,8 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert ppt.get("display_name") == "PPT制作"
     chart = next(s for s in skills if s["id"] == "chart-generation")
     assert chart.get("display_name") == "图表生成"
+    regulation = next(s for s in skills if s["id"] == "regulation-pre-review")
+    assert regulation.get("display_name") == "制度发布前审查"
     assert (tmp_path / "shared-scripts" / "format_gongwen.py").is_file()
     assert (tmp_path / "shared-scripts" / "docx_diff.py").is_file()
     assert (tmp_path / "skills" / "government-document-format" / "SKILL.md").is_file()
@@ -113,6 +116,10 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert (tmp_path / "skills" / "chart-generation" / "SKILL.md").is_file()
     assert (
         tmp_path / "skills" / "chart-generation" / "references" / "chart-catalog.md"
+    ).is_file()
+    assert (tmp_path / "skills" / "regulation-pre-review" / "SKILL.md").is_file()
+    assert (
+        tmp_path / "skills" / "regulation-pre-review" / "scripts" / "build_report.py"
     ).is_file()
 
 

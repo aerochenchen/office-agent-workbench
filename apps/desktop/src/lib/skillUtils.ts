@@ -12,6 +12,7 @@ export const BUNDLED_SKILL_IDS: ReadonlySet<string> = new Set([
   "ppt-maker",
   "chart-generation",
   "skill-builder",
+  "regulation-pre-review",
 ]);
 
 export function isBundledSkillId(id: string): boolean {

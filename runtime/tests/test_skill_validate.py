@@ -123,6 +123,53 @@ def test_validate_script_syntax_and_forbidden_import(tmp_path: Path):
     assert any("requests" in e for e in result["errors"])
 
 
+def test_validate_allows_openpyxl_and_future_rejects_pdf_stack(tmp_path: Path):
+    """Runtime ships openpyxl; PDF/COM stacks stay outside the script sandbox."""
+    ok_skill = _write_skill(
+        tmp_path / "sheet-skill",
+        name="sheet-skill",
+        description="d",
+        version="0.1.0",
+        tier="light",
+        display_name="表格",
+        permissions="run_python",
+    )
+    scripts = ok_skill / "scripts"
+    scripts.mkdir()
+    (scripts / "build.py").write_text(
+        "from __future__ import annotations\n"
+        "from openpyxl import Workbook\n"
+        "from openpyxl.styles import Font\n"
+        "from openpyxl.worksheet.pagebreak import Break\n",
+        encoding="utf-8",
+    )
+    ok = validate_skill_dir(ok_skill)
+    assert ok["ok"] is True, ok["errors"]
+    assert ok["errors"] == []
+
+    bad_skill = _write_skill(
+        tmp_path / "pdf-skill",
+        name="pdf-skill",
+        description="d",
+        version="0.1.0",
+        tier="light",
+        display_name="导出",
+        permissions="run_python",
+    )
+    bad_scripts = bad_skill / "scripts"
+    bad_scripts.mkdir()
+    (bad_scripts / "export.py").write_text(
+        "import pymupdf\nimport fitz\nimport win32com.client\n",
+        encoding="utf-8",
+    )
+    bad = validate_skill_dir(bad_skill)
+    assert bad["ok"] is False
+    joined = "\n".join(bad["errors"])
+    assert "pymupdf" in joined
+    assert "fitz" in joined
+    assert "win32com" in joined
+
+
 def test_validate_allows_sibling_script_import_only(tmp_path: Path):
     skill = _write_skill(
         tmp_path / "siblings",

@@ -20,7 +20,10 @@ ALLOWED_PERMISSIONS = frozenset({"workspace_read", "workspace_write", "run_pytho
 REQUIRED_FIELDS = ("name", "description", "version", "tier")
 MAX_DESCRIPTION_CHARS = 60
 # Capability allowlist. Anything else is rejected, including network and process modules.
+# openpyxl is the runtime Excel library. pymupdf / win32com stay off this list:
+# they are not shipped, and Excel COM cannot run inside the script sandbox.
 ALLOWED_IMPORT_ROOTS = frozenset({
+    "__future__",
     "argparse",
     "base64",
     "collections",
@@ -39,6 +42,7 @@ ALLOWED_IMPORT_ROOTS = frozenset({
     "json",
     "math",
     "office_agent",
+    "openpyxl",
     "os",
     "pathlib",
     "pptx",
