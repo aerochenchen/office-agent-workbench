@@ -164,10 +164,12 @@ export default function SessionList({
           const current = pathsEqual(group.path, workspacePath);
           const collapsed = collapsedPaths.has(normalizeWorkspaceKey(group.path));
           const switchBlocked = sending && !current;
+          const selectedHere =
+            current && group.sessions.some((session) => session.id === activeSessionId);
           return (
             <div
               key={group.path}
-              className={`workspace-group${current ? " workspace-group--current" : ""}`}
+              className={`workspace-group${current && !selectedHere ? " workspace-group--current" : ""}`}
             >
               <div
                 className="workspace-head"
