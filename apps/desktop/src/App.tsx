@@ -46,7 +46,7 @@ import type {
 } from "./lib/types";
 import SessionList from "./components/SessionList";
 import ChatPanel from "./components/ChatPanel";
-import SkillPanel from "./components/SkillPanel";
+import SkillManager from "./components/SkillManager";
 import SettingsModal from "./components/SettingsModal";
 import PermissionModal from "./components/PermissionModal";
 
@@ -66,6 +66,51 @@ function nextId(): string {
   return `m${messageSeq}`;
 }
 
+function SkillsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path
+        d="M8 2.1 13.2 4.8 8 7.5 2.8 4.8 8 2.1Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M2.8 7.75 8 10.45 13.2 7.75"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M2.8 10.65 8 13.35 13.2 10.65"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path
+        d="M6.55 1.65h2.9l.24 1.48c.4.1.77.28 1.1.5l1.38-.8 1.45 1.45-.8 1.38c.22.33.4.7.5 1.1l1.48.24v2.9l-1.48.24c-.1.4-.28.77-.5 1.1l.8 1.38-1.45 1.45-1.38-.8c-.33.22-.7.4-1.1.5l-.24 1.48h-2.9l-.24-1.48a3.7 3.7 0 0 1-1.1-.5l-1.38.8-1.45-1.45.8-1.38a3.7 3.7 0 0 1-.5-1.1l-1.48-.24v-2.9l1.48-.24c.1-.4.28-.77.5-1.1l-.8-1.38 1.45-1.45 1.38.8c.33-.22.7-.4 1.1-.5l.24-1.48Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="8" r="1.7" fill="none" stroke="currentColor" strokeWidth="1.15" />
+    </svg>
+  );
+}
+
 function App() {
   const [health, setHealth] = useState<HealthState>("checking");
   const [configReady, setConfigReady] = useState(false);
@@ -78,8 +123,7 @@ function App() {
   const [sending, setSending] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [skillsCollapsed, setSkillsCollapsed] = useState(true);
-  const [draftPrefill, setDraftPrefill] = useState<string | null>(null);
+  const [skillManagerOpen, setSkillManagerOpen] = useState(false);
   const [config, setConfig] = useState<RuntimeConfig>(DEFAULT_CONFIG);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestEvent | null>(null);
   const [permissionBusy, setPermissionBusy] = useState(false);
@@ -765,43 +809,34 @@ function App() {
             <span className={`health-dot health-dot--${status}`} aria-hidden="true" />
             <span className="health-label">{runtimeStatusLabel(status)}</span>
           </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon"
-            onClick={() => setSkillsCollapsed((v) => !v)}
-            aria-label={skillsCollapsed ? "展开办事能力" : "收起办事能力"}
-            title={skillsCollapsed ? "展开办事能力" : "收起办事能力"}
-            aria-pressed={!skillsCollapsed}
-          >
-            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-              <rect
-                x="1.5"
-                y="2.5"
-                width="13"
-                height="11"
-                rx="1"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.1"
-              />
-              <path
-                d="M10.5 2.5v11"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.1"
-              />
-              {!skillsCollapsed ? (
-                <rect x="11" y="3.5" width="2.5" height="9" fill="currentColor" opacity="0.35" />
-              ) : null}
-            </svg>
-          </button>
-          <button type="button" className="btn btn--ghost" onClick={() => setSettingsOpen(true)}>
-            设置
-          </button>
+          <div className="topbar-tools">
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon"
+              onClick={() => setSkillManagerOpen(true)}
+              aria-label="技能管理"
+              title="技能管理"
+              aria-haspopup="dialog"
+              aria-expanded={skillManagerOpen}
+            >
+              <SkillsIcon />
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="设置"
+              title="设置"
+              aria-haspopup="dialog"
+              aria-expanded={settingsOpen}
+            >
+              <SettingsIcon />
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className={`workbench${skillsCollapsed ? " skills-collapsed" : ""}`}>
+      <div className="workbench">
         <SessionList
           groups={workspaceGroups}
           collapsedPaths={collapsedPaths}
@@ -826,26 +861,23 @@ function App() {
           messages={messages}
           sending={sending}
           runtimeReady={runtimeReady}
-          draftPrefill={draftPrefill}
-          onDraftPrefillConsumed={() => setDraftPrefill(null)}
           onSend={handleSend}
           onStop={() => void handleStop()}
           onToggleSteps={handleToggleSteps}
         />
-
-        <SkillPanel
-          skills={skills}
-          collapsed={skillsCollapsed}
-          pickDisabled={sending || !runtimeReady}
-          onPickSaying={setDraftPrefill}
-          onToggle={handleToggleSkill}
-          onInspect={handleInspectSkill}
-          onConfirmInstall={handleConfirmInstallSkill}
-          onUninstall={handleUninstallSkill}
-          onRestoreBundled={handleRestoreBundledSkill}
-          onRefresh={refreshSkills}
-        />
       </div>
+
+      <SkillManager
+        open={skillManagerOpen}
+        skills={skills}
+        onClose={() => setSkillManagerOpen(false)}
+        onToggle={handleToggleSkill}
+        onInspect={handleInspectSkill}
+        onConfirmInstall={handleConfirmInstallSkill}
+        onUninstall={handleUninstallSkill}
+        onRestoreBundled={handleRestoreBundledSkill}
+        onRefresh={refreshSkills}
+      />
 
       <SettingsModal
         open={settingsOpen}

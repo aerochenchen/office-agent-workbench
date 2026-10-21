@@ -127,11 +127,7 @@ export default function SessionList({
   }
 
   return (
-    <section className="pane session-pane">
-      <div className="pane-header">
-        <span className="pane-title">文件夹</span>
-      </div>
-
+    <section className="pane session-pane" aria-label="文件夹">
       <div className="session-toolbar">
         <button
           type="button"

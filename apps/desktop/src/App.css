@@ -63,6 +63,31 @@
   gap: var(--space-3);
 }
 
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topbar-tools .btn--icon {
+  width: 32px;
+  height: 32px;
+  color: var(--ink-0);
+  border-color: transparent;
+}
+
+.topbar-tools .btn--icon:hover {
+  color: var(--accent-teal);
+  background: var(--accent-teal-soft);
+  border-color: transparent;
+}
+
+.topbar-tools .btn--icon[aria-expanded="true"] {
+  color: var(--accent-teal);
+  background: var(--accent-teal-soft);
+  border-color: transparent;
+}
+
 .health-status {
   display: inline-flex;
   align-items: center;
@@ -224,20 +249,14 @@
   cursor: not-allowed;
 }
 
-/* ---------- Three-pane workbench ---------- */
+/* ---------- Workbench ---------- */
 .workbench {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: minmax(0, var(--tree-width)) minmax(0, 1fr) minmax(0, var(--skills-width));
+  grid-template-columns: minmax(0, var(--tree-width)) minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  transition: grid-template-columns var(--motion-base);
-}
-
-/* Two tracks only — a 0px third track still overflows on WebView2 (min-width:auto). */
-.workbench.skills-collapsed {
-  grid-template-columns: minmax(0, var(--tree-width)) minmax(0, 1fr);
 }
 
 .workbench > .pane {
