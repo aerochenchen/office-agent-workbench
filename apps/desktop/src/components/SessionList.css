@@ -37,6 +37,7 @@
   line-height: 1;
   cursor: pointer;
   white-space: nowrap;
+  transition: background var(--motion-fast), border-color var(--motion-fast);
 }
 
 .session-tool-icon {
@@ -50,24 +51,24 @@
 }
 
 .session-tool--secondary {
-  border: 1px solid #d9dfd9;
-  background: var(--paper-1);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--ink-0);
 }
 
 .session-tool--secondary:hover:not([aria-disabled="true"]) {
-  background: var(--accent-teal-soft);
+  background: color-mix(in srgb, var(--ink-0) 8%, var(--paper-0));
 }
 
 .session-tool--primary {
-  border: 1px solid var(--accent-teal);
-  background: var(--accent-teal);
-  color: var(--paper-2);
+  border: 1px solid #e2e7e2;
+  background: #e2e7e2;
+  color: var(--ink-0);
 }
 
 .session-tool--primary:hover:not(:disabled) {
-  border-color: var(--accent-teal-hover);
-  background: var(--accent-teal-hover);
+  border-color: color-mix(in srgb, var(--ink-0) 14%, #e2e7e2);
+  background: color-mix(in srgb, var(--ink-0) 14%, #e2e7e2);
 }
 
 .session-tool:focus-visible {
