@@ -115,10 +115,7 @@ function PendingBody({ message }: { message: ChatMessage }) {
 function memoryNoteLabel(note: MemoryUpdateEvent): string {
   const parts: string[] = [];
   if (note.topics.length > 0) {
-    parts.push(`已记下 ${note.topics.length} 条习惯`);
-  }
-  if (note.recent_line) {
-    parts.push("近况已更新");
+    parts.push(`已记下 ${note.topics.length} 条记忆`);
   }
   if (note.display_name) {
     parts.push(`已固化「${note.display_name}」`);

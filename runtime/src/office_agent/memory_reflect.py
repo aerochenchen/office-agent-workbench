@@ -40,15 +40,32 @@ _TRACE_TOOLS = frozenset(
 )
 _OVERLAP_MIN = 12
 
+# User must say something durable about themselves / standing prefs — Hermes-style.
+# Task chatter alone must not trigger a memory write.
+_MEMORY_SIGNAL_RE = re.compile(
+    r"(记住|请记|记一下|别忘|以后都|以后不要|以后别|不要再|别再|少问|少确认|"
+    r"我习惯|我喜欢|我偏好|固定用|每次都|一律|默认就|"
+    r"remember|prefer|always|never\s+ask|don'?t\s+ask)",
+    re.IGNORECASE,
+)
+
+_SKILLISH_RE = re.compile(
+    r"(read_skill|run_skill|run_shared|SKILL\.md|技能正文|硬规则|步数预算|"
+    r"必须先|禁止把|按其中的步骤|granularity=|workspace_extract|"
+    r"format_gongwen|deliverables)",
+    re.IGNORECASE,
+)
+
 _REFLECT_SYSTEM = (
-    "你是文书通的办事备忘整理器。根据本轮对话与工具轨迹，提炼这个人的稳定习惯与近况。"
+    "你是文书通的记忆整理器。记忆只记「跨任务仍成立」的人与偏好，不记办事方法。"
     "只输出一个 JSON 对象，不要 markdown，不要解释。"
-    '格式：{"habits":[{"topic":"短主题","text":"一句偏好"}],"recent":["一句近况"]}。'
-    "habits 最多 3 条；topic 与 text 都要短。"
-    "recent 最多 2 条。"
-    "只根据使用者自己的话、助手对用户说的话、工具名与技能名来写。"
-    "禁止引用或复述任何材料正文、文件内容、抽取结果。"
-    "没有值得记下的内容时返回 {\"habits\":[],\"recent\":[]}。"
+    '格式：{"habits":[{"topic":"短主题","text":"一句关于这个人的事实"}],"recent":[]}。'
+    "habits 最多 2 条；写成陈述事实（如「用户偏好少确认」），不要写成对助手的命令。"
+    "recent 必须始终为空数组 []，不要写近况或本轮事项。"
+    "只根据「使用者原话」提炼。工具名、技能名、助手总结一律忽略。"
+    "禁止写入：技能/说明书里的步骤与纪律、排版校对规则、工具用法、"
+    "本轮做完了什么、材料正文、可从技能再次读到的内容。"
+    "使用者只是下了办事任务、没有表达偏好或纠正时，返回 {\"habits\":[],\"recent\":[]}。"
 )
 
 
@@ -73,6 +90,14 @@ def strip_attachment_footer(text: str) -> str:
     return (text or "").strip()
 
 
+def user_has_durable_signal(user_message: str) -> bool:
+    """True when the user stated a standing preference / correction / remember-me."""
+    text = strip_attachment_footer(user_message)
+    if not text:
+        return False
+    return bool(_MEMORY_SIGNAL_RE.search(text))
+
+
 def should_reflect(
     *,
     onboarding: bool,
@@ -80,6 +105,7 @@ def should_reflect(
     cancelled: bool = False,
     error: bool = False,
 ) -> bool:
+    """Whether this turn is eligible for post-turn side effects (memory / crystallize)."""
     if onboarding or cancelled or error:
         return False
     events = tool_events or []
@@ -94,12 +120,29 @@ def should_reflect(
             return False
         if name == "finish" and result.get("ok") and result.get("finished"):
             return True
-    # Tools ran but no successful finish — still reflect if real work happened
-    # (excluding ask_user-only turns, already returned False above).
     return any(
         isinstance(ev, dict) and str(ev.get("name") or "") not in {"ask_user"}
         for ev in events
     )
+
+
+def should_write_memory(
+    *,
+    onboarding: bool,
+    user_message: str,
+    tool_events: list[dict[str, Any]] | None,
+    cancelled: bool = False,
+    error: bool = False,
+) -> bool:
+    """Memory writes need a durable user signal — not every finished task."""
+    if not should_reflect(
+        onboarding=onboarding,
+        tool_events=tool_events,
+        cancelled=cancelled,
+        error=error,
+    ):
+        return False
+    return user_has_durable_signal(user_message)
 
 
 def collect_untrusted_blobs(tool_events: list[dict[str, Any]] | None) -> list[str]:
@@ -163,21 +206,15 @@ def _tool_trace_lines(tool_events: list[dict[str, Any]] | None) -> list[str]:
 def build_reflect_user_payload(
     *,
     user_message: str,
-    final_text: str,
-    tool_events: list[dict[str, Any]] | None,
+    final_text: str = "",
+    tool_events: list[dict[str, Any]] | None = None,
 ) -> str:
+    """Payload for the memory LLM — user speech only (Hermes: facts about the person)."""
+    del final_text, tool_events  # kept for call-site compatibility; must not feed skill echo
     user = strip_attachment_footer(user_message)
-    assistant = (final_text or "").strip()
-    if len(assistant) > 800:
-        assistant = assistant[:800] + "…"
-    lines = _tool_trace_lines(tool_events)
     return (
-        "使用者原话：\n"
-        + user[:600]
-        + "\n\n助手对用户说的话：\n"
-        + assistant
-        + "\n\n工具轨迹（仅名称）：\n"
-        + ("\n".join(lines) if lines else "（无）")
+        "使用者原话（只从此提炼跨任务仍成立的偏好/纠正；无则返回空）：\n"
+        + user[:800]
     )
 
 
@@ -204,6 +241,18 @@ def _parse_reflect_json(raw: str) -> dict[str, Any]:
     return data
 
 
+def _looks_skillish(text: str) -> bool:
+    sample = (text or "").strip()
+    if not sample:
+        return False
+    if _SKILLISH_RE.search(sample):
+        return True
+    # Imperatives aimed at the agent, not facts about the user.
+    if re.match(r"^(必须|禁止|务必|应当|应该|先|不要让助手)", sample):
+        return True
+    return False
+
+
 def _filter_reflection(
     data: dict[str, Any], blobs: list[str]
 ) -> tuple[list[dict[str, str]], list[str]]:
@@ -217,8 +266,10 @@ def _filter_reflection(
             continue
         if overlaps_untrusted(topic, blobs) or overlaps_untrusted(text, blobs):
             continue
+        if _looks_skillish(topic) or _looks_skillish(text):
+            continue
         habits_out.append({"topic": topic, "text": text})
-        if len(habits_out) >= 3:
+        if len(habits_out) >= 2:
             break
 
     recent_out: list[str] = []
@@ -226,10 +277,13 @@ def _filter_reflection(
         text = str(item).strip() if not isinstance(item, dict) else str(
             item.get("text") or ""
         ).strip()
-        if not text or overlaps_untrusted(text, blobs):
+        if not text or overlaps_untrusted(text, blobs) or _looks_skillish(text):
+            continue
+        # Skip completed-work diary lines ("做完了…") — Hermes skips these too.
+        if re.search(r"(做完|已完成|刚做了|本轮|这次任务)", text):
             continue
         recent_out.append(text)
-        if len(recent_out) >= 2:
+        if len(recent_out) >= 1:
             break
     return habits_out, recent_out
 
@@ -358,7 +412,7 @@ def build_skill_md(
         "  - workspace_write\n"
         "---\n\n"
         f"# {safe_display}\n\n"
-        "本技能由办事备忘根据重复流程自动固化，仅含说明，不含新脚本。\n\n"
+        "本技能由记忆根据重复流程自动固化，仅含说明，不含新脚本。\n\n"
         "## 触发\n\n"
         f"使用者意图接近：「{strip_attachment_footer(user_message)[:80]}」\n\n"
         "## 步骤\n\n"
@@ -473,26 +527,35 @@ def run_reflection(
         ):
             return None
 
-        blobs = collect_untrusted_blobs(tool_events)
-        payload = build_reflect_user_payload(
+        applied: dict[str, Any] = {
+            "changed": False,
+            "topics": [],
+            "recent_line": "",
+            "snapshot": store.snapshot(),
+        }
+        if should_write_memory(
+            onboarding=onboarding,
             user_message=user_message,
-            final_text=final_text,
             tool_events=tool_events,
-        )
-        response = gateway.chat(
-            [
-                {"role": "system", "content": _REFLECT_SYSTEM},
-                {"role": "user", "content": payload},
-            ],
-            tools=None,
-        )
-        content = ""
-        try:
-            content = str(response.choices[0].message.content or "")
-        except (AttributeError, IndexError, TypeError):
+            cancelled=cancelled,
+            error=error,
+        ):
+            blobs = collect_untrusted_blobs(tool_events)
+            payload = build_reflect_user_payload(user_message=user_message)
+            response = gateway.chat(
+                [
+                    {"role": "system", "content": _REFLECT_SYSTEM},
+                    {"role": "user", "content": payload},
+                ],
+                tools=None,
+            )
             content = ""
-        habits, recent = _filter_reflection(_parse_reflect_json(content), blobs)
-        applied = store.apply_reflection(habits, recent)
+            try:
+                content = str(response.choices[0].message.content or "")
+            except (AttributeError, IndexError, TypeError):
+                content = ""
+            habits, _recent = _filter_reflection(_parse_reflect_json(content), blobs)
+            applied = store.apply_reflection(habits, [])
 
         crystallized = None
         sig = flow_signature(user_message=user_message, tool_events=tool_events)

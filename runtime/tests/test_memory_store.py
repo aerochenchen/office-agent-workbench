@@ -57,9 +57,12 @@ def test_prompt_digest_includes_habits(store: MemoryStore):
     assert store.prompt_digest() == ""
     store.apply_reflection([{"topic": "语气", "text": "少确认"}], ["做完排版"])
     digest = store.prompt_digest()
-    assert "语气" in digest
-    assert "少确认" in digest
-    assert "做完排版" in digest
+    assert "记忆：" in digest
+    assert "- 少确认" in digest
+    assert "语气：" not in digest
+    assert "做完排版" not in digest
+    assert "近况" not in digest
+    assert "习惯" not in digest
 
 
 def test_replace_all_and_trace(store: MemoryStore):

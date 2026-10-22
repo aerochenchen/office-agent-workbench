@@ -133,18 +133,11 @@ class MemoryStore:
 
     def prompt_digest(self) -> str:
         habits = self.list_habits()
-        recent = self.list_recent()
-        if not habits and not recent:
+        if not habits:
             return ""
-        lines: list[str] = []
-        if habits:
-            lines.append("习惯：")
-            for item in habits:
-                lines.append(f"- {item['topic']}：{item['text']}")
-        if recent:
-            lines.append("近况：")
-            for item in recent[:5]:
-                lines.append(f"- {item['text']}")
+        lines: list[str] = ["记忆："]
+        for item in habits:
+            lines.append(f"- {item['text']}")
         text = "\n".join(lines)
         if len(text) > PROMPT_DIGEST_CHARS:
             text = text[: PROMPT_DIGEST_CHARS - 1] + "…"

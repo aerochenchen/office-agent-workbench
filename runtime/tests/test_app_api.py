@@ -1380,7 +1380,7 @@ def test_chat_reflects_and_injects_memory(
     client.post("/workspace/open", json={"path": str(ws)})
 
     reflect_json = json.dumps(
-        {"habits": [{"topic": "交付", "text": "都放工作成果"}], "recent": ["做完一次列表"]},
+        {"habits": [{"topic": "交付", "text": "用户偏好交付都放工作成果"}], "recent": []},
         ensure_ascii=False,
     )
     gateway = FakeGateway(
@@ -1394,7 +1394,7 @@ def test_chat_reflects_and_injects_memory(
     )
     app_state.gateway_factory = lambda _cfg: gateway
 
-    r = client.post("/chat", json={"message": "列出文件"})
+    r = client.post("/chat", json={"message": "列出文件，记住交付都放工作成果"})
     assert r.status_code == 200
     body = r.json()
     assert body["reply"] == "已列出"
@@ -1409,8 +1409,37 @@ def test_chat_reflects_and_injects_memory(
     r2 = client.post("/chat", json={"message": "再来"})
     assert r2.status_code == 200
     system = gateway2.chat_calls[0]["messages"][0]["content"]
-    assert "办事备忘" in system
+    assert "记忆" in system
     assert "都放工作成果" in system
+
+
+def test_chat_plain_task_does_not_write_memory(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+    gateway = FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[_tool_call("c1", "workspace_list", {"path": "."})],
+            ),
+            _completion(content="已列出"),
+            _completion(
+                content=json.dumps(
+                    {"habits": [{"topic": "列表", "text": "必须先 workspace_list"}], "recent": []},
+                    ensure_ascii=False,
+                )
+            ),
+        ]
+    )
+    app_state.gateway_factory = lambda _cfg: gateway
+    r = client.post("/chat", json={"message": "列出文件"})
+    assert r.status_code == 200
+    assert r.json().get("memory_update") is None
+    assert client.get("/memory").json()["habits"] == []
+    # No third model call for reflection when there is no durable signal.
+    assert len(gateway.chat_calls) == 2
 
 
 def test_chat_stream_emits_memory_updated(
@@ -1421,7 +1450,7 @@ def test_chat_stream_emits_memory_updated(
     client.post("/workspace/open", json={"path": str(ws)})
 
     reflect_json = json.dumps(
-        {"habits": [{"topic": "确认", "text": "少问"}], "recent": []},
+        {"habits": [{"topic": "确认", "text": "用户偏好少问"}], "recent": []},
         ensure_ascii=False,
     )
     app_state.gateway_factory = lambda _cfg: FakeGateway(
@@ -1435,7 +1464,9 @@ def test_chat_stream_emits_memory_updated(
         ]
     )
 
-    with client.stream("POST", "/chat/stream", json={"message": "结束"}) as r:
+    with client.stream(
+        "POST", "/chat/stream", json={"message": "结束吧，以后少确认"}
+    ) as r:
         assert r.status_code == 200
         text = "".join(r.iter_text())
 

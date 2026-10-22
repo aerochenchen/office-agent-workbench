@@ -46,12 +46,11 @@ import type {
   SkillInspectResult,
   SkillMeta,
 } from "./lib/types";
-import { MemoryIcon, SettingsIcon, SkillsIcon } from "./components/icons";
+import { SettingsIcon, SkillsIcon } from "./components/icons";
 import SessionList from "./components/SessionList";
 import ChatPanel from "./components/ChatPanel";
 import SkillManager from "./components/SkillManager";
-import MemoryManager from "./components/MemoryManager";
-import SettingsModal from "./components/SettingsModal";
+import SettingsModal, { type SettingsTab } from "./components/SettingsModal";
 import PermissionModal from "./components/PermissionModal";
 
 const DEFAULT_CONFIG: RuntimeConfig = {
@@ -82,8 +81,8 @@ function App() {
   const [sending, setSending] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined);
   const [skillManagerOpen, setSkillManagerOpen] = useState(false);
-  const [memoryManagerOpen, setMemoryManagerOpen] = useState(false);
   const [config, setConfig] = useState<RuntimeConfig>(DEFAULT_CONFIG);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestEvent | null>(null);
   const [permissionBusy, setPermissionBusy] = useState(false);
@@ -729,6 +728,12 @@ function App() {
       return next;
     });
     setSettingsOpen(false);
+    setSettingsTab(undefined);
+  }, []);
+
+  const openSettings = useCallback((tab?: SettingsTab) => {
+    setSettingsTab(tab);
+    setSettingsOpen(true);
   }, []);
 
   const handlePermissionResolve = useCallback(async (allow: boolean) => {
@@ -770,7 +775,7 @@ function App() {
             type="button"
             className={`health-status health-status--${status}`}
             onClick={() => {
-              if (status === "needs_config") setSettingsOpen(true);
+              if (status === "needs_config") openSettings("model");
             }}
             title={
               status === "needs_config" ? "请先在设置中填写模型密钥" : undefined
@@ -781,17 +786,6 @@ function App() {
             <span className="health-label">{runtimeStatusLabel(status)}</span>
           </button>
           <div className="topbar-tools">
-            <button
-              type="button"
-              className="btn btn--ghost btn--icon"
-              onClick={() => setMemoryManagerOpen(true)}
-              aria-label="记忆"
-              title="记忆"
-              aria-haspopup="dialog"
-              aria-expanded={memoryManagerOpen}
-            >
-              <MemoryIcon />
-            </button>
             <button
               type="button"
               className="btn btn--ghost btn--icon"
@@ -806,7 +800,7 @@ function App() {
             <button
               type="button"
               className="btn btn--ghost btn--icon"
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => openSettings()}
               aria-label="设置"
               title="设置"
               aria-haspopup="dialog"
@@ -846,18 +840,9 @@ function App() {
           onSend={handleSend}
           onStop={() => void handleStop()}
           onToggleSteps={handleToggleSteps}
-          onOpenMemory={() => setMemoryManagerOpen(true)}
+          onOpenMemory={() => openSettings("memory")}
         />
       </div>
-
-      <MemoryManager
-        open={memoryManagerOpen}
-        onClose={() => setMemoryManagerOpen(false)}
-        load={() => runtimeClient.getMemory()}
-        save={(body) => runtimeClient.putMemory(body)}
-        undo={() => runtimeClient.undoMemory()}
-        onOpenSkills={() => setSkillManagerOpen(true)}
-      />
 
       <SkillManager
         open={skillManagerOpen}
@@ -874,8 +859,21 @@ function App() {
       <SettingsModal
         open={settingsOpen}
         initial={config}
-        onClose={() => setSettingsOpen(false)}
+        initialTab={settingsTab}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsTab(undefined);
+        }}
         onSave={handleSaveConfig}
+        memory={{
+          load: () => runtimeClient.getMemory(),
+          save: (body) => runtimeClient.putMemory(body),
+          onOpenSkills: () => {
+            setSettingsOpen(false);
+            setSettingsTab(undefined);
+            setSkillManagerOpen(true);
+          },
+        }}
       />
 
       <PermissionModal

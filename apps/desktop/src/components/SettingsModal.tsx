@@ -10,7 +10,12 @@ import {
   SUPPORT_EMAIL,
 } from "../lib/brand";
 import { GUIDE_MORE_HELP, GUIDE_PILLARS } from "../lib/guide";
-import type { PermissionMode, RuntimeConfig } from "../lib/types";
+import type {
+  MemoryHabit,
+  MemorySnapshot,
+  PermissionMode,
+  RuntimeConfig,
+} from "../lib/types";
 import { openHttpsUrl, readOssNoticeText } from "../lib/tauri";
 import {
   applyUiFontScale,
@@ -25,20 +30,37 @@ import {
   type UiTheme,
 } from "../lib/uiPreferences";
 import AiContentReportModal from "./AiContentReportModal";
+import MemoryManager from "./MemoryManager";
 import "./SettingsModal.css";
+
+export type SettingsTab =
+  | "appearance"
+  | "model"
+  | "memory"
+  | "permission"
+  | "guide"
+  | "about";
 
 interface Props {
   open: boolean;
   initial: RuntimeConfig;
+  initialTab?: SettingsTab;
   onClose: () => void;
   onSave: (partial: Partial<RuntimeConfig>) => Promise<void>;
+  memory?: {
+    load: () => Promise<MemorySnapshot>;
+    save: (body: {
+      habits: MemoryHabit[];
+      recent: Array<{ text: string; updated_at?: number }>;
+    }) => Promise<MemorySnapshot>;
+    onOpenSkills?: () => void;
+  };
 }
-
-type SettingsTab = "appearance" | "model" | "permission" | "guide" | "about";
 
 const SETTINGS_TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
   { id: "appearance", label: "外观" },
   { id: "model", label: "模型" },
+  { id: "memory", label: "记忆" },
   { id: "permission", label: "权限与安全" },
   { id: "guide", label: "使用说明" },
   { id: "about", label: "关于" },
@@ -77,7 +99,14 @@ function resolveModelPreset(modelName: string, localDeploy: boolean): string {
   return MODEL_CUSTOM;
 }
 
-export default function SettingsModal({ open, initial, onClose, onSave }: Props) {
+export default function SettingsModal({
+  open,
+  initial,
+  initialTab,
+  onClose,
+  onSave,
+  memory,
+}: Props) {
   const [tab, setTab] = useState<SettingsTab>("model");
   const [apiBase, setApiBase] = useState(initial.api_base);
   const [apiKey, setApiKey] = useState(initial.api_key);
@@ -104,7 +133,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
 
   useEffect(() => {
     if (open) {
-      setTab("model");
+      setTab(initialTab ?? "model");
       setApiBase(initial.api_base);
       setApiKey(initial.api_key);
       setModel(initial.model);
@@ -118,7 +147,7 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
       setNoticeText(null);
       setStudioLinkError(null);
     }
-  }, [open, initial]);
+  }, [open, initial, initialTab]);
 
   const editable = tab === "appearance" || tab === "model" || tab === "permission";
   const viewingNotice = noticeText !== null;
@@ -298,6 +327,21 @@ export default function SettingsModal({ open, initial, onClose, onSave }: Props)
                   {UI_FONT_SCALE_OPTIONS.find((o) => o.value === fontScale)?.hint}
                   。切换后即时预览，点保存后记住偏好。
                 </p>
+              </section>
+            )}
+
+            {tab === "memory" && memory && (
+              <MemoryManager
+                active={open && tab === "memory"}
+                load={memory.load}
+                save={memory.save}
+                onOpenSkills={memory.onOpenSkills}
+              />
+            )}
+
+            {tab === "memory" && !memory && (
+              <section className="settings-section">
+                <p className="settings-permission-hint">记忆功能暂不可用。</p>
               </section>
             )}
 

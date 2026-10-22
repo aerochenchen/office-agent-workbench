@@ -65,3 +65,31 @@ export function SettingsIcon() {
     </Icon>
   );
 }
+
+export function PlusIcon({ size }: { size?: number } = {}) {
+  return (
+    <Icon size={size}>
+      <path d="M8 3.2v9.6M3.2 8h9.6" />
+    </Icon>
+  );
+}
+
+export function EditIcon({ size }: { size?: number } = {}) {
+  return (
+    <Icon size={size}>
+      <path d="M9.55 3.35 12.65 6.45 6.2 12.9H3.1v-3.1Z" />
+      <path d="M8.4 4.5 11.5 7.6" />
+    </Icon>
+  );
+}
+
+export function TrashIcon({ size }: { size?: number } = {}) {
+  return (
+    <Icon size={size}>
+      <path d="M3.4 4.55h9.2" />
+      <path d="M6.15 4.55V3.3h3.7V4.55" />
+      <path d="M5.05 4.55h5.9v8.1c0 .5-.4.9-.9.9H5.95c-.5 0-.9-.4-.9-.9v-8.1Z" />
+      <path d="M7 6.7v4.15M9 6.7v4.15" />
+    </Icon>
+  );
+}

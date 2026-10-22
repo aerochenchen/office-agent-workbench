@@ -9,11 +9,14 @@ from typing import Any
 import pytest
 
 from office_agent.memory_reflect import (
+    _looks_skillish,
     collect_untrusted_blobs,
     flow_signature,
     overlaps_untrusted,
     run_reflection,
     should_reflect,
+    should_write_memory,
+    user_has_durable_signal,
     try_crystallize,
 )
 from office_agent.memory_store import MemoryStore
@@ -54,6 +57,23 @@ def test_should_reflect_gates():
         tool_events=[{"name": "workspace_list", "result": {"ok": True}}],
     ) is True
     assert should_reflect(onboarding=False, tool_events=[]) is False
+
+
+def test_memory_write_needs_durable_user_signal():
+    finish = [{"name": "finish", "result": {"ok": True, "finished": True}}]
+    assert user_has_durable_signal("两版对照一下") is False
+    assert user_has_durable_signal("以后少确认，直接做") is True
+    assert should_write_memory(
+        onboarding=False, user_message="两版对照一下", tool_events=finish
+    ) is False
+    assert should_write_memory(
+        onboarding=False, user_message="记住：少问确认", tool_events=finish
+    ) is True
+
+
+def test_looks_skillish_filters_skill_rules():
+    assert _looks_skillish("必须先 read_skill 再排版") is True
+    assert _looks_skillish("用户偏好少确认") is False
 
 
 def test_overlaps_untrusted_drops_file_text():
@@ -112,6 +132,42 @@ def test_flow_signature_skips_workspace_script_and_single_skill():
     assert sig is not None
 
 
+def test_run_reflection_skips_plain_task_without_signal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    store = MemoryStore(tmp_path)
+    gateway = FakeGateway(
+        responses=[
+            _completion(
+                content=json.dumps(
+                    {"habits": [{"topic": "校对", "text": "必须先读技能正文"}], "recent": []},
+                    ensure_ascii=False,
+                )
+            )
+        ]
+    )
+    update = run_reflection(
+        gateway=gateway,
+        store=store,
+        registry=None,
+        user_message="两版对照",
+        final_text="已按技能完成对照，须先 read_skill",
+        tool_events=[
+            {"name": "run_shared_script", "args": {"name": "docx_diff"}, "result": {"ok": True}},
+            {
+                "name": "finish",
+                "args": {},
+                "result": {"ok": True, "finished": True, "summary": "ok"},
+            },
+        ],
+        onboarding=False,
+    )
+    assert update is None
+    assert store.list_habits() == []
+    assert gateway.chat_calls == []
+
+
 def test_run_reflection_writes_habits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
     store = MemoryStore(tmp_path)
@@ -120,7 +176,7 @@ def test_run_reflection_writes_habits(tmp_path: Path, monkeypatch: pytest.Monkey
             _completion(
                 content=json.dumps(
                     {
-                        "habits": [{"topic": "确认", "text": "少问确认"}],
+                        "habits": [{"topic": "确认", "text": "用户偏好少问确认"}],
                         "recent": ["做完一次对照"],
                     },
                     ensure_ascii=False,
@@ -132,8 +188,8 @@ def test_run_reflection_writes_habits(tmp_path: Path, monkeypatch: pytest.Monkey
         gateway=gateway,
         store=store,
         registry=SkillRegistry(),
-        user_message="两版对照",
-        final_text="已完成对照",
+        user_message="两版对照，以后少确认直接做",
+        final_text="已完成对照。须先 read_skill 再解读。",
         tool_events=[
             {"name": "run_shared_script", "args": {"name": "docx_diff"}, "result": {"ok": True}},
             {
@@ -146,8 +202,13 @@ def test_run_reflection_writes_habits(tmp_path: Path, monkeypatch: pytest.Monkey
     )
     assert update is not None
     assert "确认" in update["topics"]
-    assert store.list_habits()[0]["text"] == "少问确认"
+    assert store.list_habits()[0]["text"] == "用户偏好少问确认"
+    # completed-work diary must not land in recent
+    assert store.list_recent() == []
     assert gateway.chat_calls[0]["tools"] is None
+    user_payload = gateway.chat_calls[0]["messages"][1]["content"]
+    assert "read_skill" not in user_payload
+    assert "助手对用户说的话" not in user_payload
 
 
 def test_run_reflection_drops_overlapping_habit(
@@ -170,7 +231,7 @@ def test_run_reflection_drops_overlapping_habit(
         gateway=gateway,
         store=store,
         registry=None,
-        user_message="读一下",
+        user_message="请记住口径相关偏好",
         final_text="已读",
         tool_events=[
             {
@@ -183,6 +244,41 @@ def test_run_reflection_drops_overlapping_habit(
                 "args": {},
                 "result": {"ok": True, "finished": True},
             },
+        ],
+        onboarding=False,
+    )
+    assert update is None
+    assert store.list_habits() == []
+
+
+def test_run_reflection_drops_skillish_habit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    store = MemoryStore(tmp_path)
+    gateway = FakeGateway(
+        responses=[
+            _completion(
+                content=json.dumps(
+                    {
+                        "habits": [
+                            {"topic": "排版", "text": "必须先 read_skill 再 format_gongwen"}
+                        ],
+                        "recent": [],
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        ]
+    )
+    update = run_reflection(
+        gateway=gateway,
+        store=store,
+        registry=None,
+        user_message="记住排版时的要求",
+        final_text="好",
+        tool_events=[
+            {"name": "finish", "args": {}, "result": {"ok": True, "finished": True}},
         ],
         onboarding=False,
     )
