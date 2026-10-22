@@ -85,7 +85,24 @@ describe("createSseDispatcher", () => {
     const onError = vi.fn();
     const { dispatchBlock, outcome } = createSseDispatcher({ onError });
     dispatchBlock(": ping");
+
     expect(outcome.sawAny).toBe(false);
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("parses memory_updated", () => {
+    const onMemoryUpdated = vi.fn();
+    const { dispatchBlock } = createSseDispatcher({ onMemoryUpdated });
+    dispatchBlock(
+      'event: memory_updated\ndata: {"topics":["语气"],"recent_line":"做完校对","can_undo":true,"skill_id":"learned-flow-a","display_name":"习惯流程"}\n',
+    );
+    expect(onMemoryUpdated).toHaveBeenCalledWith({
+      topics: ["语气"],
+      recent_line: "做完校对",
+      can_undo: true,
+      changed: undefined,
+      skill_id: "learned-flow-a",
+      display_name: "习惯流程",
+    });
   });
 });

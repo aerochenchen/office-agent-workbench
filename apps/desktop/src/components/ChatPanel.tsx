@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ChatMessage, LiveStep } from "../lib/types";
+import type { ChatMessage, LiveStep, MemoryUpdateEvent } from "../lib/types";
 import { APP_NAME, APP_TAGLINE } from "../lib/brand";
 import { selectionTouchesElement, shouldAutoScrollChat } from "../lib/chatScroll";
 import { guideEmptyHeadline } from "../lib/guide";
@@ -23,6 +23,7 @@ interface Props {
   onSend: (text: string, attachedPaths: string[]) => void | Promise<void>;
   onStop?: () => void;
   onToggleSteps?: (messageId: string) => void;
+  onOpenMemory?: () => void;
 }
 
 function basename(path: string): string {
@@ -111,14 +112,30 @@ function PendingBody({ message }: { message: ChatMessage }) {
   );
 }
 
+function memoryNoteLabel(note: MemoryUpdateEvent): string {
+  const parts: string[] = [];
+  if (note.topics.length > 0) {
+    parts.push(`已记下 ${note.topics.length} 条习惯`);
+  }
+  if (note.recent_line) {
+    parts.push("近况已更新");
+  }
+  if (note.display_name) {
+    parts.push(`已固化「${note.display_name}」`);
+  }
+  return parts.join(" · ") || "已记下";
+}
+
 function Bubble({
   message,
   workspacePath,
   onToggleSteps,
+  onOpenMemory,
 }: {
   message: ChatMessage;
   workspacePath: string | null;
   onToggleSteps?: (messageId: string) => void;
+  onOpenMemory?: () => void;
 }) {
   const roleClass =
     message.role === "user"
@@ -146,7 +163,18 @@ function Bubble({
         {inFlight ? (
           <PendingBody message={message} />
         ) : message.role === "assistant" && message.phase === "done" ? (
-          <MarkdownMessage content={message.content} workspacePath={workspacePath} />
+          <>
+            <MarkdownMessage content={message.content} workspacePath={workspacePath} />
+            {message.memoryNote ? (
+              <button
+                type="button"
+                className="memory-note"
+                onClick={() => onOpenMemory?.()}
+              >
+                {memoryNoteLabel(message.memoryNote)}
+              </button>
+            ) : null}
+          </>
         ) : (
           message.content
         )}
@@ -205,6 +233,7 @@ export default function ChatPanel({
   onSend,
   onStop,
   onToggleSteps,
+  onOpenMemory,
 }: Props) {
   const [draft, setDraft] = useState("");
   const [attachedPaths, setAttachedPaths] = useState<string[]>([]);
@@ -370,6 +399,7 @@ export default function ChatPanel({
             message={m}
             workspacePath={workspacePath}
             onToggleSteps={onToggleSteps}
+            onOpenMemory={onOpenMemory}
           />
         ))}
       </div>

@@ -46,10 +46,11 @@ import type {
   SkillInspectResult,
   SkillMeta,
 } from "./lib/types";
-import { SettingsIcon, SkillsIcon } from "./components/icons";
+import { MemoryIcon, SettingsIcon, SkillsIcon } from "./components/icons";
 import SessionList from "./components/SessionList";
 import ChatPanel from "./components/ChatPanel";
 import SkillManager from "./components/SkillManager";
+import MemoryManager from "./components/MemoryManager";
 import SettingsModal from "./components/SettingsModal";
 import PermissionModal from "./components/PermissionModal";
 
@@ -82,6 +83,7 @@ function App() {
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [skillManagerOpen, setSkillManagerOpen] = useState(false);
+  const [memoryManagerOpen, setMemoryManagerOpen] = useState(false);
   const [config, setConfig] = useState<RuntimeConfig>(DEFAULT_CONFIG);
   const [permissionRequest, setPermissionRequest] = useState<PermissionRequestEvent | null>(null);
   const [permissionBusy, setPermissionBusy] = useState(false);
@@ -614,6 +616,15 @@ function App() {
               }));
               void refreshSessions();
             },
+            onMemoryUpdated: (ev) => {
+              patchAssistant((m) => ({
+                ...m,
+                memoryNote: ev,
+              }));
+              if (ev.skill_id) {
+                void refreshSkills();
+              }
+            },
             onError: (message) => {
               setPermissionRequest(null);
               if (isModelSetupError(message)) {
@@ -640,7 +651,7 @@ function App() {
         setSending(false);
       }
     },
-    [workspacePath, runtimeReady, refreshSessions, config, rememberOpen],
+    [workspacePath, runtimeReady, refreshSessions, refreshSkills, config, rememberOpen],
   );
 
   const handleStop = useCallback(async () => {
@@ -773,6 +784,17 @@ function App() {
             <button
               type="button"
               className="btn btn--ghost btn--icon"
+              onClick={() => setMemoryManagerOpen(true)}
+              aria-label="记忆"
+              title="记忆"
+              aria-haspopup="dialog"
+              aria-expanded={memoryManagerOpen}
+            >
+              <MemoryIcon />
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon"
               onClick={() => setSkillManagerOpen(true)}
               aria-label="技能管理"
               title="技能管理"
@@ -824,8 +846,18 @@ function App() {
           onSend={handleSend}
           onStop={() => void handleStop()}
           onToggleSteps={handleToggleSteps}
+          onOpenMemory={() => setMemoryManagerOpen(true)}
         />
       </div>
+
+      <MemoryManager
+        open={memoryManagerOpen}
+        onClose={() => setMemoryManagerOpen(false)}
+        load={() => runtimeClient.getMemory()}
+        save={(body) => runtimeClient.putMemory(body)}
+        undo={() => runtimeClient.undoMemory()}
+        onOpenSkills={() => setSkillManagerOpen(true)}
+      />
 
       <SkillManager
         open={skillManagerOpen}

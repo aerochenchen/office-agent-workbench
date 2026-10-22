@@ -48,6 +48,15 @@ export function SkillsIcon() {
   );
 }
 
+export function MemoryIcon() {
+  return (
+    <Icon>
+      <circle cx="8" cy="5.2" r="2.35" />
+      <path d="M3.4 13.2c.55-2.55 2.35-3.9 4.6-3.9s4.05 1.35 4.6 3.9" />
+    </Icon>
+  );
+}
+
 export function SettingsIcon() {
   return (
     <Icon>

@@ -46,6 +46,23 @@
   font-size: var(--font-size-xs);
 }
 
+.memory-note {
+  display: inline-flex;
+  margin-top: var(--space-2);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent-teal);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  text-align: left;
+}
+
+.memory-note:hover {
+  text-decoration: underline;
+}
+
 .live-steps {
   display: flex;
   flex-direction: column;

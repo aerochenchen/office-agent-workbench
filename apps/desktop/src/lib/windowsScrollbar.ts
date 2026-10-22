@@ -6,6 +6,7 @@ const SCROLL_SELECTOR = [
   ".settings-pane",
   ".settings-notice-text",
   ".skill-manager-body",
+  ".memory-manager-body",
   ".modal-body",
 ].join(",");
 

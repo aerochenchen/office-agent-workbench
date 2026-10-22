@@ -37,6 +37,8 @@ from office_agent.deployment import (
 from office_agent.diagnostic import configure as diagnostic_configure
 from office_agent.diagnostic import emit as diag_emit
 from office_agent.gateway import GatewayError, ModelGateway
+from office_agent.memory_reflect import run_reflection
+from office_agent.memory_store import MemoryStore
 from office_agent.paths import app_data_dir, write_private_text
 from office_agent.secret_store import SEAL_PREFIX, seal_secret, unseal_secret
 from office_agent.permissions import (
@@ -192,6 +194,7 @@ class ProcessState:
     registry: SkillRegistry = field(default_factory=SkillRegistry)
     sessions: SessionStore = field(default_factory=SessionStore)
     audit: AuditLog = field(default_factory=_default_audit)
+    memory: MemoryStore = field(default_factory=MemoryStore)
     workspace: Workspace | None = None
     gateway_factory: Callable[[AppConfig], Any] = ModelGateway
     # Soft-fail localize attempts this process (avoid re-calling LLM on every refresh)
@@ -258,6 +261,22 @@ class PermissionBody(BaseModel):
 
 class CancelChatBody(BaseModel):
     session_id: str
+
+
+class MemoryHabitBody(BaseModel):
+    topic: str
+    text: str
+    updated_at: float | None = None
+
+
+class MemoryRecentBody(BaseModel):
+    text: str
+    updated_at: float | None = None
+
+
+class MemoryPutBody(BaseModel):
+    habits: list[MemoryHabitBody] = Field(default_factory=list)
+    recent: list[MemoryRecentBody] = Field(default_factory=list)
 
 
 def _chat_status_from_tool_events(
@@ -440,6 +459,35 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             m = office.maybe_localize_skill(m)
             skills.append(office.registry.meta_payload(m))
         return {"skills": skills}
+
+    @app.get("/memory")
+    def get_memory() -> dict[str, Any]:
+        return office.memory.snapshot()
+
+    @app.put("/memory")
+    def put_memory(body: MemoryPutBody) -> dict[str, Any]:
+        snap = office.memory.replace_all(
+            [h.model_dump() for h in body.habits],
+            [r.model_dump() for r in body.recent],
+            save_undo=True,
+        )
+        office.audit.record_event(
+            "memory_edited",
+            attrs={
+                "habits": len(snap.get("habits") or []),
+                "recent": len(snap.get("recent") or []),
+            },
+        )
+        return snap
+
+    @app.post("/memory/undo")
+    def undo_memory() -> dict[str, Any]:
+        try:
+            snap = office.memory.undo()
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        office.audit.record_event("memory_undone")
+        return snap
 
     def _skill_error_detail(exc: SkillError) -> dict[str, Any] | str:
         validation = getattr(exc, "validation", None)
@@ -712,6 +760,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         list[str],
         int,
         list[dict[str, Any]],
+        str,
     ]:
         # Sidecar restarts drop in-memory workspace; recover from session path.
         if office.workspace is None and body.session_id:
@@ -750,6 +799,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 [],
                 office.config.max_tool_steps,
                 history,
+                "",
             )
 
         ws = office.require_workspace()
@@ -788,6 +838,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
         )
         catalog = office.registry.enabled_catalog()
         history = office.sessions.get_messages(session_id)
+        memory_digest = office.memory.prompt_digest()
         return (
             session_id,
             gateway,
@@ -796,7 +847,56 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
             attached,
             office.config.max_tool_steps,
             history,
+            memory_digest,
         )
+
+    def _run_post_turn_memory(
+        *,
+        gateway: Any,
+        message: str,
+        result: Any,
+        onboarding: bool,
+        cancelled: bool = False,
+        error: bool = False,
+        session_id: str | None = None,
+        turn_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        update = run_reflection(
+            gateway=gateway,
+            store=office.memory,
+            registry=None if onboarding else office.registry,
+            user_message=message,
+            final_text=str(getattr(result, "final_text", "") or ""),
+            tool_events=list(getattr(result, "tool_events", None) or []),
+            onboarding=onboarding,
+            cancelled=cancelled,
+            error=error,
+        )
+        if not update:
+            return None
+        attrs: dict[str, Any] = {
+            "topics": list(update.get("topics") or []),
+            "topic_count": len(update.get("topics") or []),
+            "recent_chars": len(str(update.get("recent_line") or "")),
+        }
+        if update.get("skill_id"):
+            attrs["skill_id"] = update["skill_id"]
+            office.audit.record_event(
+                "skill_crystallized",
+                session_id=session_id,
+                turn_id=turn_id,
+                attrs={
+                    "skill_id": update["skill_id"],
+                    "display_name": update.get("display_name"),
+                },
+            )
+        office.audit.record_event(
+            "memory_updated",
+            session_id=session_id,
+            turn_id=turn_id,
+            attrs=attrs,
+        )
+        return update
 
     def _sse(event: str, data: dict[str, Any]) -> str:
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -804,7 +904,16 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     @app.post("/chat")
     async def chat(body: ChatBody) -> dict[str, Any]:
         """Run agent off the event loop so /health stays responsive during long chats."""
-        session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(body)
+        (
+            session_id,
+            gateway,
+            tools,
+            catalog,
+            attached,
+            max_steps,
+            history,
+            memory_digest,
+        ) = _prepare_chat(body)
         message = body.message
         started = time.monotonic()
         diag_emit("chat_started", session_id=session_id)
@@ -824,6 +933,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                 max_steps,
                 history=history,
                 onboarding=tools is None,
+                memory_digest=memory_digest,
             )
 
         status = "ok"
@@ -861,11 +971,25 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     session_id,
                     exc_info=True,
                 )
-            return {
+            memory_update = None
+            if status != "error":
+                memory_update = await asyncio.to_thread(
+                    lambda: _run_post_turn_memory(
+                        gateway=gateway,
+                        message=message,
+                        result=result,
+                        onboarding=tools is None,
+                        session_id=session_id,
+                    )
+                )
+            out: dict[str, Any] = {
                 "reply": result.final_text,
                 "tool_events": result.tool_events,
                 "session_id": session_id,
             }
+            if memory_update:
+                out["memory_update"] = memory_update
+            return out
         finally:
             diag_emit(
                 "chat_finished",
@@ -879,9 +1003,16 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
     async def chat_stream(body: ChatBody) -> StreamingResponse:
         """SSE progress for one chat turn: started/status/tool_*/permission_request/final/error."""
         prepared_turn_id = str(uuid4())
-        session_id, gateway, tools, catalog, attached, max_steps, history = _prepare_chat(
-            body, interactive=True, turn_id=prepared_turn_id
-        )
+        (
+            session_id,
+            gateway,
+            tools,
+            catalog,
+            attached,
+            max_steps,
+            history,
+            memory_digest,
+        ) = _prepare_chat(body, interactive=True, turn_id=prepared_turn_id)
         message = body.message
         turn_id = tools.turn_id if tools is not None else prepared_turn_id
         event_q: queue.Queue[tuple[str, dict[str, Any]] | None] = queue.Queue()
@@ -967,6 +1098,7 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                     cancel=cancel_token,
                     turn_id=turn_id,
                     onboarding=tools is None,
+                    memory_digest=memory_digest,
                 )
                 steps = len(result.tool_events)
                 status = _chat_status_from_tool_events(result.tool_events, base=status)
@@ -992,6 +1124,19 @@ def create_app(state: ProcessState | None = None) -> FastAPI:
                         "session_id": session_id,
                     },
                 )
+                cancelled = str(result.final_text or "").startswith("已取消")
+                if status != "error":
+                    memory_update = _run_post_turn_memory(
+                        gateway=gateway,
+                        message=message,
+                        result=result,
+                        onboarding=tools is None,
+                        cancelled=cancelled,
+                        session_id=session_id,
+                        turn_id=turn_id,
+                    )
+                    if memory_update:
+                        emit("memory_updated", memory_update)
             except GatewayError as e:
                 status = "error"
                 _record_gateway_error(e)

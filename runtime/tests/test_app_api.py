@@ -1341,3 +1341,108 @@ def test_skill_install_audits(client: TestClient, tmp_path: Path, app_state: Pro
     assert un_attrs["skill_id"] == "audit-skill"
     assert "path" not in un_attrs
 
+
+def test_memory_get_put_undo(client: TestClient, app_state: ProcessState):
+    empty = client.get("/memory")
+    assert empty.status_code == 200
+    assert empty.json()["habits"] == []
+    assert empty.json()["can_undo"] is False
+
+    put = client.put(
+        "/memory",
+        json={
+            "habits": [{"topic": "语气", "text": "少确认"}],
+            "recent": [{"text": "刚做完排版"}],
+        },
+    )
+    assert put.status_code == 200
+    body = put.json()
+    assert body["habits"][0]["topic"] == "语气"
+    assert body["can_undo"] is True
+
+    client.put(
+        "/memory",
+        json={
+            "habits": [{"topic": "语气", "text": "更短"}],
+            "recent": [{"text": "又改了"}],
+        },
+    )
+    undone = client.post("/memory/undo")
+    assert undone.status_code == 200
+    assert undone.json()["habits"][0]["text"] == "少确认"
+
+
+def test_chat_reflects_and_injects_memory(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    reflect_json = json.dumps(
+        {"habits": [{"topic": "交付", "text": "都放工作成果"}], "recent": ["做完一次列表"]},
+        ensure_ascii=False,
+    )
+    gateway = FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[_tool_call("c1", "workspace_list", {"path": "."})],
+            ),
+            _completion(content="已列出"),
+            _completion(content=reflect_json),
+        ]
+    )
+    app_state.gateway_factory = lambda _cfg: gateway
+
+    r = client.post("/chat", json={"message": "列出文件"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["reply"] == "已列出"
+    assert body.get("memory_update")
+    assert "交付" in body["memory_update"]["topics"]
+
+    mem = client.get("/memory").json()
+    assert any(h["topic"] == "交付" for h in mem["habits"])
+
+    gateway2 = FakeGateway(responses=[_completion(content="好的")])
+    app_state.gateway_factory = lambda _cfg: gateway2
+    r2 = client.post("/chat", json={"message": "再来"})
+    assert r2.status_code == 200
+    system = gateway2.chat_calls[0]["messages"][0]["content"]
+    assert "办事备忘" in system
+    assert "都放工作成果" in system
+
+
+def test_chat_stream_emits_memory_updated(
+    client: TestClient, tmp_path: Path, app_state: ProcessState
+):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    client.post("/workspace/open", json={"path": str(ws)})
+
+    reflect_json = json.dumps(
+        {"habits": [{"topic": "确认", "text": "少问"}], "recent": []},
+        ensure_ascii=False,
+    )
+    app_state.gateway_factory = lambda _cfg: FakeGateway(
+        responses=[
+            _completion(
+                tool_calls=[
+                    _tool_call("c1", "finish", {"summary": "完成"}),
+                ],
+            ),
+            _completion(content=reflect_json),
+        ]
+    )
+
+    with client.stream("POST", "/chat/stream", json={"message": "结束"}) as r:
+        assert r.status_code == 200
+        text = "".join(r.iter_text())
+
+    events = _parse_sse_events(text)
+    names = [ev for ev, _ in events]
+    assert "final" in names
+    assert "memory_updated" in names
+    mem_ev = next(data for ev, data in events if ev == "memory_updated")
+    assert "确认" in mem_ev.get("topics", [])
+

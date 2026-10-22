@@ -1,6 +1,8 @@
 import type {
   ChatReply,
   ChatStreamHandlers,
+  MemorySnapshot,
+  MemoryUpdateEvent,
   PermissionRequestEvent,
   RuntimeConfig,
   SessionMeta,
@@ -239,6 +241,22 @@ export function createSseDispatcher(handlers: ChatStreamHandlers): {
           session_id: String(data.session_id ?? ""),
         });
         break;
+      case "memory_updated": {
+        const topics = Array.isArray(data.topics)
+          ? data.topics.map((t) => String(t))
+          : [];
+        const ev: MemoryUpdateEvent = {
+          topics,
+          recent_line: typeof data.recent_line === "string" ? data.recent_line : undefined,
+          can_undo: typeof data.can_undo === "boolean" ? data.can_undo : undefined,
+          changed: typeof data.changed === "boolean" ? data.changed : undefined,
+          skill_id: typeof data.skill_id === "string" ? data.skill_id : undefined,
+          display_name:
+            typeof data.display_name === "string" ? data.display_name : undefined,
+        };
+        handlers.onMemoryUpdated?.(ev);
+        break;
+      }
       case "error":
         outcome.sawError = true;
         handlers.onError?.(String(data.message ?? "未知错误"));
@@ -499,6 +517,24 @@ export const runtimeClient = {
       method: "PATCH",
       body: JSON.stringify({ title }),
     });
+  },
+
+  getMemory(): Promise<MemorySnapshot> {
+    return request("/memory");
+  },
+
+  putMemory(body: {
+    habits: Array<{ topic: string; text: string; updated_at?: number }>;
+    recent: Array<{ text: string; updated_at?: number }>;
+  }): Promise<MemorySnapshot> {
+    return request("/memory", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  undoMemory(): Promise<MemorySnapshot> {
+    return request("/memory/undo", { method: "POST", body: "{}" });
   },
 
   listSkills(): Promise<{ skills: SkillMeta[] }> {

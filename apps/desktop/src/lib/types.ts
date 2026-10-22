@@ -86,10 +86,46 @@ export interface ToolEvent {
   result: unknown;
 }
 
+export interface MemoryHabit {
+  topic: string;
+  text: string;
+  updated_at?: number;
+}
+
+export interface MemoryRecent {
+  text: string;
+  updated_at?: number;
+}
+
+export interface MemoryCrystallized {
+  signature: string;
+  skill_id: string;
+  display_name: string;
+  version?: string;
+  updated_at?: number;
+}
+
+export interface MemorySnapshot {
+  habits: MemoryHabit[];
+  recent: MemoryRecent[];
+  can_undo: boolean;
+  crystallized?: MemoryCrystallized[];
+}
+
+export interface MemoryUpdateEvent {
+  topics: string[];
+  recent_line?: string;
+  can_undo?: boolean;
+  changed?: boolean;
+  skill_id?: string;
+  display_name?: string;
+}
+
 export interface ChatReply {
   reply: string;
   tool_events: ToolEvent[];
   session_id: string;
+  memory_update?: MemoryUpdateEvent;
 }
 
 export type MessageRole = "user" | "assistant" | "error";
@@ -119,6 +155,8 @@ export interface ChatMessage {
   turnId?: string;
   statusPhase?: "planning" | "tools" | "finishing";
   stepsExpanded?: boolean;
+  /** Post-turn memory note shown under the assistant reply. */
+  memoryNote?: MemoryUpdateEvent;
 }
 
 export interface SessionMeta {
@@ -189,5 +227,6 @@ export interface ChatStreamHandlers {
   }) => void;
   onPermissionRequest?: (ev: PermissionRequestEvent) => void;
   onFinal?: (reply: ChatReply) => void;
+  onMemoryUpdated?: (ev: MemoryUpdateEvent) => void;
   onError?: (message: string) => void;
 }
