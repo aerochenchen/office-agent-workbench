@@ -1,13 +1,15 @@
 ---
 name: chart-generation
 description: 把表格、Excel、CSV、数字等数据自动转成最合适的图表，可按需换图型；用于展示、分析、汇报。
-version: 1.1.0
+version: 1.2.0
 tier: light
 display_name: 图表生成
 ---
 # Chart Generation
 
 A general-purpose workflow for turning any kind of source material into the chart that best communicates it — and for re-rendering the same data as a different chart type on request.
+
+**PPT 内图表不要走本技能**：做或改幻灯片时用 `ppt-maker` 的 `type: chart` / `mixed_chart`。本技能用于独立 PNG、插入 Word/报告。
 
 **Runtime note (文书通):** Standard / local-deploy Runtime ships **matplotlib** (Agg → PNG). Do **not** assume plotly, kaleido, or seaborn are installed. Prefer matplotlib for all static report charts; if a chart type is awkward in matplotlib, pick a simpler equivalent rather than pulling heavy optional libraries or hand-drawing with PIL.
 
@@ -84,6 +86,7 @@ When the user asks to see the same data differently ("换个图"、"用柱状图
 - `references/implementation.md` — 文书通 Runtime 以 matplotlib 为默认静态出图；无 plotly/kaleido；含 Agg、中文字体与降级约定。
 
 ## 变更记录
+- 1.2.0 — PPT 内图表改走 ppt-maker
 - 1.1.0 — 对齐标准底座：内嵌 matplotlib；明确禁止依赖 plotly/kaleido/PIL 手绘；复杂图降级为常规统计图。
 - 1.0.0 — 版本升为 1.0.0（正式版），description 保持中文，正文不变。
 - 0.1.1 — description 由英文改写为中文（界面展示用），正文内容不变。

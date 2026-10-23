@@ -1,0 +1,14 @@
+{
+  "id": "dayin-paper",
+  "name": "素雅纸本",
+  "occasion": "需打印或转 PDF",
+  "primary": "3A3F45",
+  "secondary": "6E757C",
+  "accent": "3F5E6B",
+  "background": "FFFFFF",
+  "ink": "111111",
+  "muted": "8A9096",
+  "on_primary": "FFFFFF",
+  "font_title": "微软雅黑",
+  "font_body": "微软雅黑"
+}

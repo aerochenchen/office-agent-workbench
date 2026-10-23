@@ -38,6 +38,9 @@ Operations (repeatable / combinable):
   --set-footer N TEXT      Enable the layout's footer placeholder with TEXT.
   --set-notes N TEXT       Replace slide N's speaker notes.
   --append-notes N TEXT    Append a paragraph to slide N's speaker notes.
+  --palette ID_OR_JSON     Restyle fills/fonts/charts to a palette
+                           (zhengwu-navy or palettes/*.json / {primary: hex}).
+                           Does not change slide text.
 """
 import argparse
 import copy
@@ -390,6 +393,8 @@ def main(argv=None):
     parser.add_argument("--set-footer", nargs=2, metavar=("SLIDE", "TEXT"))
     parser.add_argument("--set-notes", nargs=2, metavar=("SLIDE", "TEXT"))
     parser.add_argument("--append-notes", nargs=2, metavar=("SLIDE", "TEXT"))
+    parser.add_argument("--palette", metavar="ID_OR_JSON",
+                        help="restyle to palette id, json path, or {\"primary\":\"HEX\"}")
     args = parser.parse_args(argv)
 
     try:
@@ -441,6 +446,22 @@ def main(argv=None):
     if args.move_slide:
         move_slide(prs, *args.move_slide)
         report["slide_moved"] = args.move_slide
+    if args.palette:
+        try:
+            from pptx_engine import load_palette, restyle_presentation
+            raw = args.palette.strip()
+            palette_arg: object = raw
+            pal_path = Path(raw)
+            if pal_path.suffix.lower() == ".json" or pal_path.is_file():
+                palette_arg = json.loads(_ws(raw).read_text(encoding="utf-8"))
+            elif raw.startswith("{"):
+                palette_arg = json.loads(raw)
+            styled = restyle_presentation(prs, load_palette(palette_arg))
+            report["palette"] = styled.get("palette")
+            report["palette_applied"] = True
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
 
     try:
         out_path.parent.mkdir(parents=True, exist_ok=True)

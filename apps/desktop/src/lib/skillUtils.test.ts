@@ -12,15 +12,15 @@ describe("BUNDLED_SKILL_IDS", () => {
   it("includes known bundled skill ids", () => {
     expect(BUNDLED_SKILL_IDS.has("government-document-format")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("multidoc-digest")).toBe(true);
-    expect(BUNDLED_SKILL_IDS.has("office-visual-design")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("doc-proofread")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("doc-diff-review")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("meeting-followup")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("material-gap")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("sheet-to-brief")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("one-to-three")).toBe(true);
-    expect(BUNDLED_SKILL_IDS.has("brief-deck")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("ppt-maker")).toBe(true);
+    expect(BUNDLED_SKILL_IDS.has("brief-deck")).toBe(false);
+    expect(BUNDLED_SKILL_IDS.has("office-visual-design")).toBe(false);
     expect(BUNDLED_SKILL_IDS.has("chart-generation")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("skill-builder")).toBe(true);
     expect(BUNDLED_SKILL_IDS.has("regulation-pre-review")).toBe(true);

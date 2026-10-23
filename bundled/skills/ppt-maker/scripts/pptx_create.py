@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Create a .pptx presentation from a JSON deck spec.
 
-Spec format (all positions/sizes in inches, colors as RRGGBB hex):
+Preferred (semantic) spec uses closed `type` values and a palette id;
+the engine owns positions and colors. See pptx_engine.py.
+
+Legacy spec (layout + inches/hex) is still accepted for templates/tests:
 {
   "slide_size": "16:9",              // or "4:3" (default "16:9")
   "slides": [
@@ -211,6 +214,11 @@ def main(argv=None):
         spec_path = _ws(args.spec)
         out_path = _ws(args.output)
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        from pptx_engine import build_semantic, is_semantic_spec
+        if is_semantic_spec(spec):
+            result = build_semantic(spec, out_path, confine_path=lambda p: str(_ws(p)))
+            print(json.dumps(result, ensure_ascii=False))
+            return 0
         _confine_images(spec)
         prs = Presentation()
         if spec.get("slide_size", "16:9") == "16:9":

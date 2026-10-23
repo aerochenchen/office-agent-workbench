@@ -205,24 +205,14 @@ export const CAPABILITY_TREE: readonly CapabilityBranch[] = [
     label: "汇报演示",
     children: [
       {
-        id: "ppt-palette",
-        label: "正式配色",
-        saying: "给 PPT 选一套正式汇报配色",
-      },
-      {
-        id: "ppt-outline",
-        label: "汇报提纲",
-        saying: "按这份材料整理成汇报提纲，适合做成幻灯片",
-      },
-      {
-        id: "ppt-deck-and-script",
-        label: "演示文稿",
-        saying: "根据这份材料生成一套 PPT，并写一份对应的汇报稿",
-      },
-      {
         id: "ppt-maker",
         label: "PPT制作",
         saying: "把材料做成幻灯片，或修改已有的 PPT",
+      },
+      {
+        id: "ppt-deck-and-script",
+        label: "演示文稿与口播",
+        saying: "根据这份材料生成一套 PPT，并写一份对应的汇报稿",
       },
     ],
   },

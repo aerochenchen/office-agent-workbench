@@ -210,6 +210,9 @@ def test_system_prompt_routes_general_pptx_to_ppt_maker():
     assert "PPT制作" in text
     assert "禁止当场重写 python-pptx" in text
     assert "不要回答没有" in text
+    assert "pptx_validate.py" in text
+    assert "brief-deck" not in text
+    assert "office-visual-design" not in text
 
 
 def test_system_prompt_includes_plan_discipline():

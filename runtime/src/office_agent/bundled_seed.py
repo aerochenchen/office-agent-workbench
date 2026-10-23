@@ -10,6 +10,8 @@ import yaml
 
 from office_agent.paths import app_data_dir
 
+RETIRED_BUNDLED_SKILL_IDS = frozenset({"brief-deck", "office-visual-design"})
+
 
 def bundled_dir() -> Path:
     override = os.environ.get("OFFICE_AGENT_BUNDLED")
@@ -45,18 +47,59 @@ def _overridden_skill_ids(data_dir: Path) -> set[str]:
     return {str(k) for k, v in bucket.items() if v}
 
 
-def _frontmatter_display_name(md_path: Path) -> str | None:
+def _frontmatter_data(md_path: Path) -> dict:
+    if not md_path.is_file():
+        return {}
     text = md_path.read_text(encoding="utf-8")
     if not text.startswith("---"):
-        return None
+        return {}
     parts = text.split("---", 2)
     if len(parts) < 3:
-        return None
+        return {}
     data = yaml.safe_load(parts[1]) or {}
-    if not isinstance(data, dict):
-        return None
-    value = str(data.get("display_name") or "").strip()
+    return data if isinstance(data, dict) else {}
+
+
+def _frontmatter_display_name(md_path: Path) -> str | None:
+    value = str(_frontmatter_data(md_path).get("display_name") or "").strip()
     return value or None
+
+
+def _version_tuple(raw: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for piece in str(raw or "").split("."):
+        try:
+            parts.append(int(piece))
+        except ValueError:
+            parts.append(0)
+    return tuple(parts) if parts else (0,)
+
+
+def _should_refresh_factory(src_md: Path, dest_md: Path) -> bool:
+    """Replace factory copy when bundled version is newer. Skip unknown dest versions."""
+    src_ver = str(_frontmatter_data(src_md).get("version") or "").strip()
+    dest_ver = str(_frontmatter_data(dest_md).get("version") or "").strip()
+    if not src_ver or not dest_ver:
+        return False
+    return _version_tuple(src_ver) > _version_tuple(dest_ver)
+
+
+def _remove_retired_factory_skills(
+    skills_src: Path, skills_dest: Path, overridden: set[str]
+) -> None:
+    if not skills_dest.is_dir():
+        return
+    bundled_ids = {
+        path.name
+        for path in skills_src.iterdir()
+        if path.is_dir() and (path / "SKILL.md").is_file()
+    }
+    for skill_id in RETIRED_BUNDLED_SKILL_IDS:
+        if skill_id in overridden or skill_id in bundled_ids:
+            continue
+        stale = skills_dest / skill_id
+        if stale.is_dir():
+            shutil.rmtree(stale)
 
 
 def _patch_display_name(md_path: Path, display_name: str) -> bool:
@@ -91,13 +134,13 @@ def _patch_display_name(md_path: Path, display_name: str) -> bool:
 def seed_bundled_assets(bundled_root: Path | None = None, *, overwrite: bool = False) -> None:
     """Sync standard bundled skills/scripts into app_data.
 
-    Skills are copied only when missing (overwrite=False by default) so user
-    copies are not clobbered on startup. Shared product scripts always refresh.
-    Pass overwrite=True to replace existing bundled skill directories.
+    Skills are copied when missing. Pass overwrite=True to replace existing
+    bundled skill directories. Shared product scripts always refresh.
 
-    For existing factory skills that are not marked overridden, refresh
-    ``display_name`` from the bundled SKILL.md so UI short names ship with
-    product updates without wiping local scripts or descriptions.
+    For existing factory skills that are not marked overridden:
+    - if bundled ``version`` is newer, replace the whole directory;
+    - otherwise refresh ``display_name`` only.
+    Retired factory ids (not overridden) are removed from app_data.
     """
     src_root = bundled_root or bundled_dir()
     if not src_root.is_dir():
@@ -132,9 +175,14 @@ def seed_bundled_assets(bundled_root: Path | None = None, *, overwrite: bool = F
                 continue
             if skill_dir.name in overridden:
                 continue
+            if _should_refresh_factory(skill_dir / "SKILL.md", target / "SKILL.md"):
+                shutil.rmtree(target)
+                shutil.copytree(skill_dir, target)
+                continue
             factory_name = _frontmatter_display_name(skill_dir / "SKILL.md")
             if not factory_name:
                 continue
             dest_md = target / "SKILL.md"
             if dest_md.is_file():
                 _patch_display_name(dest_md, factory_name)
+        _remove_retired_factory_skills(skills_src, skills_dest, overridden)

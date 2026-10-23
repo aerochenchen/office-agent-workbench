@@ -2,7 +2,7 @@
 name: one-to-three
 display_name: 一文三用
 description: 同一批材料编排成报告正文、汇报提纲与答问口径三件套。
-version: 1.0.0
+version: 1.1.0
 tier: light
 permissions:
   - workspace_read
@@ -24,7 +24,7 @@ target_file_type: .docx
 ## 何时用 / 不用
 
 - **用**：同一批材料要同时出报告、上台提纲、领导追问答问；或只要其中一件且语境是「从材料提炼」。
-- **不用**：只要幻灯片硬文件（走 `brief-deck`）；多份粗汇总（可先 `multidoc-digest` 再来本技能）；纯校对/红笔（走 `doc-proofread`）；对照题目查缺（走 `material-gap`）。
+- **不用**：只要幻灯片硬文件（走 `ppt-maker`）；多份粗汇总（可先 `multidoc-digest` 再来本技能）；纯校对/红笔（走 `doc-proofread`）；对照题目查缺（走 `material-gap`）。
 
 ## 输入与产出
 
@@ -105,7 +105,7 @@ N. 结语 / 请示事项
 
 ### Step 4 — 收尾（Agent，1 步）
 
-`finish` 列出交付路径；若用户还要 PPT/讲稿，提示继续用 `brief-deck`（可直接吃 `工作成果/汇报提纲.md`）。
+`finish` 列出交付路径；若用户还要 PPT/讲稿，提示继续用 `ppt-maker`（可直接吃 `工作成果/汇报提纲.md`）。
 
 ## 步数预算
 
@@ -120,8 +120,9 @@ N. 结语 / 请示事项
 1. 三件套口径一致：提纲页序与报告章节、答问依据相互不打架。
 2. 禁止无出处定量；答问禁止虚构事实。
 3. 交付在 `工作成果/`；过程文件在 `.office-agent/work/one-to-three/`。
-4. 需要正式排版 Word 时，正文可再交 `government-document-format`；需要上台幻灯时交 `brief-deck`。
+4. 需要正式排版 Word 时，正文可再交 `government-document-format`；需要上台幻灯时交 `ppt-maker`。
 
 ## 变更记录
 
+- 1.1.0 — 上台幻灯改交 ppt-maker
 - 1.0.0 — Wave3：报告 / 提纲 / 答问编排

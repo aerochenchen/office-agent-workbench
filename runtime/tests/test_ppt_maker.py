@@ -262,7 +262,7 @@ def test_edit_swap_image(deck, workdir):
 
 def test_help_flags():
     for script in ("pptx_create.py", "pptx_read.py", "pptx_edit.py",
-                   "pptx_from_template.py"):
+                   "pptx_from_template.py", "pptx_validate.py"):
         proc = subprocess.run(
             [sys.executable, os.path.join(SCRIPTS, script), "--help"],
             capture_output=True, text=True, encoding="utf-8")
@@ -485,3 +485,228 @@ def test_jail_rejects_output_outside_workspace(tmp_path: Path):
     assert proc.returncode != 0
     assert "outside" in proc.stderr.lower() or "workspace" in proc.stderr.lower()
     assert not outside.exists()
+
+
+def _semantic_all_types():
+    return {
+        "title": "试点汇报",
+        "subtitle": "办公室 2026-10",
+        "palette": "zhengwu-navy",
+        "slides": [
+            {"type": "title", "title": "试点汇报", "subtitle": "办公室",
+             "notes": "开场"},
+            {"type": "toc", "title": "汇报提纲",
+             "bullets": ["背景", "进展", "问题", "建议"]},
+            {"type": "section", "title": "第一部分 进展"},
+            {"type": "bullets", "title": "主要进展",
+             "bullets": ["完成摸底", "启动试点", "形成口径"]},
+            {"type": "two_column", "title": "对照",
+             "left": ["已完成"], "right": ["待推进"]},
+            {"type": "kpi", "title": "指标",
+             "kpis": [{"label": "覆盖率", "value": "92%"},
+                      {"label": "办结", "value": "18"}]},
+            {"type": "table", "title": "一览",
+             "rows": [["事项", "进度"], ["摸底", "完成"], ["试点", "进行中"]]},
+            {"type": "chart", "title": "对比",
+             "chart": {"kind": "bar", "categories": ["一季度", "二季度"],
+                       "series": {"本部": [10, 12], "分部": [7, 9]}}},
+            {"type": "mixed_chart", "title": "解读",
+             "chart": {"kind": "line", "categories": ["1月", "2月", "3月"],
+                       "series": {"趋势": [1, 3, 2]}},
+             "bullets": ["前低后高", "需核实口径"]},
+            {"type": "process", "title": "步骤",
+             "steps": ["摸底", "试点", "推广"]},
+            {"type": "closing", "title": "请示事项",
+             "bullets": ["请予支持"]},
+        ],
+    }
+
+
+def test_semantic_all_types_create(workdir):
+    spec_path = workdir / "semantic.json"
+    write_json(spec_path, _semantic_all_types())
+    report = run("pptx_validate.py", str(spec_path))
+    assert report["ok"] is True
+    out = workdir / "semantic.pptx"
+    result = run("pptx_create.py", str(spec_path), str(out))
+    assert result["ok"] and result["slides"] == 11
+    assert result["palette"] == "zhengwu-navy"
+    outline = run("pptx_read.py", str(out), "--outline")
+    assert outline["slide_count"] == 11
+    texts = [" ".join(s["texts"]) for s in outline["slides"]]
+    assert "试点汇报" in texts[0]
+    assert "汇报提纲" in texts[1]
+    assert "第一部分 进展" in texts[2]
+    assert "完成摸底" in texts[3]
+    assert "已完成" in texts[4] and "待推进" in texts[4]
+    assert "92%" in texts[5]
+    assert outline["slides"][6]["tables"][0][1] == ["摸底", "完成"]
+    assert outline["slides"][7]["charts"][0]["categories"] == ["一季度", "二季度"]
+    assert "前低后高" in texts[8]
+    assert "推广" in texts[9]
+    assert "请予支持" in texts[10]
+    assert outline["slides"][0]["notes"] == "开场"
+
+
+def test_semantic_default_vs_variant_differs(workdir):
+    from pptx import Presentation
+    base = {
+        "palette": "zhengwu-navy",
+        "slides": [{"type": "bullets", "title": "要点",
+                    "bullets": ["甲", "乙", "丙"]}],
+    }
+    cards = {
+        "palette": "zhengwu-navy",
+        "slides": [{"type": "bullets", "variant": "cards", "title": "要点",
+                    "bullets": ["甲", "乙", "丙"]}],
+    }
+    write_json(workdir / "base.json", base)
+    write_json(workdir / "cards.json", cards)
+    run("pptx_create.py", str(workdir / "base.json"), str(workdir / "base.pptx"))
+    run("pptx_create.py", str(workdir / "cards.json"), str(workdir / "cards.pptx"))
+    n_base = len(Presentation(str(workdir / "base.pptx")).slides[0].shapes)
+    n_cards = len(Presentation(str(workdir / "cards.pptx")).slides[0].shapes)
+    assert n_cards > n_base
+    outline = run("pptx_read.py", str(workdir / "cards.pptx"))
+    blob = " ".join(outline["slides"][0]["texts"])
+    assert "甲" in blob and "乙" in blob
+
+
+def test_validate_rejects_bad_type_too_many_bullets_and_hex(workdir):
+    bad_type = {"slides": [{"type": "magic", "title": "x"}]}
+    write_json(workdir / "bad_type.json", bad_type)
+    proc = run_raw("pptx_validate.py", str(workdir / "bad_type.json"))
+    assert proc.returncode != 0
+    report = json.loads(proc.stdout)
+    assert report["ok"] is False
+    assert any("type" in e for e in report["errors"])
+
+    too_many = {"palette": "zhengwu-navy", "slides": [
+        {"type": "bullets", "title": "x",
+         "bullets": [f"要点{i}" for i in range(8)]}]}
+    write_json(workdir / "too_many.json", too_many)
+    proc = run_raw("pptx_validate.py", str(workdir / "too_many.json"))
+    assert proc.returncode != 0
+    assert "上限" in proc.stdout
+
+    canvas_hex = {"palette": "zhengwu-navy", "slides": [{
+        "type": "canvas", "title": "x",
+        "shapes": [{"type": "rectangle", "left": 1, "top": 1,
+                    "width": 2, "height": 1, "fill": "FF00FF"}],
+    }]}
+    write_json(workdir / "canvas_hex.json", canvas_hex)
+    proc = run_raw("pptx_validate.py", str(workdir / "canvas_hex.json"))
+    assert proc.returncode != 0
+    assert "FF00FF" in proc.stdout or "token" in proc.stdout
+
+    with_xy = {"palette": "zhengwu-navy", "slides": [
+        {"type": "bullets", "title": "x", "bullets": ["a"], "left": 1}]}
+    write_json(workdir / "xy.json", with_xy)
+    proc = run_raw("pptx_validate.py", str(workdir / "xy.json"))
+    assert proc.returncode != 0
+    assert "left" in proc.stdout
+
+
+def test_legacy_layout_spec_fails_validate_but_create_still_works(workdir):
+    spec = {"slides": [{"layout": "title", "title": "旧稿"}]}
+    write_json(workdir / "legacy.json", spec)
+    proc = run_raw("pptx_validate.py", str(workdir / "legacy.json"))
+    assert proc.returncode != 0
+    assert "layout" in proc.stdout
+    result = run("pptx_create.py", str(workdir / "legacy.json"),
+                 str(workdir / "legacy.pptx"))
+    assert result["ok"] and result["slides"] == 1
+
+
+def test_brief_deck_content_alias_accepted(workdir):
+    spec = {
+        "title": "汇报演示",
+        "slides": [
+            {"type": "title", "title": "汇报演示", "subtitle": "场合"},
+            {"type": "content", "title": "进展", "bullets": ["一项"]},
+            {"type": "closing", "title": "完毕", "bullets": ["请示"]},
+        ],
+    }
+    write_json(workdir / "brief.json", spec)
+    report = run("pptx_validate.py", str(workdir / "brief.json"))
+    assert report["ok"]
+    result = run("pptx_create.py", str(workdir / "brief.json"),
+                 str(workdir / "brief.pptx"))
+    assert result["slides"] == 3
+    outline = run("pptx_read.py", str(workdir / "brief.pptx"))
+    blob = " ".join(t for s in outline["slides"] for t in s["texts"])
+    assert "一项" in blob and "请示" in blob
+
+
+def test_canvas_token_fill_allowed(workdir):
+    spec = {
+        "palette": "zhengwu-navy",
+        "slides": [{
+            "type": "canvas",
+            "title": "标注",
+            "shapes": [{
+                "type": "rounded_rectangle",
+                "left": 1, "top": 2, "width": 3, "height": 1,
+                "fill": "primary", "text": "说明", "text_color": "on_primary",
+            }],
+        }],
+    }
+    write_json(workdir / "canvas.json", spec)
+    assert run("pptx_validate.py", str(workdir / "canvas.json"))["ok"]
+    run("pptx_create.py", str(workdir / "canvas.json"),
+        str(workdir / "canvas.pptx"))
+    outline = run("pptx_read.py", str(workdir / "canvas.pptx"))
+    assert "说明" in " ".join(outline["slides"][0]["texts"])
+
+
+def test_edit_palette_keeps_copy(workdir):
+    from pptx import Presentation
+    spec = {
+        "palette": "zhengwu-navy",
+        "title": "试点汇报",
+        "slides": [
+            {"type": "title", "title": "试点汇报", "subtitle": "办公室"},
+            {"type": "bullets", "title": "进展", "bullets": ["完成摸底"]},
+        ],
+    }
+    write_json(workdir / "navy.json", spec)
+    src = workdir / "navy.pptx"
+    run("pptx_create.py", str(workdir / "navy.json"), str(src))
+    edited = workdir / "crimson.pptx"
+    result = run("pptx_edit.py", str(src), "--output", str(edited),
+                 "--palette", "dangjian-crimson")
+    assert result["palette_applied"] and result["palette"] == "dangjian-crimson"
+    before = run("pptx_read.py", str(src))
+    after = run("pptx_read.py", str(edited))
+    assert before["slides"][0]["texts"] == after["slides"][0]["texts"]
+    assert before["slides"][1]["texts"] == after["slides"][1]["texts"]
+    prs = Presentation(str(edited))
+    fills = []
+    for shape in prs.slides[0].shapes:
+        try:
+            if shape.fill.type is not None:
+                fills.append(str(shape.fill.fore_color.rgb))
+        except (AttributeError, TypeError, ValueError):
+            continue
+    assert "8B1E1E" in fills
+
+
+def test_palette_from_primary_hex(workdir):
+    spec = {
+        "palette": {"primary": "003A70"},
+        "slides": [{"type": "title", "title": "单位蓝"}],
+    }
+    write_json(workdir / "brand.json", spec)
+    result = run("pptx_create.py", str(workdir / "brand.json"),
+                 str(workdir / "brand.pptx"))
+    assert result["ok"]
+    outline = run("pptx_read.py", str(workdir / "brand.pptx"))
+    assert "单位蓝" in outline["slides"][0]["texts"]
+
+
+def test_skill_mentions_unified_entry_and_forbids_handwritten_pptx():
+    text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+    assert "pptx_validate.py" in text
+    assert "brief-deck" not in text
+    assert "office-visual-design" not in text
+    assert "禁止当场重写 python-pptx" in text or "禁止在工作区重写 python-pptx" in text

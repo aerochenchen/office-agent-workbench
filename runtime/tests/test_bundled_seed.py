@@ -45,14 +45,12 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     expected = {
         "government-document-format",
         "multidoc-digest",
-        "office-visual-design",
         "doc-proofread",
         "doc-diff-review",
         "meeting-followup",
         "material-gap",
         "sheet-to-brief",
         "one-to-three",
-        "brief-deck",
         "ppt-maker",
         "chart-generation",
         "skill-builder",
@@ -78,8 +76,6 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert gongwen.get("display_name") == "公文排版"
     digest = next(s for s in skills if s["id"] == "multidoc-digest")
     assert digest.get("display_name") == "多份汇总"
-    visual = next(s for s in skills if s["id"] == "office-visual-design")
-    assert visual.get("display_name") == "正式配色"
     proof = next(s for s in skills if s["id"] == "doc-proofread")
     assert proof.get("display_name") == "通篇校对"
     diff_review = next(s for s in skills if s["id"] == "doc-diff-review")
@@ -92,8 +88,6 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert sheet.get("display_name") == "表格成文"
     one = next(s for s in skills if s["id"] == "one-to-three")
     assert one.get("display_name") == "一文三用"
-    deck = next(s for s in skills if s["id"] == "brief-deck")
-    assert deck.get("display_name") == "汇报成套"
     ppt = next(s for s in skills if s["id"] == "ppt-maker")
     assert ppt.get("display_name") == "PPT制作"
     chart = next(s for s in skills if s["id"] == "chart-generation")
@@ -104,15 +98,17 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert (tmp_path / "shared-scripts" / "docx_diff.py").is_file()
     assert (tmp_path / "skills" / "government-document-format" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "multidoc-digest" / "scripts" / "ingest.py").is_file()
-    assert (tmp_path / "skills" / "office-visual-design" / "palettes" / "zhengwu-navy.md").is_file()
+    assert (tmp_path / "skills" / "ppt-maker" / "palettes" / "zhengwu-navy.json").is_file()
     assert (tmp_path / "skills" / "doc-proofread" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "doc-diff-review" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "meeting-followup" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "material-gap" / "scripts" / "inventory.py").is_file()
     assert (tmp_path / "skills" / "sheet-to-brief" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "one-to-three" / "SKILL.md").is_file()
-    assert (tmp_path / "skills" / "brief-deck" / "scripts" / "build_pptx.py").is_file()
     assert (tmp_path / "skills" / "ppt-maker" / "scripts" / "pptx_create.py").is_file()
+    assert (tmp_path / "skills" / "ppt-maker" / "scripts" / "pptx_validate.py").is_file()
+    assert "brief-deck" not in ids
+    assert "office-visual-design" not in ids
     assert (tmp_path / "skills" / "chart-generation" / "SKILL.md").is_file()
     assert (
         tmp_path / "skills" / "chart-generation" / "references" / "chart-catalog.md"
@@ -188,3 +184,68 @@ def test_seed_refreshes_stale_display_name(tmp_path: Path, monkeypatch):
     assert "display_name: 多份汇总" in text
     assert "批量文档整理" not in text
     assert "description: keep" in text
+
+
+def test_seed_refreshes_when_bundled_version_newer(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    repo_bundled = Path(__file__).resolve().parents[2] / "bundled"
+
+    skill_dir = tmp_path / "skills" / "ppt-maker"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: ppt-maker\ndisplay_name: PPT制作\n"
+        "description: 旧版\nversion: 1.0.0\ntier: light\n---\n\n# 旧\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "STALE.txt").write_text("stale", encoding="utf-8")
+
+    seed_bundled_assets(repo_bundled)
+
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert "version: 2.0.0" in text
+    assert "pptx_validate.py" in text
+    assert not (skill_dir / "STALE.txt").is_file()
+    assert (skill_dir / "scripts" / "pptx_validate.py").is_file()
+    assert (skill_dir / "palettes" / "zhengwu-navy.json").is_file()
+
+
+def test_seed_removes_retired_factory_skills(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    repo_bundled = Path(__file__).resolve().parents[2] / "bundled"
+
+    for skill_id in ("brief-deck", "office-visual-design"):
+        path = tmp_path / "skills" / skill_id
+        path.mkdir(parents=True)
+        (path / "SKILL.md").write_text(
+            f"---\nname: {skill_id}\nversion: 1.0.0\ntier: light\n"
+            "description: 退役\n---\n\n# old\n",
+            encoding="utf-8",
+        )
+
+    seed_bundled_assets(repo_bundled)
+
+    assert not (tmp_path / "skills" / "brief-deck").exists()
+    assert not (tmp_path / "skills" / "office-visual-design").exists()
+
+
+def test_seed_keeps_overridden_retired_skill(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("OFFICE_AGENT_DATA", str(tmp_path))
+    repo_bundled = Path(__file__).resolve().parents[2] / "bundled"
+
+    skill_dir = tmp_path / "skills" / "brief-deck"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: brief-deck\ndisplay_name: 我的成套\n"
+        "description: x\nversion: 1.0.0\ntier: light\n---\n\n# keep\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "skills_state.json").write_text(
+        '{"overridden": {"brief-deck": true}}',
+        encoding="utf-8",
+    )
+
+    seed_bundled_assets(repo_bundled)
+
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert "我的成套" in text
+    assert skill_dir.is_dir()
