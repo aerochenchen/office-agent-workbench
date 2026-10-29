@@ -28,7 +28,8 @@ def main(argv=None) -> int:
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(json.dumps({"ok": False, "errors": [str(exc)]}, ensure_ascii=False))
         return 1
-    report = validate_deck(spec)
+    report = validate_deck(
+        spec, confine_path=lambda p: str(confine_to_workspace(Path(p), Path.cwd())))
     print(json.dumps(report, ensure_ascii=False))
     return 0 if report.get("ok") else 1
 

@@ -30,3 +30,7 @@
 ## 配色
 
 `palette` 用 id，或 `{"primary":"003A70"}` 由脚本生成整套 token。
+
+## 风格包
+
+用户说「以这份 PPT 为模板/参考/样板」时：先 `pptx_style.py` 抽出 `style.json`（palette / type_scale / chrome / motifs），再在 deck.json 写 `"style": "….json"`。引擎按风格包换皮肤，**禁止抄坐标**。无风格包时默认左色带 + 列表。

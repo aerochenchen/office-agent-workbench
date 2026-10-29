@@ -2,7 +2,7 @@
 name: ppt-maker
 display_name: PPT制作
 description: 做成或修改正式幻灯片，含提纲、配色、图表与口播稿。
-version: 2.0.0
+version: 2.1.0
 tier: light
 permissions:
   - workspace_read
@@ -26,6 +26,10 @@ trigger_phrases:
   - 汇报配色
   - 幻灯片风格
   - 套个配色
+  - 以这份PPT为模板
+  - 以这份PPT为参考
+  - 以这份PPT为样板
+  - 按这个风格做PPT
   - 按这份材料整理成汇报提纲，适合做成幻灯片
   - 根据这份材料生成一套 PPT，并写一份对应的汇报稿
 target_file_type: .pptx
@@ -39,7 +43,7 @@ target_file_type: .pptx
 
 ## 何时用 / 不用
 
-- **用**：做或改幻灯片；汇报提纲要落成 PPT；要口播稿；换正式配色；套单位模板；用户问有没有 PPT 能力。
+- **用**：做或改幻灯片；汇报提纲要落成 PPT；要口播稿；换正式配色；套单位模板；以已有 PPT 为模板/参考/样板做风格相近的新稿；用户问有没有 PPT 能力。
 - **不用**：红头公文；只要报告正文或答问；把表做成独立 PNG 去插 Word。
 
 ## 输入与产出
@@ -54,7 +58,9 @@ target_file_type: .pptx
 
 页类型、字段见 `references/layouts.md` 与 `references/deck.schema.md`。
 
-## 四条路径
+## 五条路径
+
+「模板」有两种，不要混：文件里有 `{{名称}}` 才走「套占位模板」；用户说「以这份 PPT 为模板/参考/样板」是抽风格包，禁止抄坐标。
 
 ### 新建（必须按序）
 
@@ -83,7 +89,7 @@ run_skill_script
 6. `pptx_read.py --outline` 核对页数、标题、表格和图表数字。
 7. 用户要口播稿才写 `工作成果/汇报稿.md`：按页序分段，同序同题。
 
-场合配色：`palette` 用 `zhengwu-navy`（默认）/`dangjian-crimson`/`fazhan-teal`/`shuzhi-steel`/`anquan-slate`/`peixun-warmgray`/`zhongdian-amber`/`dayin-paper`。有单位主色则 `"palette": {"primary": "003A70"}`。
+场合配色：`palette` 用 `zhengwu-navy`（默认）/`dangjian-crimson`/`fazhan-teal`/`shuzhi-steel`/`anquan-slate`/`peixun-warmgray`/`zhongdian-amber`/`dayin-paper`。有单位主色则 `"palette": {"primary": "003A70"}`。有风格包时写 `"style": ".office-agent/work/ppt-maker/style.json"`，不必再手填 palette。
 
 ### 读取
 
@@ -114,9 +120,26 @@ run_skill_script
 
 含图表的页不能复制，应新建一页。换皮不改文案。改完再 `pptx_read.py --outline`。
 
-### 套模板
+### 风格参考（模板 / 参考 / 样板）
 
-模板里写 `{{名称}}`，values JSON 为 `{"名称": "替换文字"}`。
+用户说「以这份 PPT 为模板/参考/样板」或「做成类似风格」时走本路径，不要去量参考稿的 left/top。
+
+1. 定位参考 `.pptx`（工作区内）。缺路径 `ask_user` **一次**。
+2. 抽风格包（配色、字号、封面/顶栏/卡片骨架；不含坐标）：
+
+```
+run_skill_script
+  skill_id: ppt-maker
+  script: pptx_style.py
+  args: [参考.pptx, .office-agent/work/ppt-maker/style.json]
+```
+
+3. 按「新建」写语义 `deck.json`，加上 `"style": ".office-agent/work/ppt-maker/style.json"`。内容按用户材料重写，页 `type` 仍只许从表里抄。
+4. 禁止把参考稿的形状坐标、blank+shapes 抄进 deck.json。校验、生成同「新建」。
+
+### 套占位模板
+
+仅当模板里写了 `{{名称}}`。values JSON 为 `{"名称": "替换文字"}`。
 
 ```
 run_skill_script
@@ -132,9 +155,10 @@ run_skill_script
 | 阶段 | 约计 |
 |------|------|
 | 读技能 + 材料/提纲 | 2～4 |
+| 抽风格包（仅参考稿路径） | 0～1 |
 | 写 JSON + 校验 + 生成 | 3 |
 | 回读；口播稿按需 | 1～3 |
-| **合计** | **≈6～10** |
+| **合计** | **≈6～11** |
 
 改已有文件：先读大纲，改完再回读。
 
@@ -145,9 +169,11 @@ run_skill_script
 3. 页 `type` 只能用封闭列表；坐标和裸 hex 仅 `type: canvas` 且颜色须为 palette token。
 4. 交付放在 `工作成果/`；过程 JSON 放在 `.office-agent/work/ppt-maker/`。
 5. 图片和输出路径必须在当前文件夹内。
-6. 用户问有没有 PPT 或幻灯片能力时，直接说明可以新建、读取、修改、换配色，并按本技能做。
+6. 用户问有没有 PPT 或幻灯片能力时，直接说明可以新建、读取、修改、换配色、按参考稿抽风格，并按本技能做。
+7. 用户说以某份 PPT 为模板/参考/样板时，必须先 `pptx_style.py` 再语义生成；禁止抄坐标。
 
 ## 变更记录
 
+- 2.1.0 — 「以这份 PPT 为模板/参考/样板」抽风格包再语义生成，禁止抄坐标。
 - 2.0.0 — 合并汇报成套与正式配色：语义页纲 + 版式引擎 + 校验；分档靠 variant/canvas。
 - 1.0.0 — 由 Nous Research powerpoint 1.1.0（MIT）改编为文书通预置技能。

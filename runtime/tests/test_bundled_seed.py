@@ -107,6 +107,7 @@ def test_bundled_assets_seeded_on_app_startup(tmp_path: Path, monkeypatch):
     assert (tmp_path / "skills" / "one-to-three" / "SKILL.md").is_file()
     assert (tmp_path / "skills" / "ppt-maker" / "scripts" / "pptx_create.py").is_file()
     assert (tmp_path / "skills" / "ppt-maker" / "scripts" / "pptx_validate.py").is_file()
+    assert (tmp_path / "skills" / "ppt-maker" / "scripts" / "pptx_style.py").is_file()
     assert "brief-deck" not in ids
     assert "office-visual-design" not in ids
     assert (tmp_path / "skills" / "chart-generation" / "SKILL.md").is_file()
@@ -202,7 +203,7 @@ def test_seed_refreshes_when_bundled_version_newer(tmp_path: Path, monkeypatch):
     seed_bundled_assets(repo_bundled)
 
     text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
-    assert "version: 2.0.0" in text
+    assert "version: 2.1.0" in text
     assert "pptx_validate.py" in text
     assert not (skill_dir / "STALE.txt").is_file()
     assert (skill_dir / "scripts" / "pptx_validate.py").is_file()

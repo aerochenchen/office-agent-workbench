@@ -262,7 +262,8 @@ def test_edit_swap_image(deck, workdir):
 
 def test_help_flags():
     for script in ("pptx_create.py", "pptx_read.py", "pptx_edit.py",
-                   "pptx_from_template.py", "pptx_validate.py"):
+                   "pptx_from_template.py", "pptx_validate.py",
+                   "pptx_style.py"):
         proc = subprocess.run(
             [sys.executable, os.path.join(SCRIPTS, script), "--help"],
             capture_output=True, text=True, encoding="utf-8")
@@ -710,3 +711,211 @@ def test_skill_mentions_unified_entry_and_forbids_handwritten_pptx():
     assert "brief-deck" not in text
     assert "office-visual-design" not in text
     assert "禁止当场重写 python-pptx" in text or "禁止在工作区重写 python-pptx" in text
+    assert "pptx_style.py" in text
+    assert "参考" in text and "样板" in text
+    assert "禁止抄坐标" in text or "不要抄坐标" in text
+
+
+def _solid_hex(shape):
+    try:
+        fill = shape.fill
+        if fill.type is not None and "SOLID" in str(fill.type).upper():
+            return str(fill.fore_color.rgb)
+    except Exception:
+        return None
+    return None
+
+
+def _build_style_reference(path: Path) -> None:
+    from pptx import Presentation
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import PP_ALIGN
+    from pptx.util import Inches, Pt
+
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    def paint(shape, hex_color):
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor.from_string(hex_color)
+        shape.line.fill.background()
+
+    def add_text(slide, left, top, width, height, text, *, size, color, font,
+                 bold=False, align=None):
+        box = slide.shapes.add_textbox(
+            Inches(left), Inches(top), Inches(width), Inches(height))
+        para = box.text_frame.paragraphs[0]
+        if align is not None:
+            para.alignment = align
+        run = para.add_run()
+        run.text = text
+        run.font.size = Pt(size)
+        run.font.bold = bold
+        run.font.name = font
+        run.font.color.rgb = RGBColor.from_string(color)
+
+    cover = prs.slides.add_slide(prs.slide_layouts[6])
+    bg = cover.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    paint(bg, "1B3A5C")
+    top = cover.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, Inches(0.15))
+    paint(top, "D4A838")
+    bot = cover.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, Inches(7.35), prs.slide_width, Inches(0.15))
+    paint(bot, "D4A838")
+    add_text(cover, 0, 2.5, 13.33, 0.7, "2026年第三季度",
+             size=32, color="FFFFFF", font="SimSun", align=PP_ALIGN.CENTER)
+    add_text(cover, 0, 3.2, 13.33, 0.9, "综合治理工作情况汇报",
+             size=40, color="FFFFFF", font="SimSun", bold=True,
+             align=PP_ALIGN.CENTER)
+    add_text(cover, 0, 4.3, 13.33, 0.45, "办公室",
+             size=20, color="D4A838", font="Microsoft YaHei",
+             align=PP_ALIGN.CENTER)
+
+    toc = prs.slides.add_slide(prs.slide_layouts[6])
+    bar = toc.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, Inches(0.12))
+    paint(bar, "1B3A5C")
+    add_text(toc, 0.6, 0.45, 12.0, 0.6, "主要内容",
+             size=26, color="2C3E50", font="SimSun", bold=True)
+    columns = [
+        (1.24, "1B3A5C", "综治安全"),
+        (5.27, "2E6CA4", "行政后勤"),
+        (9.31, "1A7A5C", "综合保障"),
+    ]
+    for i, (x, color, title) in enumerate(columns):
+        card = toc.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, Inches(x), Inches(1.8), Inches(2.8), Inches(4.8))
+        paint(card, "F0F4F8")
+        strip = toc.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, Inches(x), Inches(1.8), Inches(2.8), Inches(0.08))
+        paint(strip, color)
+        badge = toc.shapes.add_shape(
+            MSO_SHAPE.OVAL, Inches(x + 1.05), Inches(2.15), Inches(0.7), Inches(0.7))
+        paint(badge, color)
+        add_text(toc, x + 1.05, 2.15, 0.7, 0.7, "一二三"[i],
+                 size=20, color="FFFFFF", font="SimSun", bold=True,
+                 align=PP_ALIGN.CENTER)
+        add_text(toc, x, 3.05, 2.8, 0.45, title,
+                 size=15, color=color, font="Microsoft YaHei", bold=True,
+                 align=PP_ALIGN.CENTER)
+    add_text(toc, 12.13, 7.1, 0.6, 0.3, "2",
+             size=10, color="7F8C8D", font="Microsoft YaHei")
+
+    body = prs.slides.add_slide(prs.slide_layouts[6])
+    bar = body.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, Inches(0.12))
+    paint(bar, "1B3A5C")
+    add_text(body, 0.6, 0.5, 12.0, 0.6, "总体情况概述",
+             size=26, color="2C3E50", font="SimSun", bold=True)
+    add_text(body, 0.8, 1.7, 11.7, 1.2, "第三季度统筹推进，总体态势平稳可控。",
+             size=14, color="2C3E50", font="Microsoft YaHei")
+
+    closing = prs.slides.add_slide(prs.slide_layouts[6])
+    bg = closing.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0, prs.slide_width, prs.slide_height)
+    paint(bg, "1B3A5C")
+    add_text(closing, 0, 2.8, 13.33, 1.2, "汇报完毕",
+             size=44, color="FFFFFF", font="SimSun", bold=True,
+             align=PP_ALIGN.CENTER)
+    prs.save(str(path))
+
+
+def test_style_extract_from_reference_has_no_coordinates(workdir):
+    src = workdir / "style_ref.pptx"
+    _build_style_reference(src)
+    out = workdir / "style.json"
+    result = run("pptx_style.py", str(src), str(out))
+    assert result["ok"]
+    style = json.loads(out.read_text(encoding="utf-8"))
+    assert "left" not in style and "top" not in style and "shapes" not in style
+    pal = style["palette"]
+    assert pal["primary"] == "1B3A5C"
+    assert pal["accent"] == "D4A838"
+    assert pal["ink"] == "2C3E50"
+    assert pal["font_title"] in {"SimSun", "宋体"}
+    assert pal["font_body"] in {"Microsoft YaHei", "微软雅黑"}
+    assert style["chrome"]["cover"] == "dark-center"
+    assert style["chrome"]["header"] == "top-bar"
+    assert style["chrome"]["footer"] == "page-number"
+    assert style["chrome"]["number_badge"] is True
+    assert style["chrome"]["card"] == "tint-top-accent"
+    assert style["motifs"]["toc"] == "columns"
+    assert style["type_scale"]["cover_title"] >= 36
+    assert style["type_scale"]["page_title"] >= 24
+
+
+def test_style_pack_renders_like_reference_not_left_band(workdir):
+    from pptx import Presentation
+
+    src = workdir / "style_ref2.pptx"
+    _build_style_reference(src)
+    style_path = workdir / "style2.json"
+    run("pptx_style.py", str(src), str(style_path))
+    spec = {
+        "title": "修订情况汇报",
+        "style": str(style_path),
+        "slides": [
+            {"type": "title", "title": "综合目标管理规定",
+             "subtitle": "办公室 2026年10月"},
+            {"type": "toc", "title": "主要内容",
+             "bullets": ["修订背景", "主要修订", "请示事项"]},
+            {"type": "bullets", "title": "修订背景",
+             "bullets": ["建立安委会", "整合总体要求", "调整考核体系"]},
+            {"type": "closing", "title": "请予审议",
+             "bullets": ["请审议修订稿"]},
+        ],
+    }
+    spec_path = workdir / "styled.json"
+    write_json(spec_path, spec)
+    report = run("pptx_validate.py", str(spec_path))
+    assert report["ok"] is True
+    out = workdir / "styled.pptx"
+    result = run("pptx_create.py", str(spec_path), str(out))
+    assert result["ok"] and result["slides"] == 4
+    prs = Presentation(str(out))
+    cover_fills = [_solid_hex(sh) for sh in prs.slides[0].shapes]
+    assert "1B3A5C" in cover_fills
+    assert "D4A838" in cover_fills
+    cover_fonts = set()
+    cover_align = set()
+    for sh in prs.slides[0].shapes:
+        if not sh.has_text_frame:
+            continue
+        for para in sh.text_frame.paragraphs:
+            if para.alignment is not None:
+                cover_align.add(str(para.alignment))
+            for run_obj in para.runs:
+                if run_obj.font.name:
+                    cover_fonts.add(run_obj.font.name)
+                assert run_obj.font.size is not None
+    assert any("CENTER" in a for a in cover_align)
+    assert cover_fonts & {"SimSun", "宋体", "Microsoft YaHei", "微软雅黑"}
+
+    toc = prs.slides[1]
+    toc_fills = [_solid_hex(sh) for sh in toc.shapes]
+    assert "F0F4F8" in toc_fills or any(
+        f and f not in {"1B3A5C", "FFFFFF", "D4A838"} for f in toc_fills)
+    # 参考稿是顶栏而不是左侧色带：应有全宽矮条，不应只有一条瘦高左带。
+    wide_short = 0
+    tall_thin = 0
+    sw, shh = prs.slide_width, prs.slide_height
+    for sh in toc.shapes:
+        if sh.width is None:
+            continue
+        if sh.width >= sw * 0.9 and sh.height <= int(prs.slide_height * 0.05):
+            wide_short += 1
+        if sh.width <= int(sw * 0.04) and sh.height >= shh * 0.8:
+            tall_thin += 1
+    assert wide_short >= 1
+    assert tall_thin == 0
+    blob = " ".join(
+        sh.text_frame.text for sh in toc.shapes if sh.has_text_frame)
+    assert "修订背景" in blob and "主要修订" in blob
+
+    closing_blob = " ".join(
+        sh.text_frame.text for sh in prs.slides[3].shapes if sh.has_text_frame)
+    assert "请予审议" in closing_blob or "请审议修订稿" in closing_blob

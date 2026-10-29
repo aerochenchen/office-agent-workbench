@@ -7,6 +7,7 @@
   "title": "汇报标题",
   "subtitle": "单位 / 场合 / 日期",
   "palette": "zhengwu-navy",
+  "style": ".office-agent/work/ppt-maker/style.json",
   "slides": [
     {"type": "title", "title": "汇报标题", "subtitle": "办公室 2026年10月", "notes": "开场致谢"},
     {"type": "toc", "title": "汇报提纲", "bullets": ["背景", "进展", "问题", "建议"]},
@@ -31,6 +32,8 @@
 }
 ```
 
+`style` 可省略。有参考稿时先跑 `pptx_style.py` 写出该文件，不要手填 left/top。`palette` 与风格包同时出现时以 deck 里的 `palette` 为准。
+
 旧 brief-deck 的 `content` 会当成 `bullets`。不要再写 `layout` 坐标稿去 `pptx_validate.py`。
 
 ## 分档
@@ -38,6 +41,7 @@
 | 档 | 写什么 |
 |----|--------|
 | 下限 | `type` + 标题/要点/数据 + `palette` |
+| 风格参考 | 另加 `style` 指向 `pptx_style.py` 产出；仍禁止坐标 |
 | 上限 | `variant`、`emphasis`、`notes`、`type: canvas` |
 
 canvas 颜色只许：`primary` `secondary` `accent` `background` `ink` `muted` `on_primary`，或与当前 palette 相同的 6 位 hex。

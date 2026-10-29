@@ -83,12 +83,71 @@ BRIEF_DECK_REWRITE = (
 def is_semantic_spec(spec: dict) -> bool:
     if not isinstance(spec, dict):
         return False
-    if spec.get("palette") is not None:
+    if spec.get("palette") is not None or spec.get("style") is not None:
         return True
     for slide in spec.get("slides") or []:
         if isinstance(slide, dict) and slide.get("type"):
             return True
     return False
+
+
+def default_style() -> dict[str, Any]:
+    return {
+        "type_scale": {
+            "cover_kicker": 20,
+            "cover_title": 36,
+            "cover_meta": 16,
+            "page_title": 22,
+            "body": 18,
+            "caption": 10,
+            "badge": 16,
+        },
+        "chrome": {
+            "cover": "default",
+            "header": "left-band",
+            "card": "plain",
+            "footer": "title",
+            "number_badge": False,
+        },
+        "motifs": {"toc": "list", "bullets": "list"},
+        "surface": None,
+        "palette": None,
+    }
+
+
+def resolve_style(spec: dict, *, confine_path=None) -> dict[str, Any]:
+    """Merge optional style pack with engine defaults. Palette always resolved."""
+    style = default_style()
+    raw = spec.get("style")
+    loaded: dict[str, Any] = {}
+    if isinstance(raw, str) and raw.strip():
+        path = Path(confine_path(raw) if confine_path else raw)
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError("style.json 须为对象")
+    elif isinstance(raw, dict):
+        loaded = raw
+    for key in ("type_scale", "chrome", "motifs"):
+        extra = loaded.get(key)
+        if isinstance(extra, dict):
+            style[key].update(extra)
+    if loaded.get("surface"):
+        style["surface"] = _hex(str(loaded["surface"]))
+    pal_spec = spec.get("palette")
+    if pal_spec is None and loaded.get("palette") is not None:
+        pal_spec = loaded["palette"]
+    style["palette"] = load_palette(pal_spec)
+    return style
+
+
+def _st(deck: dict) -> dict[str, Any]:
+    return deck.get("_style") or default_style()
+
+
+def _surface_hex(style: dict[str, Any], palette: dict[str, str]) -> str:
+    if style.get("surface"):
+        return str(style["surface"])
+    return _mix(palette["background"], palette["secondary"], 0.18)
 
 
 def list_palette_ids() -> list[str]:
@@ -250,7 +309,7 @@ def _count_bullets(slide: dict) -> int:
     return 0
 
 
-def validate_deck(spec: Any) -> dict[str, Any]:
+def validate_deck(spec: Any, *, confine_path=None) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
     if not isinstance(spec, dict):
@@ -274,7 +333,8 @@ def validate_deck(spec: Any) -> dict[str, Any]:
 
     palette = None
     try:
-        palette = load_palette(spec.get("palette"))
+        style = resolve_style(spec, confine_path=confine_path)
+        palette = style["palette"]
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         errors.append(str(exc))
 
@@ -402,12 +462,171 @@ def _footer(slide, label: str, palette: dict[str, str]) -> None:
              font=palette["font_body"])
 
 
-def _title_bar(slide, title: str, palette: dict[str, str]) -> None:
+def _title_bar(slide, title: str, palette: dict[str, str], *, size_pt: int = 22) -> None:
     head = _textbox(slide, Inches(0.55), Inches(0.38), Inches(12.2), Inches(0.7))
     p = head.text_frame.paragraphs[0]
     run = p.add_run()
-    _set_run(run, title or "要点", size_pt=22, bold=True,
+    _set_run(run, title or "要点", size_pt=size_pt, bold=True,
              color=palette["primary"], font=palette["font_title"])
+
+
+def _begin_content(slide, title: str, palette: dict[str, str], style: dict[str, Any],
+                   *, kicker: str = "") -> float:
+    """Paint background + header. Returns body top in inches."""
+    _paint_bg(slide, palette["background"])
+    ts = style.get("type_scale") or {}
+    page_title = int(ts.get("page_title") or 22)
+    if (style.get("chrome") or {}).get("header") == "top-bar":
+        bar = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, Emu(0), Emu(0), SLIDE_W, Inches(0.12)
+        )
+        _fill_solid(bar, palette["primary"])
+        top = 0.28
+        if kicker:
+            kick = _textbox(slide, Inches(0.6), Inches(0.22), Inches(8.0), Inches(0.32))
+            p = kick.text_frame.paragraphs[0]
+            run = p.add_run()
+            _set_run(run, kicker, size_pt=11, bold=True,
+                     color=palette["primary"], font=palette["font_body"])
+            top = 0.48
+        head = _textbox(slide, Inches(0.6), Inches(top), Inches(12.13), Inches(0.62))
+        p = head.text_frame.paragraphs[0]
+        run = p.add_run()
+        _set_run(run, title or "要点", size_pt=page_title, bold=True,
+                 color=palette["ink"], font=palette["font_title"])
+        rule = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, Inches(0.6), Inches(top + 0.68),
+            Inches(12.13), Inches(0.03),
+        )
+        _fill_solid(rule, _mix(palette["background"], palette["muted"], 0.55))
+        return round(top + 0.9, 2)
+    _left_band(slide, palette)
+    _title_bar(slide, title, palette, size_pt=page_title)
+    return 1.25
+
+
+def _end_content(slide, palette: dict[str, str], style: dict[str, Any], deck: dict,
+                 *, numbered: bool = True) -> None:
+    chrome = style.get("chrome") or {}
+    if chrome.get("footer") == "page-number" and numbered:
+        page = int(deck.get("_page") or 1)
+        box = _textbox(slide, Inches(12.05), Inches(7.08), Inches(0.9), Inches(0.3))
+        p = box.text_frame.paragraphs[0]
+        p.alignment = PP_ALIGN.RIGHT
+        run = p.add_run()
+        size = int((style.get("type_scale") or {}).get("caption") or 10)
+        _set_run(run, str(page), size_pt=size, color=palette["muted"],
+                 font=palette["font_body"])
+        return
+    _footer(slide, str(deck.get("title") or ""), palette)
+
+
+def _accent_cycle(palette: dict[str, str], index: int) -> str:
+    colors = [palette["primary"], palette["secondary"], palette["accent"]]
+    return colors[index % 3]
+
+
+def _grid_dims(count: int) -> tuple[int, int]:
+    if count <= 3:
+        return 1, max(count, 1)
+    if count == 4:
+        return 2, 2
+    return 2, 3
+
+
+def _render_card_grid(slide, items: list[str], palette: dict[str, str],
+                      style: dict[str, Any], *, top: float) -> None:
+    items = [t for t in items if t][:MAX_BULLETS]
+    if not items:
+        items = ["（本页要点待补）"]
+    rows, cols = _grid_dims(len(items))
+    gap = 0.22
+    grid_w, grid_h = 12.13, min(5.35, 7.0 - top - 0.45)
+    card_w = (grid_w - gap * (cols - 1)) / cols
+    card_h = (grid_h - gap * (rows - 1)) / rows
+    surface = _surface_hex(style, palette)
+    chrome = style.get("chrome") or {}
+    ts = style.get("type_scale") or {}
+    body_pt = int(ts.get("body") or 14)
+    badge_pt = int(ts.get("badge") or 16)
+    numerals = "一二三四五六"
+    for i, text in enumerate(items):
+        row, col = divmod(i, cols)
+        left = 0.6 + col * (card_w + gap)
+        y = top + row * (card_h + gap)
+        card = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE, Inches(left), Inches(y),
+            Inches(card_w), Inches(card_h),
+        )
+        _fill_solid(card, surface)
+        accent = _accent_cycle(palette, i)
+        if chrome.get("card") == "tint-top-accent":
+            strip = slide.shapes.add_shape(
+                MSO_SHAPE.RECTANGLE, Inches(left), Inches(y),
+                Inches(card_w), Inches(0.08),
+            )
+            _fill_solid(strip, accent)
+        text_left = left + 0.18
+        text_top = y + 0.22
+        text_w = card_w - 0.36
+        if chrome.get("number_badge"):
+            badge = slide.shapes.add_shape(
+                MSO_SHAPE.OVAL, Inches(left + (card_w - 0.56) / 2), Inches(y + 0.22),
+                Inches(0.56), Inches(0.56),
+            )
+            _fill_solid(badge, accent)
+            mark = _textbox(
+                slide, Inches(left + (card_w - 0.56) / 2), Inches(y + 0.22),
+                Inches(0.56), Inches(0.56))
+            p = mark.text_frame.paragraphs[0]
+            p.alignment = PP_ALIGN.CENTER
+            run = p.add_run()
+            label = numerals[i] if i < len(numerals) else str(i + 1)
+            _set_run(run, label, size_pt=badge_pt, bold=True,
+                     color=palette["on_primary"], font=palette["font_title"])
+            text_top = y + 0.9
+        body = _textbox(slide, text_left, text_top, text_w, max(0.4, card_h - (text_top - y) - 0.12))
+        tf = body.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.CENTER
+        run = p.add_run()
+        _set_run(run, text, size_pt=body_pt, bold=True,
+                 color=palette["ink"], font=palette["font_body"])
+
+
+def _render_title_dark_center(slide, spec: dict, palette: dict[str, str],
+                              style: dict[str, Any]) -> None:
+    ts = style.get("type_scale") or {}
+    _paint_bg(slide, palette["primary"])
+    top = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Emu(0), Emu(0), SLIDE_W, Inches(0.15)
+    )
+    _fill_solid(top, palette["accent"])
+    bot = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Emu(0), Inches(7.35), SLIDE_W, Inches(0.15)
+    )
+    _fill_solid(bot, palette["accent"])
+    title = str(spec.get("title") or "汇报")
+    box = _textbox(slide, Inches(0), Inches(2.65), Inches(13.33), Inches(1.15))
+    p = box.text_frame.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    run = p.add_run()
+    _set_run(run, title, size_pt=int(ts.get("cover_title") or 36), bold=True,
+             color=palette["on_primary"], font=palette["font_title"])
+    subtitle = str(spec.get("subtitle") or "")
+    if subtitle:
+        rule = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE, Inches(5.17), Inches(3.95),
+            Inches(3.0), Inches(0.04),
+        )
+        _fill_solid(rule, palette["accent"])
+        sub = _textbox(slide, Inches(0), Inches(4.15), Inches(13.33), Inches(0.5))
+        sp = sub.text_frame.paragraphs[0]
+        sp.alignment = PP_ALIGN.CENTER
+        sr = sp.add_run()
+        _set_run(sr, subtitle, size_pt=int(ts.get("cover_meta") or 16),
+                 color=palette["accent"], font=palette["font_body"])
 
 
 def _write_bullets(tf, bullets: list, palette: dict[str, str],
@@ -509,26 +728,37 @@ def _add_table(slide, rows: list, palette: dict[str, str],
 
 
 def render_title(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
+    style = _st(deck)
+    if (style.get("chrome") or {}).get("cover") == "dark-center":
+        _render_title_dark_center(slide, spec, palette, style)
+        return
     _paint_bg(slide, palette["primary"])
     title = spec.get("title") or deck.get("title") or "汇报"
+    ts = style.get("type_scale") or {}
     box = _textbox(slide, Inches(0.9), Inches(2.35), Inches(11.5), Inches(1.7))
     p = box.text_frame.paragraphs[0]
     run = p.add_run()
-    _set_run(run, str(title), size_pt=36, bold=True,
+    _set_run(run, str(title), size_pt=int(ts.get("cover_title") or 36), bold=True,
              color=palette["on_primary"], font=palette["font_title"])
     subtitle = spec.get("subtitle") or deck.get("subtitle") or ""
     if subtitle:
         sub = _textbox(slide, Inches(0.9), Inches(4.2), Inches(11.5), Inches(0.9))
         sp = sub.text_frame.paragraphs[0]
         sr = sp.add_run()
-        _set_run(sr, str(subtitle), size_pt=16,
+        _set_run(sr, str(subtitle), size_pt=int(ts.get("cover_meta") or 16),
                  color=_mix(palette["on_primary"], palette["secondary"], 0.25),
                  font=palette["font_body"])
     _footer(slide, str(deck.get("title") or ""), palette)
 
 
 def render_section(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
+    style = _st(deck)
     _paint_bg(slide, palette["background"])
+    if (style.get("chrome") or {}).get("header") == "top-bar":
+        top = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, Emu(0), Emu(0), SLIDE_W, Inches(0.12)
+        )
+        _fill_solid(top, palette["primary"])
     bar = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE, Emu(0), Inches(2.95), SLIDE_W, Inches(1.55)
     )
@@ -538,23 +768,25 @@ def render_section(slide, spec: dict, deck: dict, palette: dict[str, str]) -> No
     run = p.add_run()
     _set_run(run, str(spec.get("title") or "章节"), size_pt=28, bold=True,
              color=palette["on_primary"], font=palette["font_title"])
-    _footer(slide, str(deck.get("title") or ""), palette)
+    _end_content(slide, palette, style, deck, numbered=False)
 
 
 def render_bullets(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
-    _paint_bg(slide, palette["background"])
-    _left_band(slide, palette)
-    _title_bar(slide, str(spec.get("title") or "要点"), palette)
+    style = _st(deck)
+    top = _begin_content(slide, str(spec.get("title") or "要点"), palette, style)
     bullets = _items(spec.get("bullets"))
     emphasis = _emphasis_set(spec)
-    if _variant(spec, "bullets") == "cards":
+    card_motif = (style.get("motifs") or {}).get("bullets") == "cards"
+    if card_motif:
+        items = [_bullet_text(b)[0] for b in bullets if _bullet_text(b)[0]][:MAX_BULLETS]
+        _render_card_grid(slide, items, palette, style, top=top)
+    elif _variant(spec, "bullets") == "cards":
         items = [_bullet_text(b)[0] for b in bullets if _bullet_text(b)[0]][:MAX_BULLETS]
         if not items:
             items = ["（本页要点待补）"]
         n = len(items)
         gap = 0.18
         card_h = min(0.85, (5.4 - gap * (n - 1)) / max(n, 1))
-        top = 1.25
         for i, text in enumerate(items):
             card = slide.shapes.add_shape(
                 MSO_SHAPE.ROUNDED_RECTANGLE,
@@ -573,46 +805,49 @@ def render_bullets(slide, spec: dict, deck: dict, palette: dict[str, str]) -> No
             _set_run(run, text, size_pt=16, bold=i in emphasis,
                      color=ink, font=palette["font_body"])
     else:
-        body = _textbox(slide, Inches(0.7), Inches(1.25), Inches(11.9), Inches(5.5))
-        _write_bullets(body.text_frame, bullets, palette, emphasis)
-    _footer(slide, str(deck.get("title") or ""), palette)
+        body = _textbox(slide, Inches(0.7), Inches(top), Inches(11.9), Inches(5.5))
+        _write_bullets(body.text_frame, bullets, palette, emphasis,
+                       size_pt=int((style.get("type_scale") or {}).get("body") or 18))
+    _end_content(slide, palette, style, deck)
 
 
 def render_toc(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
-    _paint_bg(slide, palette["background"])
-    _left_band(slide, palette)
-    _title_bar(slide, str(spec.get("title") or "汇报提纲"), palette)
+    style = _st(deck)
+    top = _begin_content(
+        slide, str(spec.get("title") or "汇报提纲"), palette, style)
     bullets = _items(spec.get("bullets"))
-    numbered = []
-    for i, item in enumerate(bullets[:MAX_BULLETS], start=1):
-        text, _ = _bullet_text(item)
-        numbered.append(f"{i:02d}  {text}")
-    body = _textbox(slide, Inches(0.7), Inches(1.3), Inches(11.9), Inches(5.4))
-    _write_bullets(body.text_frame, numbered, palette, _emphasis_set(spec), size_pt=20)
-    _footer(slide, str(deck.get("title") or ""), palette)
+    if (style.get("motifs") or {}).get("toc") == "columns":
+        items = [_bullet_text(b)[0] for b in bullets if _bullet_text(b)[0]][:MAX_BULLETS]
+        _render_card_grid(slide, items, palette, style, top=top)
+    else:
+        numbered = []
+        for i, item in enumerate(bullets[:MAX_BULLETS], start=1):
+            text, _ = _bullet_text(item)
+            numbered.append(f"{i:02d}  {text}")
+        body = _textbox(slide, Inches(0.7), Inches(top), Inches(11.9), Inches(5.4))
+        _write_bullets(body.text_frame, numbered, palette, _emphasis_set(spec), size_pt=20)
+    _end_content(slide, palette, style, deck)
 
 
 def render_two_column(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
-    _paint_bg(slide, palette["background"])
-    _left_band(slide, palette)
-    _title_bar(slide, str(spec.get("title") or "对照"), palette)
+    style = _st(deck)
+    top = _begin_content(slide, str(spec.get("title") or "对照"), palette, style)
     left = list(_items(spec.get("left") or spec.get("bullets")))
     right = list(_items(spec.get("right") or spec.get("right_bullets")))
-    left_box = _textbox(slide, Inches(0.6), Inches(1.3), Inches(5.8), Inches(5.4))
-    right_box = _textbox(slide, Inches(6.8), Inches(1.3), Inches(5.8), Inches(5.4))
+    left_box = _textbox(slide, Inches(0.6), Inches(top), Inches(5.8), Inches(5.4))
+    right_box = _textbox(slide, Inches(6.8), Inches(top), Inches(5.8), Inches(5.4))
     if spec.get("left_title"):
         left.insert(0, {"text": str(spec["left_title"]), "level": 0})
     if spec.get("right_title"):
         right.insert(0, {"text": str(spec["right_title"]), "level": 0})
     _write_bullets(left_box.text_frame, left, palette, set())
     _write_bullets(right_box.text_frame, right, palette, set())
-    _footer(slide, str(deck.get("title") or ""), palette)
+    _end_content(slide, palette, style, deck)
 
 
 def render_kpi(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
-    _paint_bg(slide, palette["background"])
-    _left_band(slide, palette)
-    _title_bar(slide, str(spec.get("title") or "主要指标"), palette)
+    style = _st(deck)
+    body_top = _begin_content(slide, str(spec.get("title") or "主要指标"), palette, style)
     kpis = []
     for item in _items(spec.get("kpis") or spec.get("bullets"))[:MAX_KPI]:
         if isinstance(item, dict):
@@ -627,7 +862,7 @@ def render_kpi(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
     hero = _variant(spec, "kpi") == "hero"
     if hero and kpis:
         card = slide.shapes.add_shape(
-            MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(1.3),
+            MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(body_top),
             Inches(12.2), Inches(2.2),
         )
         _fill_solid(card, palette["primary"])
@@ -644,10 +879,10 @@ def render_kpi(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
         _set_run(r2, kpis[0][0], size_pt=14, color=palette["on_primary"],
                  font=palette["font_body"])
         rest = kpis[1:]
-        top = 3.8
+        top = body_top + 2.5
     else:
         rest = kpis
-        top = 1.4
+        top = body_top + 0.15
     if rest:
         n = len(rest)
         width = (12.2 - 0.2 * (n - 1)) / n
@@ -670,34 +905,32 @@ def render_kpi(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
             r2 = p2.add_run()
             _set_run(r2, label, size_pt=13, color=palette["ink"],
                      font=palette["font_body"])
-    _footer(slide, str(deck.get("title") or ""), palette)
+    _end_content(slide, palette, style, deck)
 
 
 def render_table(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
-    _paint_bg(slide, palette["background"])
-    _left_band(slide, palette)
-    _title_bar(slide, str(spec.get("title") or "一览"), palette)
+    style = _st(deck)
+    top = _begin_content(slide, str(spec.get("title") or "一览"), palette, style)
     _add_table(
         slide, spec.get("rows") or [], palette,
-        Inches(0.55), Inches(1.25), Inches(12.2), Inches(5.4),
+        Inches(0.55), Inches(top), Inches(12.2), Inches(5.4),
     )
-    _footer(slide, str(deck.get("title") or ""), palette)
+    _end_content(slide, palette, style, deck)
 
 
 def render_chart(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
-    _paint_bg(slide, palette["background"])
-    _left_band(slide, palette)
-    _title_bar(slide, str(spec.get("title") or "数据"), palette)
+    style = _st(deck)
+    top = _begin_content(slide, str(spec.get("title") or "数据"), palette, style)
     chart = spec.get("chart") or {}
     split = _variant(spec, "chart") == "split" or spec.get("bullets")
     if split:
-        _add_chart(slide, chart, palette, Inches(0.5), Inches(1.25), Inches(7.4), Inches(5.4))
-        body = _textbox(slide, Inches(8.1), Inches(1.3), Inches(4.6), Inches(5.3))
+        _add_chart(slide, chart, palette, Inches(0.5), Inches(top), Inches(7.4), Inches(5.4))
+        body = _textbox(slide, Inches(8.1), Inches(top), Inches(4.6), Inches(5.3))
         _write_bullets(body.text_frame, _items(spec.get("bullets")), palette,
                        _emphasis_set(spec), size_pt=16)
     else:
-        _add_chart(slide, chart, palette, Inches(0.7), Inches(1.25), Inches(11.9), Inches(5.4))
-    _footer(slide, str(deck.get("title") or ""), palette)
+        _add_chart(slide, chart, palette, Inches(0.7), Inches(top), Inches(11.9), Inches(5.4))
+    _end_content(slide, palette, style, deck)
 
 
 def render_mixed_chart(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
@@ -707,9 +940,8 @@ def render_mixed_chart(slide, spec: dict, deck: dict, palette: dict[str, str]) -
 
 
 def render_process(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
-    _paint_bg(slide, palette["background"])
-    _left_band(slide, palette)
-    _title_bar(slide, str(spec.get("title") or "步骤"), palette)
+    style = _st(deck)
+    body_top = _begin_content(slide, str(spec.get("title") or "步骤"), palette, style)
     steps = []
     for item in _items(spec.get("steps") or spec.get("bullets"))[:MAX_STEPS]:
         steps.append(_bullet_text(item)[0] or "步骤")
@@ -718,7 +950,7 @@ def render_process(slide, spec: dict, deck: dict, palette: dict[str, str]) -> No
     n = len(steps)
     chevron = _variant(spec, "process") == "chevron"
     width = min(2.1, (12.0 - 0.15 * (n - 1)) / n)
-    top = 2.6
+    top = max(2.2, body_top + 0.7)
     for i, text in enumerate(steps):
         left = 0.55 + i * (width + 0.15)
         shape_kind = MSO_SHAPE.CHEVRON if chevron else MSO_SHAPE.ROUNDED_RECTANGLE
@@ -737,12 +969,17 @@ def render_process(slide, spec: dict, deck: dict, palette: dict[str, str]) -> No
         label = f"{i + 1}  {text}" if not chevron else text
         _set_run(run, label, size_pt=13, bold=True,
                  color=palette["on_primary"], font=palette["font_body"])
-    _footer(slide, str(deck.get("title") or ""), palette)
+    _end_content(slide, palette, style, deck)
 
 
 def render_closing(slide, spec: dict, deck: dict, palette: dict[str, str]) -> None:
     copied = dict(spec)
     copied["title"] = spec.get("title") or "汇报完毕"
+    style = _st(deck)
+    has_bullets = bool(_items(spec.get("bullets")))
+    if (style.get("chrome") or {}).get("cover") == "dark-center" and not has_bullets:
+        _render_title_dark_center(slide, copied, palette, style)
+        return
     render_bullets(slide, copied, deck, palette)
 
 
@@ -818,21 +1055,27 @@ RENDERERS = {
 
 
 def build_semantic(spec: dict, out_path: Path, *, confine_path) -> dict[str, Any]:
-    report = validate_deck(spec)
+    report = validate_deck(spec, confine_path=confine_path)
     if not report["ok"]:
         raise ValueError("；".join(report["errors"]))
-    palette = load_palette(spec.get("palette"))
+    style = resolve_style(spec, confine_path=confine_path)
+    palette = style["palette"]
+    work = dict(spec)
+    work["_style"] = style
     prs = Presentation()
     prs.slide_width = SLIDE_W
     prs.slide_height = SLIDE_H
     counts: dict[str, int] = {}
-    for raw in spec.get("slides") or []:
+    slides = list(spec.get("slides") or [])
+    work["_pages"] = len(slides)
+    for index, raw in enumerate(slides):
+        work["_page"] = index + 1
         stype = _slide_type(raw)
         slide = _blank(prs)
         if stype == "canvas":
-            render_canvas(slide, raw, spec, palette, confine_path)
+            render_canvas(slide, raw, work, palette, confine_path)
         else:
-            RENDERERS[stype](slide, raw, spec, palette)
+            RENDERERS[stype](slide, raw, work, palette)
         if raw.get("notes"):
             slide.notes_slide.notes_text_frame.text = str(raw["notes"])
         counts[stype] = counts.get(stype, 0) + 1
