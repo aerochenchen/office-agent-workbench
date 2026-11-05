@@ -248,7 +248,7 @@ export function listCapabilityLeaves(): CapabilityLeaf[] {
   return CAPABILITY_TREE.flatMap((b) => [...b.children]);
 }
 
-/** Footer of settings「使用说明」, with the studio WeChat Channels QR. */
+/** Footer of settings「说明」. */
 export const GUIDE_MORE_HELP = `更多使用说明，请查看微信视频号「${STUDIO_NAME}」。`;
 
 export const GUIDE_HINTS = {

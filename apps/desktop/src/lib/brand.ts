@@ -13,7 +13,7 @@ export const STUDIO_WEBSITE_LABEL = "www.lirenda.cn";
 export const STUDIO_WEBSITE_URL = "https://www.lirenda.cn";
 
 /** Support / AI-content report mailbox (Store 11.16). */
-export const SUPPORT_EMAIL = "wenshutongapp@163.com";
+export const SUPPORT_EMAIL = "ailirenda@163.com";
 
 /** Key OSS attributions for the in-app About block (full list ships as NOTICE). */
 export const OSS_CREDITS: ReadonlyArray<{ name: string; license: string }> = [

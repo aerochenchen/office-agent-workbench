@@ -80,8 +80,10 @@
 }
 
 .btn--xs {
+  min-height: 0;
   padding: 2px var(--space-2);
   font-size: var(--font-size-xs);
+  font-weight: 500;
 }
 
 .manual-open {

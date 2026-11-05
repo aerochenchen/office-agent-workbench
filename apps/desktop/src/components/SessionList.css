@@ -1,5 +1,5 @@
 .session-pane {
-  background: var(--paper-0);
+  background: transparent;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -7,18 +7,18 @@
 
 .session-toolbar {
   flex: 0 0 auto;
-  padding: var(--space-2) var(--space-2) var(--space-1);
+  padding: 0 8px 8px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 4px;
 }
 
 .session-toolbar-row {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   width: 100%;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -26,54 +26,46 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
-  width: calc(var(--tree-width) * 3 / 5);
+  gap: 8px;
+  width: 100%;
   max-width: 100%;
-  height: 32px;
+  height: var(--control-height);
   padding: 0 12px;
+  border: 0;
   border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-1);
   font: inherit;
   font-size: var(--font-size-md);
-  line-height: 1;
+  font-weight: 500;
+  line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--motion-fast), border-color var(--motion-fast);
+  transition: background var(--motion-fast), color var(--motion-fast);
 }
 
 .session-tool-icon {
-  flex: 0 0 17px;
-  width: 17px;
-  height: 17px;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: inherit;
+  color: var(--ink-2);
 }
 
-.session-tool--secondary {
-  border: 1px solid transparent;
-  background: transparent;
+.session-tool:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--nav-hover);
   color: var(--ink-0);
 }
 
-.session-tool--secondary:hover:not([aria-disabled="true"]) {
-  background: color-mix(in srgb, var(--ink-0) 8%, var(--paper-0));
-}
-
-.session-tool--primary {
-  border: 1px solid #e2e7e2;
-  background: #e2e7e2;
-  color: var(--ink-0);
-}
-
-.session-tool--primary:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--ink-0) 14%, #e2e7e2);
-  background: color-mix(in srgb, var(--ink-0) 14%, #e2e7e2);
+.session-tool:hover:not(:disabled):not([aria-disabled="true"]) .session-tool-icon {
+  color: var(--ink-1);
 }
 
 .session-tool:focus-visible {
-  outline: 2px solid var(--accent-teal);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .session-tool:disabled,
@@ -86,27 +78,28 @@
   margin: 0 0 var(--space-1);
 }
 
-.workspace-group--current .workspace-open-name {
-  color: var(--ink-0);
+.workspace-group--current .workspace-open-name,
+.workspace-group--current .workspace-open-icon {
+  color: var(--accent-teal);
 }
 
 .workspace-head {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin: 0 var(--space-2);
+  margin: 0 8px;
   min-width: 0;
 }
 
 .workspace-chevron {
   flex: 0 0 auto;
-  width: 22px;
-  height: 28px;
+  width: 28px;
+  height: 36px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--ink-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -123,7 +116,7 @@
 }
 
 .workspace-chevron:hover {
-  background: color-mix(in srgb, var(--ink-0) 6%, var(--paper-0));
+  background: var(--nav-hover);
   color: var(--ink-0);
 }
 
@@ -133,24 +126,27 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 28px;
-  padding: 0 var(--space-2);
+  height: 36px;
+  padding: 0 12px;
   border: none;
   background: transparent;
   color: var(--ink-1);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   font: inherit;
+  font-weight: 500;
   text-align: left;
 }
 
 .workspace-open:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink-0) 6%, var(--paper-0));
+  background: var(--nav-hover);
+  color: var(--ink-0);
 }
 
 .workspace-group--current .workspace-open,
 .workspace-group--current .workspace-open:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-teal) 16%, var(--paper-0));
+  background: var(--nav-selected);
+  color: var(--accent-teal);
 }
 
 .workspace-open:disabled {
@@ -178,7 +174,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-2) 0;
+  padding: 8px 0 12px;
 }
 
 .session-list {
@@ -188,11 +184,11 @@
 }
 
 .session-list.workspace-sessions {
-  margin-top: var(--space-3);
-  margin-left: 22px;
+  margin-top: 4px;
+  margin-left: 28px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 4px;
 }
 
 .session-row {
@@ -200,21 +196,24 @@
   align-items: center;
   gap: var(--space-2);
   box-sizing: border-box;
-  height: 38px;
-  margin: 0 var(--space-2) 0 0;
-  padding: 0 var(--space-2);
+  height: var(--control-height);
+  margin: 0 8px 0 0;
+  padding: 0 12px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  color: var(--ink-0);
+  color: var(--ink-1);
+  font-weight: 500;
 }
 
 .session-row:hover {
-  background: color-mix(in srgb, var(--ink-0) 6%, var(--paper-0));
+  background: var(--nav-hover);
+  color: var(--ink-0);
 }
 
 .session-row--active,
 .session-row--active:hover {
-  background: color-mix(in srgb, var(--accent-teal) 16%, var(--paper-0));
+  background: var(--nav-selected);
+  color: var(--accent-teal);
 }
 
 .session-row--blocked {
@@ -266,7 +265,7 @@
 
 .session-rename-input:focus {
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-teal) 22%, transparent);
+  box-shadow: var(--focus-ring);
 }
 
 .session-context-menu {
@@ -314,4 +313,5 @@
 .session-workspace-error {
   font-size: var(--font-size-xs);
   color: var(--status-error);
+  padding: 0 12px;
 }

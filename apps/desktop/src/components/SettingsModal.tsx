@@ -61,8 +61,8 @@ const SETTINGS_TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
   { id: "appearance", label: "外观" },
   { id: "model", label: "模型" },
   { id: "memory", label: "记忆" },
-  { id: "permission", label: "权限与安全" },
-  { id: "guide", label: "使用说明" },
+  { id: "permission", label: "安全" },
+  { id: "guide", label: "说明" },
   { id: "about", label: "关于" },
 ];
 
@@ -450,7 +450,7 @@ export default function SettingsModal({
             {tab === "permission" && (
               <section className="settings-section" aria-labelledby="settings-permission-title">
                 <h3 id="settings-permission-title" className="settings-section-title">
-                  权限与安全
+                  安全
                 </h3>
                 <label className="field">
                   <span className="field-label">工具确认策略</span>
@@ -491,7 +491,7 @@ export default function SettingsModal({
             {tab === "guide" && (
               <section className="settings-guide" aria-labelledby="settings-guide-title">
                 <h3 id="settings-guide-title" className="settings-section-title">
-                  使用说明
+                  说明
                 </h3>
                 <ul className="settings-guide-list">
                   {GUIDE_PILLARS.map((p) => (
@@ -503,13 +503,6 @@ export default function SettingsModal({
                 </ul>
                 <div className="settings-guide-more">
                   <p className="settings-guide-item-body">{GUIDE_MORE_HELP}</p>
-                  <img
-                    className="settings-guide-qr"
-                    src="/wechat-channels-qr.jpg"
-                    alt={`微信视频号「${STUDIO_NAME}」二维码`}
-                    width={168}
-                    height={168}
-                  />
                 </div>
               </section>
             )}

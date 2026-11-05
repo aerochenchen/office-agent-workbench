@@ -3,7 +3,7 @@ import "./styles/theme.css";
 import "./styles/scrollbar.css";
 import "./App.css";
 import { installWindowsScrollbars } from "./lib/windowsScrollbar";
-import { APP_NAME, APP_TAGLINE } from "./lib/brand";
+import { APP_NAME } from "./lib/brand";
 import { dismissBootSplash, shouldDismissBootSplash } from "./lib/bootSplash";
 import {
   bootPollInterval,
@@ -755,64 +755,19 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div className="topbar-brand">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
           <img
-            className="topbar-logo"
+            className="sidebar-logo"
             src="/logo-mark.png"
-            width={28}
-            height={28}
+            width={32}
+            height={32}
             alt=""
             aria-hidden="true"
           />
-          <div className="topbar-brand-text">
-            <span className="topbar-title">{APP_NAME}</span>
-            <span className="topbar-tagline">{APP_TAGLINE}</span>
-          </div>
+          <span className="sidebar-title">{APP_NAME}</span>
         </div>
-        <div className="topbar-actions">
-          <button
-            type="button"
-            className={`health-status health-status--${status}`}
-            onClick={() => {
-              if (status === "needs_config") openSettings("model");
-            }}
-            title={
-              status === "needs_config" ? "请先在设置中填写模型密钥" : undefined
-            }
-            disabled={status !== "needs_config"}
-          >
-            <span className={`health-dot health-dot--${status}`} aria-hidden="true" />
-            <span className="health-label">{runtimeStatusLabel(status)}</span>
-          </button>
-          <div className="topbar-tools">
-            <button
-              type="button"
-              className="btn btn--ghost btn--icon"
-              onClick={() => setSkillManagerOpen(true)}
-              aria-label="技能管理"
-              title="技能管理"
-              aria-haspopup="dialog"
-              aria-expanded={skillManagerOpen}
-            >
-              <SkillsIcon />
-            </button>
-            <button
-              type="button"
-              className="btn btn--ghost btn--icon"
-              onClick={() => openSettings()}
-              aria-label="设置"
-              title="设置"
-              aria-haspopup="dialog"
-              aria-expanded={settingsOpen}
-            >
-              <SettingsIcon />
-            </button>
-          </div>
-        </div>
-      </header>
 
-      <div className="workbench">
         <SessionList
           groups={workspaceGroups}
           collapsedPaths={collapsedPaths}
@@ -831,7 +786,49 @@ function App() {
           onRenameSession={(id, title) => void handleRenameSession(id, title)}
         />
 
-        <ChatPanel
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className="sidebar-nav"
+            onClick={() => setSkillManagerOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={skillManagerOpen}
+          >
+            <span className="sidebar-nav-icon">
+              <SkillsIcon />
+            </span>
+            技能
+          </button>
+          <button
+            type="button"
+            className="sidebar-nav"
+            onClick={() => openSettings()}
+            aria-haspopup="dialog"
+            aria-expanded={settingsOpen}
+          >
+            <span className="sidebar-nav-icon">
+              <SettingsIcon />
+            </span>
+            设置
+          </button>
+          <button
+            type="button"
+            className={`health-status health-status--${status}`}
+            onClick={() => {
+              if (status === "needs_config") openSettings("model");
+            }}
+            title={
+              status === "needs_config" ? "请先在设置中填写模型密钥" : undefined
+            }
+            disabled={status !== "needs_config"}
+          >
+            <span className={`health-dot health-dot--${status}`} aria-hidden="true" />
+            <span className="health-label">{runtimeStatusLabel(status)}</span>
+          </button>
+        </div>
+      </aside>
+
+      <ChatPanel
           workspaceOpen={workspacePath !== null}
           workspacePath={workspacePath}
           messages={messages}
@@ -842,7 +839,6 @@ function App() {
           onToggleSteps={handleToggleSteps}
           onOpenMemory={() => openSettings("memory")}
         />
-      </div>
 
       <SkillManager
         open={skillManagerOpen}

@@ -4,7 +4,7 @@
  */
 :root {
   /* -- 色板：纸感背景 / 墨色文字 -- */
-  --paper-0: #eef0ec; /* 侧栏与顶栏 */
+  --paper-0: #eef0ec; /* 次级表面 */
   --paper-1: #f8f9f6; /* 中间工作区 */
   --paper-2: #ffffff; /* 卡片、输入、弹层 */
   --ink-0: #1e2321; /* 主文字 */
@@ -61,6 +61,15 @@
   /* -- 布局尺寸 -- */
   --topbar-height: 52px;
   --tree-width: 268px;
+  --sidebar-brand-height: 72px;
+  --control-height: 40px;
+  --composer-min-height: 56px;
+  --radius-message: 10px;
+
+  /* -- 导航与焦点：随主题色混合，不另写色值 -- */
+  --nav-hover: color-mix(in srgb, var(--ink-0) 6%, var(--paper-2));
+  --nav-selected: var(--accent-teal-soft);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent-teal) 16%, transparent);
 
   /* -- 动效：唯一统一时长 -- */
   --motion-fast: 120ms ease-out;
@@ -188,6 +197,6 @@ pre,
 }
 
 *:focus-visible {
-  outline: 2px solid var(--accent-teal);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }

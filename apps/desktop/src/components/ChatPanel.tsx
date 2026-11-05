@@ -367,11 +367,6 @@ export default function ChatPanel({
 
   return (
     <section className="pane chat-pane">
-      <div className="pane-header">
-        <span className="pane-title">当前对话</span>
-        {sending && <span className="chat-status">运行中…</span>}
-      </div>
-
       <div className="pane-body chat-scroll" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="chat-empty">
@@ -505,9 +500,12 @@ export default function ChatPanel({
             />
           </div>
           {sending ? (
-            <button type="button" className="btn btn--ghost" onClick={() => onStop?.()}>
-              停止
-            </button>
+            <>
+              <span className="chat-status">运行中…</span>
+              <button type="button" className="btn btn--primary" onClick={() => onStop?.()}>
+                停止
+              </button>
+            </>
           ) : (
             <button
               type="submit"

@@ -14,7 +14,7 @@
   background: var(--paper-2);
   border: 1px solid var(--line-1);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-2);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
 }
@@ -61,43 +61,47 @@
   flex: 0 0 132px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: var(--space-3);
   border-right: 1px solid var(--line-1);
-  background: var(--paper-1);
+  background: var(--paper-2);
   overflow-y: auto;
 }
 
 .settings-nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
+  height: var(--control-height);
   margin: 0;
-  padding: 8px 10px;
+  padding: 0 12px;
   border: none;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--ink-1);
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: background var(--motion-fast), color var(--motion-fast);
 }
 
 .settings-nav-item:hover {
-  background: var(--line-1);
+  background: var(--nav-hover);
   color: var(--ink-0);
 }
 
-.settings-nav-item--active {
-  background: color-mix(in srgb, var(--accent-teal-soft) 62%, var(--paper-1));
-  color: var(--ink-0);
-  font-weight: 600;
+.settings-nav-item--active,
+.settings-nav-item--active:hover {
+  background: var(--nav-selected);
+  color: var(--accent-teal);
+  font-weight: 500;
 }
 
 .settings-nav-item:focus-visible {
-  outline: 2px solid var(--accent-teal);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .settings-pane.modal-body {
@@ -222,12 +226,20 @@
 
 .settings-pane .field-input {
   box-sizing: border-box;
-  min-height: 40px;
+  height: var(--control-height);
+  min-height: var(--control-height);
   padding: 0 var(--space-3);
   border-color: var(--line-0);
-  background: color-mix(in srgb, var(--paper-0) 22%, var(--paper-2));
+  border-radius: var(--radius-md);
+  background: var(--paper-2);
   font-size: var(--font-size-md);
   color: var(--ink-0);
+}
+
+.settings-pane .field-input:focus {
+  outline: none;
+  border-color: var(--accent-teal);
+  box-shadow: var(--focus-ring);
 }
 
 .settings-pane .field-input::placeholder {
@@ -312,14 +324,6 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-2);
-}
-
-.settings-guide-qr {
-  width: 168px;
-  height: 168px;
-  object-fit: contain;
-  background: #fff;
-  border-radius: var(--radius-sm);
 }
 
 .settings-about-product {
@@ -458,10 +462,12 @@
   border-top: 1px solid var(--line-1);
 }
 
+.modal-footer .btn,
 .modal--settings .modal-footer .btn {
   box-sizing: border-box;
-  min-height: 36px;
-  padding: 0 var(--space-4);
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding: 0 16px;
   border-radius: var(--radius-md);
 }
 

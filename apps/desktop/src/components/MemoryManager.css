@@ -44,7 +44,7 @@
 
 .memory-card--new {
   border-style: dashed;
-  background: var(--paper-0);
+  background: var(--paper-1);
 }
 
 .memory-manager-section-empty {
@@ -68,9 +68,9 @@
 
 .memory-card {
   border: 1px solid var(--line-1);
-  border-radius: var(--radius-md);
-  padding: 6px 10px;
-  background: var(--paper-1);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  background: var(--paper-2);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -109,6 +109,13 @@
   min-width: 0;
 }
 
+.memory-card-edit .btn {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+}
+
 .memory-card-actions {
   display: flex;
   flex: 0 0 auto;
@@ -125,24 +132,26 @@
 .memory-edit-field {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid var(--line-1);
-  border-radius: var(--radius-sm);
-  padding: 4px 8px;
+  border: 1px solid var(--line-0);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
   font: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
   color: var(--ink-0);
-  background: var(--paper-0);
-  min-height: 0;
+  background: var(--paper-2);
+  height: var(--control-height);
+  min-height: var(--control-height);
 }
 
 .memory-edit-field:focus {
-  outline: 2px solid var(--accent-teal-soft);
+  outline: none;
   border-color: var(--accent-teal);
+  box-shadow: var(--focus-ring);
 }
 
 .memory-manager-error {
   margin: 0;
-  color: var(--danger, #b42318);
+  color: var(--status-error);
   font-size: var(--font-size-sm);
 }
 
