@@ -6,7 +6,12 @@ export function sessionMessagesToChat(
 ): ChatMessage[] {
   return messages.map((m) => {
     if (m.role === "user") {
-      return { id: nextId(), role: "user", content: m.content };
+      return {
+        id: nextId(),
+        role: "user",
+        content: m.content,
+        ...(m.attachments && m.attachments.length > 0 ? { attachments: m.attachments } : {}),
+      };
     }
     const steps = (m.live_steps ?? []).map((step) => ({
       id: step.id,

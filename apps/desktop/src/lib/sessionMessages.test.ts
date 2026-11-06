@@ -45,4 +45,22 @@ describe("sessionMessagesToChat", () => {
       },
     ]);
   });
+
+  it("keeps attachment paths on the user turn", () => {
+    const incoming: SessionUiMessage[] = [
+      { role: "user", content: "请处理这个文件", attachments: ["notes/report.docx"] },
+      { role: "assistant", content: "已收到" },
+    ];
+    let n = 0;
+    const chat = sessionMessagesToChat(incoming, () => {
+      n += 1;
+      return `m${n}`;
+    });
+    expect(chat[0]).toEqual({
+      id: "m1",
+      role: "user",
+      content: "请处理这个文件",
+      attachments: ["notes/report.docx"],
+    });
+  });
 });

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import time
 import uuid
@@ -62,11 +63,41 @@ def _message_text(content: Any) -> str:
     return ""
 
 
-def _strip_user_attachments(text: str) -> str:
-    marker = "\n\n用户附带的文件路径："
-    if marker in text:
-        return text.split(marker, 1)[0].strip()
-    return text.strip()
+_ATTACHMENT_SECTION_RE = re.compile(
+    r"(?:^|\n\n)(?:附带图片：|以下图片未能读取：|其余图片本次未发送[^\n]*：|用户附带的文件路径：)"
+)
+
+
+def _attachment_item(line: str) -> str:
+    """Turn one injected bullet into a path or filename. Drop model-only placeholders."""
+    item = line.strip()
+    if item.startswith("- "):
+        item = item[2:].strip()
+    if not item or item == "（无其他文件）":
+        return ""
+    # Failed images are stored as "name：原因". Paths themselves use / or \.
+    if "：" in item:
+        head = item.split("：", 1)[0].strip()
+        if head and "/" not in head and "\\" not in head:
+            return head
+    return item
+
+
+def _split_user_attachments(text: str) -> tuple[str, list[str]]:
+    """Separate the user's words from the attachment block written for the model."""
+    raw = text or ""
+    match = _ATTACHMENT_SECTION_RE.search(raw)
+    if not match:
+        return raw.strip(), []
+    visible = raw[: match.start()].strip()
+    names: list[str] = []
+    for line in raw[match.start() :].splitlines():
+        if not line.strip().startswith("- "):
+            continue
+        item = _attachment_item(line)
+        if item:
+            names.append(item)
+    return visible, names
 
 
 def _tool_result_dict(content: Any) -> dict[str, Any]:
@@ -169,14 +200,17 @@ def history_to_ui_messages(history: list[dict[str, Any]]) -> list[dict[str, Any]
         if msg.get("role") != "user":
             i += 1
             continue
-        user_text = _strip_user_attachments(_message_text(msg.get("content")))
+        user_text, attachments = _split_user_attachments(_message_text(msg.get("content")))
         i += 1
         turn: list[dict[str, Any]] = []
         while i < len(history) and history[i].get("role") != "user":
             turn.append(history[i])
             i += 1
-        if user_text:
-            out.append({"role": "user", "content": user_text})
+        if user_text or attachments:
+            user_bubble: dict[str, Any] = {"role": "user", "content": user_text}
+            if attachments:
+                user_bubble["attachments"] = attachments
+            out.append(user_bubble)
         bubble = _turn_to_assistant_bubble(turn)
         if bubble:
             out.append(bubble)

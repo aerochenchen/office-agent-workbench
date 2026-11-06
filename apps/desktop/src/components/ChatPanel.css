@@ -225,7 +225,7 @@
 }
 
 .message-row--user {
-  align-items: stretch;
+  align-items: flex-end;
 }
 
 .message-row--assistant,
@@ -254,10 +254,46 @@
 }
 
 .bubble--user {
+  width: fit-content;
+  max-width: 100%;
   background: var(--accent-teal-soft);
   color: var(--ink-0);
   border: none;
+  border-radius: 16px;
   font-weight: 500;
+}
+
+.bubble-user-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.bubble-user-text {
+  white-space: pre-wrap;
+}
+
+.bubble-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  font-weight: 500;
+}
+
+.bubble-file-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--accent-teal);
+}
+
+.bubble-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 18em;
 }
 
 .bubble--assistant {

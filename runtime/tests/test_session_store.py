@@ -209,3 +209,47 @@ def test_history_to_ui_messages_finish_uses_summary():
     ui = history_to_ui_messages(history)
     assert ui[1]["content"] == "PPT 已生成（19 页）。接着写逐页讲解稿。"
     assert "收个尾" not in ui[1]["content"]
+
+
+def test_history_to_ui_messages_keeps_attachment_names():
+    history = [
+        {
+            "role": "user",
+            "content": "请处理这个文件\n\n第一段\n\n第二段\n\n用户附带的文件路径：\n- notes/report.docx",
+        },
+        {"role": "assistant", "content": "已收到"},
+    ]
+    ui = history_to_ui_messages(history)
+    assert ui[0]["content"] == "请处理这个文件\n\n第一段\n\n第二段"
+    assert ui[0]["attachments"] == ["notes/report.docx"]
+    assert "用户附带的文件路径" not in ui[0]["content"]
+
+
+def test_history_to_ui_messages_lists_images_without_model_notes():
+    stored = (
+        "请看\n\n"
+        "附带图片：\n"
+        "- scan.png\n\n"
+        "以下图片未能读取：\n"
+        "- blur.png：无法读取\n\n"
+        "其余图片本次未发送（单次最多 4 张）：\n"
+        "- extra.png\n\n"
+        "用户附带的文件路径：\n"
+        "- notes/report.docx\n"
+        "图片已包含在本条消息中，请直接根据图像回答，不要用读取工具打开这些图片文件。"
+    )
+    history = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": stored},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,xx"}},
+            ],
+        },
+        {"role": "assistant", "content": "看到了"},
+    ]
+    ui = history_to_ui_messages(history)
+    assert ui[0]["content"] == "请看"
+    assert ui[0]["attachments"] == ["scan.png", "blur.png", "extra.png", "notes/report.docx"]
+    assert "附带图片" not in ui[0]["content"]
+    assert "无其他文件" not in ui[0]["content"]

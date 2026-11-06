@@ -21,6 +21,15 @@ function Icon({ children, size = ICON_SIZE }: { children: ReactNode; size?: numb
   );
 }
 
+export function FileIcon({ size }: { size?: number } = {}) {
+  return (
+    <Icon size={size}>
+      <path d="M4.15 1.9h4.55L12.1 5.3v7.85c0 .5-.4.95-.95.95H4.15c-.55 0-.95-.45-.95-.95V2.85c0-.5.4-.95.95-.95Z" />
+      <path d="M8.6 2.05V5.35h3.3" />
+    </Icon>
+  );
+}
+
 export function FolderIcon({ size }: { size?: number } = {}) {
   return (
     <Icon size={size}>

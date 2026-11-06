@@ -9,6 +9,7 @@ import {
   parsePastedPaths,
   pickFiles,
 } from "../lib/tauri";
+import { FileIcon } from "./icons";
 import MarkdownMessage from "./MarkdownMessage";
 import "./ChatPanel.css";
 
@@ -172,6 +173,18 @@ function Bubble({
               </button>
             ) : null}
           </>
+        ) : message.role === "user" ? (
+          <div className="bubble-user-line">
+            {message.attachments?.map((path) => (
+              <span key={path} className="bubble-file" title={path}>
+                <span className="bubble-file-icon">
+                  <FileIcon size={16} />
+                </span>
+                <span className="bubble-file-name">{basename(path)}</span>
+              </span>
+            ))}
+            {message.content ? <span className="bubble-user-text">{message.content}</span> : null}
+          </div>
         ) : (
           message.content
         )}

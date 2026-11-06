@@ -500,7 +500,12 @@ function App() {
     async (text: string, attachedPaths: string[] = []) => {
       if (!runtimeReady) return;
 
-      const userMsg: ChatMessage = { id: nextId(), role: "user", content: text };
+      const userMsg: ChatMessage = {
+        id: nextId(),
+        role: "user",
+        content: text,
+        ...(attachedPaths.length > 0 ? { attachments: attachedPaths } : {}),
+      };
       const assistantId = nextId();
 
       // 未配模型：直接展示固定引导。本地档有地址即可，不必有 Key。

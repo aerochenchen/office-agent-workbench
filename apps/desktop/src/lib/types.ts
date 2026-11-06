@@ -146,6 +146,8 @@ export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
+  /** Workspace paths attached to this user turn. Shown as filenames in the transcript. */
+  attachments?: string[];
   toolEvents?: ToolEvent[];
   /** In-progress assistant bubble (A0 placeholder / B1 live stream). */
   phase?: AssistantPhase;
@@ -179,6 +181,8 @@ export interface SessionUiMessage {
   role: "user" | "assistant";
   content: string;
   live_steps?: SessionUiLiveStep[];
+  /** Relative paths recovered from a stored user turn. */
+  attachments?: string[];
 }
 
 export type PermissionMode = "cautious" | "standard" | "trust_workspace";
