@@ -21,7 +21,7 @@ export const UI_THEME_OPTIONS: ReadonlyArray<{
   label: string;
   hint: string;
 }> = [
-  { value: "default", label: "素笺", hint: "素净宣纸感，冷灰日间默认" },
+  { value: "default", label: "宣纸", hint: "白底配青绿，大面积不铺色" },
   { value: "deeper", label: "黛青", hint: "略沉的青墨底色，仍适合日间办公" },
   { value: "paper", label: "竹纸", hint: "暖米色竹纸感，长时间阅读更柔和" },
 ];

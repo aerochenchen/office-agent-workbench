@@ -7,7 +7,6 @@
 }
 
 .chat-status {
-  align-self: center;
   font-size: var(--font-size-xs);
   font-weight: 500;
   color: var(--accent-teal);
@@ -570,8 +569,6 @@
   flex: 0 0 auto;
   padding: 0;
   display: flex;
-  gap: var(--space-2);
-  align-items: center;
 }
 
 .chat-input-shell {
@@ -579,13 +576,13 @@
   min-width: 0;
   min-height: var(--composer-min-height);
   display: flex;
-  align-items: center;
-  gap: var(--space-1);
+  flex-direction: column;
+  gap: 8px;
   border: 1px solid var(--line-0);
-  border-radius: var(--radius-lg);
+  border-radius: 16px;
   background: var(--paper-2);
   box-shadow: none;
-  padding: 0 8px 0 4px;
+  padding: 12px 12px 10px 16px;
   transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
 }
 
@@ -595,15 +592,28 @@
   box-shadow: var(--focus-ring);
 }
 
+.chat-input-bar {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+}
+
+.chat-input-bar-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .chat-attach-plus {
   flex: 0 0 auto;
   width: 32px;
   height: 32px;
-  margin-bottom: 0;
+  margin-left: -6px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-1);
+  color: var(--ink-2);
   font-size: 20px;
   font-weight: 400;
   line-height: 1;
@@ -627,16 +637,17 @@
 
 .chat-input {
   flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  /* 静息一行，外壳至少 56px；长文自动增高，最多约 8 行后内部滚动 */
-  min-height: var(--composer-min-height);
+  /* 文字区高于一行；长文继续增高，最多约 8 行后内部滚动 */
+  min-height: 44px;
   max-height: min(calc(12em + 2 * var(--space-2)), 36vh);
   overflow-y: auto;
   resize: none;
   border: none;
-  border-radius: var(--radius-sm);
-  padding: 16px 8px 16px 0;
+  border-radius: 0;
+  padding: 0;
   background: transparent;
   color: var(--ink-0);
   font-size: var(--font-size-md);
@@ -653,13 +664,20 @@
   color: var(--ink-2);
 }
 
-.chat-input-row > .btn {
+.chat-input-bar .btn--primary {
   flex: 0 0 auto;
-  align-self: center;
-  height: var(--control-height);
-  min-height: var(--control-height);
-  border-radius: var(--radius-md);
-  padding: 0 16px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 0 14px;
+}
+
+.chat-send.btn--primary {
+  width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .chat-send.btn--primary:disabled {

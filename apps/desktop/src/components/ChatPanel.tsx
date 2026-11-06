@@ -461,22 +461,6 @@ export default function ChatPanel({
           }}
         >
           <div className="chat-input-shell">
-            <button
-              type="button"
-              className="chat-attach-plus"
-              disabled={attachDisabled}
-              aria-label="添加文件夹内文件"
-              title={
-                !workspaceOpen
-                  ? "请先打开文件夹"
-                  : isTauriRuntime()
-                    ? "添加文件夹内文件"
-                    : "粘贴文件夹内绝对路径"
-              }
-              onClick={() => void handleAttachClick()}
-            >
-              +
-            </button>
             <textarea
               ref={inputRef}
               className="chat-input"
@@ -498,23 +482,52 @@ export default function ChatPanel({
                 }
               }}
             />
-          </div>
-          {sending ? (
-            <>
-              <span className="chat-status">运行中…</span>
-              <button type="button" className="btn btn--primary" onClick={() => onStop?.()}>
-                停止
+            <div className="chat-input-bar">
+              <button
+                type="button"
+                className="chat-attach-plus"
+                disabled={attachDisabled}
+                aria-label="添加文件夹内文件"
+                title={
+                  !workspaceOpen
+                    ? "请先打开文件夹"
+                    : isTauriRuntime()
+                      ? "添加文件夹内文件"
+                      : "粘贴文件夹内绝对路径"
+                }
+                onClick={() => void handleAttachClick()}
+              >
+                +
               </button>
-            </>
-          ) : (
-            <button
-              type="submit"
-              className="btn btn--primary chat-send"
-              disabled={disabled || !draft.trim()}
-            >
-              发送
-            </button>
-          )}
+              <div className="chat-input-bar-end">
+                {sending ? (
+                  <>
+                    <span className="chat-status">运行中…</span>
+                    <button type="button" className="btn btn--primary" onClick={() => onStop?.()}>
+                      停止
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="submit"
+                    className="btn btn--primary chat-send"
+                    aria-label="发送"
+                    disabled={disabled || !draft.trim()}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M12 19V6M12 6l-5.5 5.5M12 6l5.5 5.5"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </form>
       </div>
     </section>

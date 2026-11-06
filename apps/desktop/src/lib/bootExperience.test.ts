@@ -28,7 +28,7 @@ describe("boot experience wiring", () => {
       };
     };
     expect(conf.app.windows[0].visible).toBe(false);
-    expect(conf.app.windows[0].backgroundColor).toBe("#f3f4f1");
+    expect(conf.app.windows[0].backgroundColor).toBe("#f4f7f6");
   });
 
   it("wires a Windows native splash with prerendered spinner before WebView", () => {
@@ -54,7 +54,7 @@ describe("boot experience wiring", () => {
 
   it("keeps paper-colored html/body behind the HTML splash", () => {
     const html = read("index.html");
-    expect(html).toMatch(/html,\s*body[\s\S]*background:\s*#f3f4f1/);
+    expect(html).toMatch(/html,\s*body[\s\S]*background:\s*#f4f7f6/);
     expect(html).toContain("正在启动本地运行组件");
   });
 });
