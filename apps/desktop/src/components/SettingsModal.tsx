@@ -80,17 +80,10 @@ const MODEL_PRESETS: ReadonlyArray<{ id: string; label: string }> = [
 
 const MODEL_CUSTOM = "__custom__";
 
-const MODEL_TAB_INTRO =
-  "文书通不自带云模型。填写你自己的接口地址与密钥后即可对话；材料仍在本机。下列以 DeepSeek 为例便于开箱配置，也可换成单位内网或其它兼容接口。入口与步骤以各供应商官网当前说明为准。";
-
-const MODEL_FIELD_HINTS = {
-  model:
-    "决定用哪套模型回答。DeepSeek 可选 Flash（更快）或 Pro（更强）；其它服务选「自定义」并填写对方提供的模型名。",
-  apiBase:
-    "模型服务地址。DeepSeek 官方为 https://api.deepseek.com；单位内网或其它服务请按对方说明填写（有的需带 /v1）。",
-  apiKey:
-    "访问该服务的密钥，仅保存在本机。DeepSeek：登录开放平台 → API Keys → 创建并复制后粘贴到此处。具体菜单名称与路径以官网为准。",
-} as const;
+const MODEL_PAGE_NOTES = [
+  "不自带云模型。填入接口地址和密钥即可对话，材料留在本机。",
+  "以 DeepSeek 为例：Flash 更快，Pro 更强；地址 https://api.deepseek.com。密钥在开放平台创建，只存本机。其它服务选「自定义」。",
+] as const;
 
 function resolveModelPreset(modelName: string, localDeploy: boolean): string {
   if (localDeploy) return MODEL_CUSTOM;
@@ -176,19 +169,13 @@ export default function SettingsModal({
       ].filter(Boolean);
     }
     if (tab === "model") {
+      if (!isLocalDeploy) return [...MODEL_PAGE_NOTES];
       return [
-        isLocalDeploy
-          ? "本地部署版本只连接本机或单位内网的模型服务。请填写内网地址（IP 或内网域名，如 http://127.0.0.1:8000/v1），公网 DeepSeek/OpenAI 等会被拒绝。"
-          : MODEL_TAB_INTRO,
-        isLocalDeploy ? "" : MODEL_FIELD_HINTS.model,
-        isLocalDeploy ? "填写内网或本机 OpenAI 兼容服务给出的模型名。" : "",
-        isLocalDeploy
-          ? "填写本机或单位内网地址（如 http://127.0.0.1:8000/v1 或专网 IP）。公网 DeepSeek/OpenAI 等会被拒绝。"
-          : MODEL_FIELD_HINTS.apiBase,
-        isLocalDeploy
-          ? "内网服务若不校验密钥可留空；填写后仅保存在本机。"
-          : MODEL_FIELD_HINTS.apiKey,
-      ].filter(Boolean);
+        "本地部署版本只连接本机或单位内网的模型服务。请填写内网地址（IP 或内网域名，如 http://127.0.0.1:8000/v1），公网 DeepSeek/OpenAI 等会被拒绝。",
+        "填写内网或本机 OpenAI 兼容服务给出的模型名。",
+        "填写本机或单位内网地址（如 http://127.0.0.1:8000/v1 或专网 IP）。公网 DeepSeek/OpenAI 等会被拒绝。",
+        "内网服务若不校验密钥可留空；填写后仅保存在本机。",
+      ];
     }
     if (tab === "memory" && memory) {
       return ["记下你的偏好，之后都会按这个办。点添加，或说「记住……」。"];
