@@ -273,6 +273,9 @@ function App() {
         return;
       }
       if (sendingRef.current) return;
+      setSettingsOpen(false);
+      setSettingsTab(undefined);
+      setSkillManagerOpen(false);
       setWorkspaceError(null);
       try {
         const res = await runtimeClient.openWorkspace(path);
@@ -361,6 +364,9 @@ function App() {
 
   const handleNewSession = useCallback(async () => {
     if (!workspacePath || sending || !runtimeReady) return;
+    setSettingsOpen(false);
+    setSettingsTab(undefined);
+    setSkillManagerOpen(false);
     try {
       const created = await runtimeClient.createSession(workspacePath);
       setSessionId(created.session.id);
@@ -381,6 +387,9 @@ function App() {
 
   const handleSelectSession = useCallback(
     async (session: SessionMeta) => {
+      setSettingsOpen(false);
+      setSettingsTab(undefined);
+      setSkillManagerOpen(false);
       if (sending && session.id !== sessionIdRef.current) return;
       if (
         session.id === sessionIdRef.current &&
@@ -738,6 +747,7 @@ function App() {
 
   const openSettings = useCallback((tab?: SettingsTab) => {
     setSettingsTab(tab);
+    setSkillManagerOpen(false);
     setSettingsOpen(true);
   }, []);
 
@@ -795,8 +805,12 @@ function App() {
           <button
             type="button"
             className="sidebar-nav"
-            onClick={() => setSkillManagerOpen(true)}
-            aria-haspopup="dialog"
+            onClick={() => {
+              setSettingsOpen(false);
+              setSettingsTab(undefined);
+              setSkillManagerOpen((open) => !open);
+            }}
+            aria-pressed={skillManagerOpen}
             aria-expanded={skillManagerOpen}
           >
             <span className="sidebar-nav-icon">
@@ -807,8 +821,15 @@ function App() {
           <button
             type="button"
             className="sidebar-nav"
-            onClick={() => openSettings()}
-            aria-haspopup="dialog"
+            onClick={() => {
+              if (settingsOpen) {
+                setSettingsOpen(false);
+                setSettingsTab(undefined);
+                return;
+              }
+              openSettings();
+            }}
+            aria-pressed={settingsOpen}
             aria-expanded={settingsOpen}
           >
             <span className="sidebar-nav-icon">
@@ -833,7 +854,40 @@ function App() {
         </div>
       </aside>
 
-      <ChatPanel
+      {skillManagerOpen ? (
+        <SkillManager
+          open
+          skills={skills}
+          onClose={() => setSkillManagerOpen(false)}
+          onToggle={handleToggleSkill}
+          onInspect={handleInspectSkill}
+          onConfirmInstall={handleConfirmInstallSkill}
+          onUninstall={handleUninstallSkill}
+          onRestoreBundled={handleRestoreBundledSkill}
+          onRefresh={refreshSkills}
+        />
+      ) : settingsOpen ? (
+        <SettingsModal
+          open
+          initial={config}
+          initialTab={settingsTab}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsTab(undefined);
+          }}
+          onSave={handleSaveConfig}
+          memory={{
+            load: () => runtimeClient.getMemory(),
+            save: (body) => runtimeClient.putMemory(body),
+            onOpenSkills: () => {
+              setSettingsOpen(false);
+              setSettingsTab(undefined);
+              setSkillManagerOpen(true);
+            },
+          }}
+        />
+      ) : (
+        <ChatPanel
           workspaceOpen={workspacePath !== null}
           workspacePath={workspacePath}
           messages={messages}
@@ -844,38 +898,7 @@ function App() {
           onToggleSteps={handleToggleSteps}
           onOpenMemory={() => openSettings("memory")}
         />
-
-      <SkillManager
-        open={skillManagerOpen}
-        skills={skills}
-        onClose={() => setSkillManagerOpen(false)}
-        onToggle={handleToggleSkill}
-        onInspect={handleInspectSkill}
-        onConfirmInstall={handleConfirmInstallSkill}
-        onUninstall={handleUninstallSkill}
-        onRestoreBundled={handleRestoreBundledSkill}
-        onRefresh={refreshSkills}
-      />
-
-      <SettingsModal
-        open={settingsOpen}
-        initial={config}
-        initialTab={settingsTab}
-        onClose={() => {
-          setSettingsOpen(false);
-          setSettingsTab(undefined);
-        }}
-        onSave={handleSaveConfig}
-        memory={{
-          load: () => runtimeClient.getMemory(),
-          save: (body) => runtimeClient.putMemory(body),
-          onOpenSkills: () => {
-            setSettingsOpen(false);
-            setSettingsTab(undefined);
-            setSkillManagerOpen(true);
-          },
-        }}
-      />
+      )}
 
       <PermissionModal
         request={permissionRequest}

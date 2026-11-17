@@ -142,7 +142,6 @@ export default function SkillManager({
 
   const enabledSkills = skills.filter((s) => s.enabled);
   const disabledSkills = skills.filter((s) => !s.enabled);
-  const subDialogOpen = Boolean(preview || uninstallTarget || restoreTarget);
 
   useEffect(() => {
     if (!open) return;
@@ -261,37 +260,19 @@ export default function SkillManager({
     }
   }
 
-  function handleBackdropClose() {
-    if (subDialogOpen) return;
-    onClose();
-  }
-
   if (!open) return null;
 
   return (
     <>
-      <div
-        className="skill-manager-backdrop"
-        role="presentation"
-        onClick={handleBackdropClose}
-      >
-        <div
-          className="skill-manager"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="skill-manager-title"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <header className="skill-manager-header">
-            <h2 id="skill-manager-title" className="skill-manager-title">
-              技能管理
-            </h2>
-            <div className="skill-manager-header-actions">
-              <button type="button" className="btn btn--ghost btn--xs" onClick={onRefresh}>
+      <section className="flat-page" aria-labelledby="skill-manager-title">
+        <div className="flat-page-column">
+          <header className="flat-page-toolbar">
+            <h1 id="skill-manager-title" className="flat-page-title">
+              技能
+            </h1>
+            <div className="flat-page-toolbar-actions">
+              <button type="button" className="btn btn--ghost" onClick={onRefresh}>
                 刷新
-              </button>
-              <button type="button" className="btn btn--ghost btn--xs" onClick={onClose}>
-                关闭
               </button>
             </div>
           </header>
@@ -391,7 +372,7 @@ export default function SkillManager({
             </footer>
           )}
         </div>
-      </div>
+      </section>
 
       {preview && previewPath && (
         <div

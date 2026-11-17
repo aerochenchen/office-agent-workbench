@@ -132,6 +132,13 @@ export default function SettingsModal({
   const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
+    return () => {
+      applyUiFontScale(readUiFontScale());
+      applyUiTheme(readUiTheme());
+    };
+  }, []);
+
+  useEffect(() => {
     if (open) {
       setTab(initialTab ?? "model");
       setApiBase(initial.api_base);
@@ -249,43 +256,31 @@ export default function SettingsModal({
   }
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="设置">
-      <div className="modal modal--settings">
-        <div className="modal-header">
-          <div className="modal-header-brand">
-            <img
-              className="modal-logo"
-              src="/logo-mark.png"
-              width={20}
-              height={20}
-              alt=""
-              aria-hidden="true"
-            />
-            <span>{viewingNotice ? "开源许可" : "设置"}</span>
-          </div>
-          <button type="button" className="btn btn--ghost btn--xs" onClick={viewingNotice ? handleCloseNotice : handleClose}>
-            {viewingNotice ? "返回" : "关闭"}
-          </button>
-        </div>
+    <section className="flat-page" aria-label="设置">
+      <div className="flat-page-column">
+        <header className="flat-page-toolbar">
+          <h1 className="flat-page-title">{viewingNotice ? "开源许可" : "设置"}</h1>
+        </header>
 
         <div className="settings-layout">
           {!viewingNotice ? (
             <>
-          <nav className="settings-nav" aria-label="设置分类">
+          <div className="flat-tabs" role="tablist" aria-label="设置分类">
             {SETTINGS_TABS.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className={`settings-nav-item${tab === item.id ? " settings-nav-item--active" : ""}`}
-                aria-current={tab === item.id ? "page" : undefined}
+                role="tab"
+                className={tab === item.id ? "is-on" : ""}
+                aria-selected={tab === item.id}
                 onClick={() => setTab(item.id)}
               >
                 {item.label}
               </button>
             ))}
-          </nav>
+          </div>
 
-          <div className="settings-pane modal-body">
+          <div className="settings-pane">
             {tab === "appearance" && (
               <section className="settings-section" aria-labelledby="settings-appearance-title">
                 <h3 id="settings-appearance-title" className="settings-section-title">
@@ -590,7 +585,7 @@ export default function SettingsModal({
           )}
         </div>
 
-        <div className="modal-footer">
+        <div className="flat-page-actions">
           {viewingNotice ? (
             <button type="button" className="btn btn--ghost" onClick={handleCloseNotice}>
               返回关于
@@ -614,6 +609,6 @@ export default function SettingsModal({
         target={null}
         onClose={() => setReportOpen(false)}
       />
-    </div>
+    </section>
   );
 }
