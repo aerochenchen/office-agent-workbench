@@ -324,14 +324,31 @@
   overflow: auto;
   background: var(--paper-1);
   padding: 32px;
+  display: flex;
+  flex-direction: column;
 }
 
 .flat-page-column {
   width: min(760px, 100%);
   margin: 0 auto;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.flat-page-note {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+.flat-page-note p {
+  margin: 0;
 }
 
 .flat-page-toolbar {

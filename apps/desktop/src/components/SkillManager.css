@@ -38,13 +38,6 @@
   color: var(--ink-0);
 }
 
-.skill-manager-intro {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--ink-1);
-  line-height: 1.6;
-}
-
 .skill-manager-header-actions {
   display: flex;
   gap: var(--space-2);

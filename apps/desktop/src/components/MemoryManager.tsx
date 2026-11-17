@@ -145,10 +145,6 @@ export default function MemoryManager({
         </div>
       </div>
 
-      <p className="memory-panel-intro">
-        记下你的偏好，之后都会按这个办。点添加，或说「记住……」。
-      </p>
-
       {error ? <p className="memory-manager-error">{error}</p> : null}
 
       {entries.length === 0 && edit?.kind !== "new" ? (

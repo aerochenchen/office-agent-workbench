@@ -58,8 +58,8 @@ interface Props {
 }
 
 const SETTINGS_TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
-  { id: "appearance", label: "外观" },
   { id: "model", label: "模型" },
+  { id: "appearance", label: "外观" },
   { id: "memory", label: "记忆" },
   { id: "permission", label: "安全" },
   { id: "guide", label: "说明" },
@@ -165,6 +165,56 @@ export default function SettingsModal({
     () => permissionModeOptions.find((o) => o.value === permissionMode)?.hint,
     [permissionMode, permissionModeOptions],
   );
+
+  const pageNotes = useMemo(() => {
+    if (tab === "appearance") {
+      const themeHint = UI_THEME_OPTIONS.find((o) => o.value === uiTheme)?.hint;
+      const fontHint = UI_FONT_SCALE_OPTIONS.find((o) => o.value === fontScale)?.hint;
+      return [
+        themeHint ? `${themeHint}。切换后即时预览，点保存后记住偏好。` : "",
+        fontHint ? `${fontHint}。切换后即时预览，点保存后记住偏好。` : "",
+      ].filter(Boolean);
+    }
+    if (tab === "model") {
+      return [
+        isLocalDeploy
+          ? "本地部署版本只连接本机或单位内网的模型服务。请填写内网地址（IP 或内网域名，如 http://127.0.0.1:8000/v1），公网 DeepSeek/OpenAI 等会被拒绝。"
+          : MODEL_TAB_INTRO,
+        isLocalDeploy ? "" : MODEL_FIELD_HINTS.model,
+        isLocalDeploy ? "填写内网或本机 OpenAI 兼容服务给出的模型名。" : "",
+        isLocalDeploy
+          ? "填写本机或单位内网地址（如 http://127.0.0.1:8000/v1 或专网 IP）。公网 DeepSeek/OpenAI 等会被拒绝。"
+          : MODEL_FIELD_HINTS.apiBase,
+        isLocalDeploy
+          ? "内网服务若不校验密钥可留空；填写后仅保存在本机。"
+          : MODEL_FIELD_HINTS.apiKey,
+      ].filter(Boolean);
+    }
+    if (tab === "memory" && memory) {
+      return ["记下你的偏好，之后都会按这个办。点添加，或说「记住……」。"];
+    }
+    if (tab === "permission") {
+      return [
+        permissionHint ?? "",
+        initial.deployment_profile === "local"
+          ? "本地部署版：模型地址限本机或内网；自定义脚本默认关闭，可手动开启。"
+          : "",
+        allowWorkspaceScripts
+          ? "已开启：助手可在工作区写并运行临时脚本，能力更强，也可能改动工作区文件。技能脚本不受影响。"
+          : "默认关闭：助手不能自写自跑工作区脚本，复杂自动化会弱一些。技能功能不受影响。",
+      ].filter(Boolean);
+    }
+    return [];
+  }, [
+    allowWorkspaceScripts,
+    fontScale,
+    initial.deployment_profile,
+    isLocalDeploy,
+    memory,
+    permissionHint,
+    tab,
+    uiTheme,
+  ]);
 
   if (!open) return null;
 
@@ -300,10 +350,6 @@ export default function SettingsModal({
                     ))}
                   </select>
                 </label>
-                <p className="settings-permission-hint">
-                  {UI_THEME_OPTIONS.find((o) => o.value === uiTheme)?.hint}
-                  。切换后即时预览，点保存后记住偏好。
-                </p>
                 <label className="field">
                   <span className="field-label">界面文字大小</span>
                   <select
@@ -318,10 +364,6 @@ export default function SettingsModal({
                     ))}
                   </select>
                 </label>
-                <p className="settings-permission-hint">
-                  {UI_FONT_SCALE_OPTIONS.find((o) => o.value === fontScale)?.hint}
-                  。切换后即时预览，点保存后记住偏好。
-                </p>
               </section>
             )}
 
@@ -345,11 +387,6 @@ export default function SettingsModal({
                 <h3 id="settings-model-title" className="settings-section-title">
                   模型
                 </h3>
-                <p className="settings-callout">
-                  {initial.deployment_profile === "local"
-                    ? "本地部署版本只连接本机或单位内网的模型服务。请填写内网地址（IP 或内网域名，如 http://127.0.0.1:8000/v1），公网 DeepSeek/OpenAI 等会被拒绝。"
-                    : MODEL_TAB_INTRO}
-                </p>
 
                 {!isLocalDeploy && (
                   <div className="settings-field-block">
@@ -368,7 +405,6 @@ export default function SettingsModal({
                         <option value={MODEL_CUSTOM}>自定义…</option>
                       </select>
                     </label>
-                    <p className="settings-field-hint">{MODEL_FIELD_HINTS.model}</p>
                   </div>
                 )}
 
@@ -383,9 +419,6 @@ export default function SettingsModal({
                         placeholder={isLocalDeploy ? "内网服务提供的模型名" : "例如 deepseek-v4-flash"}
                       />
                     </label>
-                    {isLocalDeploy && (
-                      <p className="settings-field-hint">填写内网或本机 OpenAI 兼容服务给出的模型名。</p>
-                    )}
                   </div>
                 )}
 
@@ -406,11 +439,6 @@ export default function SettingsModal({
                         }
                       />
                     </label>
-                    <p className="settings-field-hint">
-                      {isLocalDeploy
-                        ? "填写本机或单位内网地址（如 http://127.0.0.1:8000/v1 或专网 IP）。公网 DeepSeek/OpenAI 等会被拒绝。"
-                        : MODEL_FIELD_HINTS.apiBase}
-                    </p>
                   </div>
 
                   <div className="settings-field-block">
@@ -430,11 +458,6 @@ export default function SettingsModal({
                         }
                       />
                     </label>
-                    <p className="settings-field-hint">
-                      {isLocalDeploy
-                        ? "内网服务若不校验密钥可留空；填写后仅保存在本机。"
-                        : MODEL_FIELD_HINTS.apiKey}
-                    </p>
                   </div>
                 </div>
 
@@ -461,12 +484,6 @@ export default function SettingsModal({
                     ))}
                   </select>
                 </label>
-                <p className="settings-permission-hint">{permissionHint}</p>
-                {initial.deployment_profile === "local" && (
-                  <p className="settings-permission-hint">
-                    本地部署版：模型地址限本机或内网；自定义脚本默认关闭，可手动开启。
-                  </p>
-                )}
                 <label className="field field--checkbox">
                   <span className="field-label">允许运行工作区内的自定义脚本</span>
                   <input
@@ -475,11 +492,6 @@ export default function SettingsModal({
                     onChange={(e) => setAllowWorkspaceScripts(e.currentTarget.checked)}
                   />
                 </label>
-                <p className="settings-permission-hint">
-                  {allowWorkspaceScripts
-                    ? "已开启：助手可在工作区写并运行临时脚本，能力更强，也可能改动工作区文件。技能脚本不受影响。"
-                    : "默认关闭：助手不能自写自跑工作区脚本，复杂自动化会弱一些。技能功能不受影响。"}
-                </p>
               </section>
             )}
 
@@ -584,6 +596,14 @@ export default function SettingsModal({
             </div>
           )}
         </div>
+
+        {!viewingNotice && pageNotes.length > 0 ? (
+          <div className="flat-page-note">
+            {pageNotes.map((note) => (
+              <p key={note}>{note}</p>
+            ))}
+          </div>
+        ) : null}
 
         <div className="flat-page-actions">
           {viewingNotice ? (
